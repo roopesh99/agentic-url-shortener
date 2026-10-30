@@ -1,0 +1,105 @@
+"""Built-in gates used by the workflows."""
+
+from __future__ import annotations
+
+import asyncio
+import re
+import shutil
+from typing import Any
+
+from ..engine.models import GateResult
+from .base import Gate, GateContext, GateRegistry
+
+
+class FilesExistGate(Gate):
+    """args: paths: [relative paths that must exist in the workspace]"""
+
+    name = "files_exist"
+
+    async def check(self, ctx: GateContext) -> GateResult:
+        missing = [p for p in self.args.get("paths", []) if not (ctx.workspace / p).exists()]
+        if missing:
+            return self.result(False, f"missing files: {missing}")
+        return self.result(True, f"{len(self.args.get('paths', []))} file(s) present")
+
+
+class OutputsPresentGate(Gate):
+    """Structural check of the agent's output. args: keys: [required top-level output keys]"""
+
+    name = "outputs_present"
+
+    async def check(self, ctx: GateContext) -> GateResult:
+        assert ctx.artifact is not None, "outputs_present is an exit gate"
+        outputs = ctx.artifact.result.outputs
+        missing = [k for k in self.args.get("keys", []) if not outputs.get(k)]
+        if missing:
+            return self.result(False, f"output missing or empty: {missing}")
+        return self.result(True, f"outputs present: {self.args.get('keys', [])}")
+
+
+class AmbiguitiesResolvedGate(Gate):
+    """Every open question the analyst surfaced must carry a resolution
+    (an explicit assumption or a human answer) before design may proceed."""
+
+    name = "ambiguities_resolved"
+
+    async def check(self, ctx: GateContext) -> GateResult:
+        assert ctx.artifact is not None, "ambiguities_resolved is an exit gate"
+        items: list[dict[str, Any]] = ctx.artifact.result.outputs.get("ambiguities", [])
+        open_items = [a["question"] for a in items if not a.get("resolution")]
+        if open_items:
+            return self.result(False, f"{len(open_items)} unresolved: {open_items}")
+        return self.result(True, f"{len(items)} ambiguity(ies), all resolved")
+
+
+class MavenTestGate(Gate):
+    """Runs the real build. args: project: dir relative to workspace; goal: default 'test';
+    timeout_seconds: default 600."""
+
+    name = "maven_test"
+
+    async def check(self, ctx: GateContext) -> GateResult:
+        mvn = shutil.which("mvn")
+        if mvn is None:
+            return self.result(False, "mvn not found on PATH")
+        project = ctx.workspace / self.args.get("project", ".")
+        if not (project / "pom.xml").exists():
+            return self.result(False, f"no pom.xml in {project}")
+        goal = self.args.get("goal", "test")
+        proc = await asyncio.create_subprocess_exec(
+            mvn, "-B", "-q", "--no-transfer-progress", goal,
+            cwd=project,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        try:
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=self.args.get("timeout_seconds", 600))
+        except asyncio.TimeoutError:
+            proc.kill()
+            return self.result(False, f"mvn {goal} timed out")
+        log = out.decode(errors="replace")
+        if proc.returncode != 0:
+            return self.result(False, f"mvn {goal} exit {proc.returncode}\n{_failure_excerpt(log)}")
+        return self.result(True, f"mvn {goal} passed{_surefire_summary(project)}")
+
+
+def _failure_excerpt(log: str, limit: int = 60) -> str:
+    """Keep the lines an engineer (or a retrying agent) needs: errors and failures."""
+    interesting = [l for l in log.splitlines() if re.search(r"ERROR|FAIL|Tests run|expected|Exception", l)]
+    return "\n".join((interesting or log.splitlines())[-limit:])
+
+
+def _surefire_summary(project) -> str:
+    reports = list((project / "target" / "surefire-reports").glob("*.txt"))
+    total = 0
+    for r in reports:
+        m = re.search(r"Tests run: (\d+)", r.read_text(errors="replace"))
+        total += int(m.group(1)) if m else 0
+    return f" ({total} tests in {len(reports)} class(es))" if reports else ""
+
+
+def builtin_gates() -> GateRegistry:
+    registry = GateRegistry()
+    for gate in (FilesExistGate, OutputsPresentGate, AmbiguitiesResolvedGate, MavenTestGate):
+        registry.register(gate.name, gate)
+    return registry

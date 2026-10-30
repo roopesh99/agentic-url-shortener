@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+target/
+.idea/
+*.iml
+.DS_Store
+# run outputs are local by default; curated sample runs are committed under runs/samples/
+runs/*
+!runs/samples/

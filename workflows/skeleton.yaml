@@ -1,0 +1,45 @@
+# Walking-skeleton lifecycle: proves DAG scheduling, a parallel fork + join,
+# real verification gates, bounded retries and a human approval checkpoint.
+#
+#   requirements ──► implement  ──┐
+#        │                        ├──► test   (join: needs both branches)
+#        └─────────► test_plan ───┘
+name: skeleton
+version: "1"
+description: Requirement -> normalized spec -> code + test plan (parallel) -> verified tests
+
+stages:
+  - id: requirements
+    agent: analyst
+    description: Normalize the requirement; surface and resolve ambiguities
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [goal, functional, non_functional] }
+      - ambiguities_resolved
+    approval: required          # human confirms the interpreted spec + assumptions
+
+  - id: implement
+    agent: coder
+    needs: [requirements]
+    write_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
+    exit_gates:
+      - name: files_exist
+        args: { paths: [url-shortener/pom.xml] }
+    retry: { max_attempts: 3, backoff_seconds: 1 }
+
+  - id: test_plan
+    agent: test_planner
+    needs: [requirements]
+    write_scope: ["docs/test-plan.md"]
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [test_cases] }
+
+  - id: test
+    agent: tester
+    needs: [implement, test_plan]
+    write_scope: ["url-shortener/src/test/**"]
+    exit_gates:
+      - name: maven_test
+        args: { project: url-shortener, timeout_seconds: 600 }
+    retry: { max_attempts: 3, backoff_seconds: 1 }

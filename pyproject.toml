@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orchestrator"
+version = "0.1.0"
+description = "Governed agentic SDLC orchestrator (DAG engine, gates, approvals, audit)"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+    "pydantic>=2.6",
+    "anthropic>=0.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+orch = "orchestrator.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["orchestrator*"]
+
+[tool.setuptools.package-data]
+orchestrator = ["agents/templates/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["orchestrator/tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["maven: requires Maven + JDK (slow, real build)"]
