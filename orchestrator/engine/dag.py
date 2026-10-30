@@ -42,6 +42,18 @@ def topological_order(workflow: WorkflowSpec) -> list[str]:
     return list(TopologicalSorter(graph).static_order())
 
 
+def upstream(workflow: WorkflowSpec, stage_id: str) -> set[str]:
+    """All stages `stage_id` transitively depends on (excluding itself)."""
+    out: set[str] = set()
+    stack = list(workflow.stage(stage_id).needs)
+    while stack:
+        dep = stack.pop()
+        if dep not in out:
+            out.add(dep)
+            stack.extend(workflow.stage(dep).needs)
+    return out
+
+
 def downstream(workflow: WorkflowSpec, stage_id: str) -> set[str]:
     """All stages that transitively depend on `stage_id` (excluding itself)."""
     children: dict[str, set[str]] = {s.id: set() for s in workflow.stages}

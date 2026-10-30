@@ -51,6 +51,7 @@ class StageSpec(BaseModel):
     retry: RetryPolicy = Field(default_factory=RetryPolicy)
     fallback: str | None = None  # alternate agent name, used after retries are exhausted
     write_scope: list[str] = Field(default_factory=list)  # glob patterns, relative to workspace
+    read_scope: list[str] = Field(default_factory=list)   # files the agent is shown as context
 
     @field_validator("entry_gates", "exit_gates", mode="before")
     @classmethod

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from orchestrator.engine.dag import WorkflowError, downstream, load_workflow, topological_order, validate
+from orchestrator.engine.dag import WorkflowError, downstream, load_workflow, topological_order, upstream, validate
 from orchestrator.engine.models import WorkflowSpec
 from orchestrator.engine.state import IllegalTransition, NodeState, check_transition
 
@@ -46,6 +46,8 @@ def test_downstream_is_transitive():
     )
     assert downstream(w, "a") == {"b", "c"}
     assert downstream(w, "d") == set()
+    assert upstream(w, "c") == {"a", "b"}
+    assert upstream(w, "a") == set()
 
 
 def test_retry_attempts_are_bounded():

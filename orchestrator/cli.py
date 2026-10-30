@@ -8,6 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .agents.base import AgentRegistry
 from .agents.stubs import stub_agents
 from .approvals.service import AutoApprover, CLIApprover
 from .engine.dag import load_workflow
@@ -18,10 +19,26 @@ from .policy.engine import PolicyEngine
 
 DEFAULT_RUNS_DIR = Path("runs")
 DEFAULT_POLICY = Path("policies/default.yaml")
+DEFAULT_CASSETTES = Path("scenarios/cassettes")
 
 
 def _new_run_id(workflow_name: str) -> str:
     return f"{workflow_name}-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}"
+
+
+def _agents(args: argparse.Namespace, workflow_name: str) -> AgentRegistry:
+    if args.agents == "stub":
+        return stub_agents()
+    from .agents.llm_agents import llm_agents
+    from .llm.client import AnthropicLLM
+    from .llm.replay import CassetteLLM, Mode
+
+    mode = Mode(args.llm)
+    cassettes = Path(args.cassettes) if args.cassettes else DEFAULT_CASSETTES / f"{workflow_name}-{Path(args.requirement).stem}"
+    live = None if mode is Mode.REPLAY else AnthropicLLM()
+    llm = live if mode is Mode.LIVE else CassetteLLM(cassettes, mode, live)
+    print(f"agents: claude ({args.model}), llm mode={mode.value}" + ("" if mode is Mode.LIVE else f", cassettes={cassettes}"))
+    return llm_agents(llm, args.model)
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -37,7 +54,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     engine = Engine(
         workflow,
-        stub_agents(),
+        _agents(args, workflow.name),
         builtin_gates(),
         approver,
         policy=PolicyEngine.load(Path(args.policy)),
@@ -97,6 +114,12 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--run-id")
     run.add_argument("--policy", default=str(DEFAULT_POLICY), help="governance policy YAML")
     run.add_argument("--max-parallel", type=int, default=4)
+    run.add_argument("--agents", choices=["stub", "llm"], default="stub",
+                     help="deterministic stubs, or Claude-backed agents")
+    run.add_argument("--llm", choices=["live", "record", "replay"], default="replay",
+                     help="llm agents: call Claude, call and record cassettes, or replay cassettes offline")
+    run.add_argument("--cassettes", help="cassette directory (default: scenarios/cassettes/<workflow>-<requirement>)")
+    run.add_argument("--model", default="claude-opus-5-5")
     run.add_argument("--auto-approve", action="store_true",
                      help="non-interactive approvals (recorded as non-human in the audit log)")
     run.set_defaults(func=cmd_run)

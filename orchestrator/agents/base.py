@@ -12,12 +12,17 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from ..engine.models import AgentResult, Artifact, StageSpec
 from ..workspace.changes import ChangeSet, ScopeViolation, resolve_in_workspace
 
-__all__ = ["Agent", "AgentContext", "AgentRegistry", "ScopeViolation"]
+__all__ = ["Agent", "AgentContext", "AgentRegistry", "FatalAgentError", "ScopeViolation"]
+
+
+class FatalAgentError(RuntimeError):
+    """A failure retrying cannot fix (bad credentials, refusal, cassette miss):
+    the engine fails the stage immediately instead of spending its retry budget."""
 
 
 @dataclass
@@ -30,6 +35,7 @@ class AgentContext:
     attempt: int = 1
     feedback: list[str] = field(default_factory=list)  # gate/policy evidence from failed attempts
     changes: ChangeSet = field(default_factory=ChangeSet)
+    telemetry: list[dict[str, Any]] = field(default_factory=list)  # one entry per LLM call
 
     def in_scope(self, rel_path: str) -> bool:
         return any(fnmatch(rel_path, pattern) for pattern in self.stage.write_scope)
@@ -42,6 +48,17 @@ class AgentContext:
                 f"stage '{self.stage.id}' may not write '{rel_path}' (scope: {self.stage.write_scope})"
             )
         self.changes.stage(self.workspace, rel_path, content)
+
+    def context_files(self) -> dict[str, str]:
+        """Workspace files matching the stage's `read_scope`, overlaid with pending changes."""
+        root = self.workspace.resolve()
+        paths = {
+            p.relative_to(root).as_posix()
+            for p in root.rglob("*")
+            if p.is_file() and any(fnmatch(p.relative_to(root).as_posix(), g) for g in self.stage.read_scope)
+        }
+        paths |= {p for p in self.changes.paths if any(fnmatch(p, g) for g in self.stage.read_scope)}
+        return {p: self.read_file(p) or "" for p in sorted(paths)}
 
     def read_file(self, rel_path: str) -> str | None:
         """Current view of a file: this stage's pending change if any, else disk."""

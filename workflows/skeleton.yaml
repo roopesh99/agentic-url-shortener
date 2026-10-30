@@ -22,9 +22,12 @@ stages:
     agent: coder
     needs: [requirements]
     write_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
     exit_gates:
       - name: files_exist
         args: { paths: [url-shortener/pom.xml] }
+      - name: maven_test
+        args: { project: url-shortener, goal: compile, timeout_seconds: 600 }
     retry: { max_attempts: 3, backoff_seconds: 1 }
 
   - id: test_plan
@@ -39,6 +42,7 @@ stages:
     agent: tester
     needs: [implement, test_plan]
     write_scope: ["url-shortener/src/test/**"]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**", "url-shortener/src/test/**"]
     exit_gates:
       - name: maven_test
         args: { project: url-shortener, timeout_seconds: 600 }

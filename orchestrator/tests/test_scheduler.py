@@ -170,9 +170,10 @@ async def test_downstream_receives_upstream_artifacts_with_lineage(build_engine,
     engine = build_engine(DIAMOND, {"fast": make_agent(recorder, behaviour=capture),
                                     "slow": make_agent(recorder, behaviour=capture)})
     await engine.run()
-    assert seen["d"] == ["b", "c"]
+    assert seen["d"] == ["a", "b", "c"], "transitive ancestors, not only direct needs"
+    assert seen["b"] == ["a"]
     d_artifact = [e for e in _events(engine, EventType.ARTIFACT_RECORDED) if e.stage == "d"][0]
-    assert {i["name"] for i in d_artifact.payload["inputs"]} == {"b", "c"}
+    assert {i["name"] for i in d_artifact.payload["inputs"]} == {"a", "b", "c"}
 
 
 async def test_event_log_is_source_of_truth(build_engine, recorder):

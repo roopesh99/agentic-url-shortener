@@ -27,13 +27,13 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..agents.base import AgentContext, AgentRegistry, ScopeViolation
+from ..agents.base import AgentContext, AgentRegistry, FatalAgentError, ScopeViolation
 from ..approvals.service import ApprovalRequest, Approver
 from ..gates.base import GateContext, GateRegistry
 from ..policy.engine import PolicyEngine
 from ..policy.models import Action, PolicyDecision
 from ..workspace.changes import ChangeSet, apply_changes
-from .dag import topological_order, validate
+from .dag import topological_order, upstream, validate
 from .events import EventStore, EventType
 from .models import AgentResult, ApprovalMode, Artifact, GateRef, GateResult, StageSpec, WorkflowSpec
 from .state import UNSUCCESSFUL, NodeState, check_transition
@@ -156,7 +156,10 @@ class Engine:
     # ------------------------------------------------------------- stage execution
 
     async def _execute(self, stage: StageSpec) -> None:
-        inputs = {d: self.artifacts[d] for d in stage.needs if d in self.artifacts}
+        # Cross-stage context: every accepted ancestor artifact, not only direct dependencies
+        # (the tester needs the approved spec as much as the code it tests).
+        ancestors = upstream(self.workflow, stage.id)
+        inputs = {d: self.artifacts[d] for d in self._order if d in ancestors and d in self.artifacts}
 
         for ref in stage.entry_gates:
             res = await self._run_gate(ref, stage, None, inputs, phase="entry")
@@ -187,6 +190,9 @@ class Engine:
             if isinstance(result, ScopeViolation):
                 # Breaching the autonomy boundary is a policy failure, not a flaky error: no retry.
                 self._transition(stage.id, NodeState.FAILED, f"policy: {result}")
+                return
+            if isinstance(result, FatalAgentError):
+                self._transition(stage.id, NodeState.FAILED, f"non-retryable agent error: {result}")
                 return
             if isinstance(result, Exception):
                 feedback = [f"agent error: {result}"]
@@ -256,7 +262,7 @@ class Engine:
         except Exception as exc:  # agent failures are data, not crashes
             self.events.append(
                 EventType.AGENT_ERROR, stage.id, agent=stage.agent, attempt=ctx.attempt,
-                error=f"{type(exc).__name__}: {exc}",
+                error=f"{type(exc).__name__}: {exc}", llm_calls=ctx.telemetry,
             )
             return exc
         self.events.append(
@@ -266,6 +272,7 @@ class Engine:
             attempt=ctx.attempt,
             summary=result.summary,
             files_proposed=ctx.changes.paths,
+            llm_calls=ctx.telemetry,
             duration_ms=int((time.monotonic() - started) * 1000),
         )
         return result
