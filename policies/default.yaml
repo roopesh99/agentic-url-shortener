@@ -1,0 +1,48 @@
+# Default governance policy. Evaluated on every proposed change set before it
+# is written to disk. The strictest triggered action wins:
+#   allow < flag < require_approval < reject (retryable) < block (stop)
+# This file's sha256 is recorded on every run.
+
+rules:
+  # --- security --------------------------------------------------------------
+  secrets:
+    action: reject
+    entropy_threshold: 4.5
+    entropy_min_length: 32
+    exclude: ["*.md"]               # docs may show placeholder examples
+
+  dangerous_code:
+    action: reject
+    include: ["*.java", "*.kt"]
+
+  # --- compliance ------------------------------------------------------------
+  pii_logging:
+    action: reject
+    include: ["*.java", "*.kt"]
+
+  # --- change control --------------------------------------------------------
+  dependency_allowlist:
+    action: require_approval
+    allowed:
+      - "org.springframework.boot:*"
+      - "com.h2database:h2"
+      - "org.flywaydb:*"
+      - "com.github.ben-manes.caffeine:caffeine"
+      - "com.bucket4j:*"
+      - "org.springdoc:springdoc-openapi-*"
+      - "io.micrometer:*"
+
+  high_impact_paths:
+    action: require_approval
+    paths:                           # any change, including creating the file
+      - "*/db/migration/*"
+      - "*/security/*"
+      - ".github/*"
+    modify_only:                     # creating is fine; changing an existing one is not
+      - "*application*.yml"
+      - "*application*.properties"
+
+  diff_size:
+    action: require_approval
+    max_changed_lines: 1500
+    max_files: 40

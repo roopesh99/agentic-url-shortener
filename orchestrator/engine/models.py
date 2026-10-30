@@ -14,9 +14,11 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ApprovalMode(str, Enum):
-    NONE = "none"          # agent output is accepted once exit gates pass
-    REQUIRED = "required"  # a human must approve after exit gates pass
-    POLICY = "policy"      # policy engine decides from the action's risk tier
+    """Workflow-declared checkpoint. Independent of, and never a waiver for,
+    approvals the policy engine requires for high-risk changes."""
+
+    NONE = "none"          # accepted once exit gates pass (unless policy requires approval)
+    REQUIRED = "required"  # a human must approve the verified output
 
 
 class RetryPolicy(BaseModel):

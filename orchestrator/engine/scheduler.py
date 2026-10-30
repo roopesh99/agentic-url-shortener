@@ -5,9 +5,14 @@ SUCCEEDED, and is SKIPPED as soon as any of them ends unsuccessfully. Every
 READY stage runs concurrently (bounded by `max_parallel`); a stage with several
 `needs` is therefore a synchronization point (join). Within a stage:
 
-    entry gates -> agent attempt -> exit gates -> (approval) -> SUCCEEDED
-                         ^              | fail
-                         +-- RETRYING <-+  (bounded; gate evidence fed back)
+    entry gates -> agent proposes changes -> policy -> (policy approval) -> apply
+                         ^                       | reject                     |
+                         +------ RETRYING <------+---------- exit gates <-----+
+                    (bounded; policy/gate evidence fed back)     | pass
+                                                     (workflow approval) -> SUCCEEDED
+
+Agents only propose a change set; the engine writes it to disk, and only after
+the policy engine allows it. A policy BLOCK or a scope breach is never retried.
 
 Every transition, agent call, gate result, artifact and approval is written to
 the hash-chained event log, which is the run's source of truth.
@@ -25,6 +30,9 @@ from pathlib import Path
 from ..agents.base import AgentContext, AgentRegistry, ScopeViolation
 from ..approvals.service import ApprovalRequest, Approver
 from ..gates.base import GateContext, GateRegistry
+from ..policy.engine import PolicyEngine
+from ..policy.models import Action, PolicyDecision
+from ..workspace.changes import ChangeSet, apply_changes
 from .dag import topological_order, validate
 from .events import EventStore, EventType
 from .models import AgentResult, ApprovalMode, Artifact, GateRef, GateResult, StageSpec, WorkflowSpec
@@ -50,6 +58,7 @@ class Engine:
         gates: GateRegistry,
         approver: Approver,
         *,
+        policy: PolicyEngine,
         run_id: str,
         run_dir: Path,
         workspace: Path,
@@ -60,6 +69,7 @@ class Engine:
         self.agents = agents
         self.gates = gates
         self.approver = approver
+        self.policy = policy
         self.run_id = run_id
         self.run_dir = run_dir
         self.workspace = workspace
@@ -83,6 +93,7 @@ class Engine:
             workflow_version=self.workflow.version,
             stages=self._order,
             requirement_sha=_sha(self.requirement),
+            policy_sha=self.policy.policy_sha,
             workspace=str(self.workspace),
         )
 
@@ -184,7 +195,29 @@ class Engine:
                     return
                 continue
 
-            artifact = self._record_artifact(stage, attempt, result, ctx.written, inputs)
+            artifact = self._record_artifact(stage, attempt, result, ctx.changes, inputs)
+
+            policy = self._evaluate_policy(stage, attempt, ctx.changes)
+            if policy.action is Action.BLOCK:
+                self._transition(stage.id, NodeState.FAILED, f"policy blocked: {_violation_summary(policy)}")
+                return
+            if policy.action is Action.REJECT:
+                feedback = [f"policy violation: {v.describe()}" for v in policy.at_least(Action.REJECT)]
+                self._retry_or_fail(stage, last, f"policy rejected change: {_violation_summary(policy)}")
+                if last:
+                    return
+                continue
+            if policy.action is Action.REQUIRE_APPROVAL:
+                high_risk = policy.at_least(Action.REQUIRE_APPROVAL)
+                if not await self._approve(
+                    stage, artifact,
+                    reason=f"policy: {policy.tier.value}-risk change ({_violation_summary(policy)})",
+                    evidence=[v.describe() for v in high_risk],
+                    source="policy",
+                ):
+                    return
+            self._apply(stage, ctx.changes)
+
             self._transition(stage.id, NodeState.VALIDATING, f"{len(stage.exit_gates)} exit gate(s)")
             gate_results = [
                 await self._run_gate(ref, stage, artifact, inputs, phase="exit") for ref in stage.exit_gates
@@ -198,7 +231,10 @@ class Engine:
                 continue
 
             if stage.approval is ApprovalMode.REQUIRED and not await self._approve(
-                stage, artifact, gate_results
+                stage, artifact,
+                reason="workflow declares this stage approval: required",
+                evidence=[f"{r.gate}: {'PASS' if r.passed else 'FAIL'}" for r in gate_results],
+                source="workflow",
             ):
                 return
             self.artifacts[stage.id] = artifact
@@ -229,7 +265,7 @@ class Engine:
             agent=stage.agent,
             attempt=ctx.attempt,
             summary=result.summary,
-            files_written=ctx.written,
+            files_proposed=ctx.changes.paths,
             duration_ms=int((time.monotonic() - started) * 1000),
         )
         return result
@@ -242,19 +278,24 @@ class Engine:
         else:
             self._transition(stage.id, NodeState.RETRYING, reason)
 
-    async def _approve(self, stage: StageSpec, artifact: Artifact, gate_results: list[GateResult]) -> bool:
-        self._transition(stage.id, NodeState.AWAITING_APPROVAL, "workflow requires human approval")
+    async def _approve(
+        self, stage: StageSpec, artifact: Artifact, *, reason: str, evidence: list[str], source: str
+    ) -> bool:
+        """Pause for a human. `source` is 'policy' (before changes are applied) or
+        'workflow' (after gates have verified them)."""
+        self._transition(stage.id, NodeState.AWAITING_APPROVAL, f"{source} requires human approval")
         request = ApprovalRequest(
             run_id=self.run_id,
             stage=stage.id,
-            reason="workflow declares this stage approval: required",
+            reason=reason,
             summary=artifact.result.summary,
-            gate_evidence=[f"{r.gate}: {'PASS' if r.passed else 'FAIL'}" for r in gate_results],
+            gate_evidence=evidence,
             files_changed=artifact.result.files_written,
             decisions=[f"{d.topic}: {d.choice} ({d.source})" for d in artifact.result.decisions],
         )
         self.events.append(
-            EventType.APPROVAL_REQUESTED, stage.id, artifact=artifact.ref().model_dump(), reason=request.reason
+            EventType.APPROVAL_REQUESTED, stage.id, artifact=artifact.ref().model_dump(),
+            reason=reason, source=source, evidence=evidence,
         )
         decision = await self.approver.decide(request)
         self.events.append(
@@ -268,6 +309,25 @@ class Engine:
         if not decision.approved:
             self._transition(stage.id, NodeState.FAILED, f"rejected by {decision.approver}")
         return decision.approved
+
+    def _evaluate_policy(self, stage: StageSpec, attempt: int, changes: ChangeSet) -> PolicyDecision:
+        decision = self.policy.evaluate(changes, stage)
+        self.events.append(
+            EventType.POLICY_EVALUATED,
+            stage.id,
+            attempt=attempt,
+            action=decision.action.value,
+            tier=decision.tier.value,
+            policy_sha=decision.policy_sha,
+            files=changes.paths,
+            violations=[v.model_dump(mode="json") for v in decision.violations],
+        )
+        return decision
+
+    def _apply(self, stage: StageSpec, changes: ChangeSet) -> None:
+        """The only place agent output reaches disk: after policy (and any approval)."""
+        paths = apply_changes(self.workspace, changes)
+        self.events.append(EventType.CHANGES_APPLIED, stage.id, files=changes.file_hashes(), count=len(paths))
 
     # ------------------------------------------------------------------- helpers
 
@@ -295,15 +355,13 @@ class Engine:
         return res
 
     def _record_artifact(
-        self, stage: StageSpec, attempt: int, result: AgentResult, written: list[str], inputs: dict[str, Artifact]
+        self, stage: StageSpec, attempt: int, result: AgentResult, changes: ChangeSet, inputs: dict[str, Artifact]
     ) -> Artifact:
-        # The workspace handle's record of writes is authoritative, not the agent's claim.
-        result = result.model_copy(update={"files_written": written})
+        # The proposed change set is authoritative, not the agent's claim about what it wrote.
+        result = result.model_copy(update={"files_written": changes.paths})
         version = self._versions.get(stage.id, 0) + 1
         self._versions[stage.id] = version
-        file_hashes = {
-            p: _sha((self.workspace / p).read_text(encoding="utf-8")) for p in sorted(written)
-        }
+        file_hashes = changes.file_hashes()
         sha = _sha(json.dumps({"result": result.model_dump(), "files": file_hashes}, sort_keys=True))
         artifact = Artifact(
             name=stage.id,
@@ -345,6 +403,11 @@ class Engine:
         self.events.append(
             EventType.STAGE_STATE, stage_id, **{"from": current.value, "to": NodeState.FAILED.value}, reason=reason
         )
+
+
+def _violation_summary(decision: PolicyDecision) -> str:
+    rules = sorted({v.rule for v in decision.at_least(decision.action)})
+    return f"{len(decision.violations)} violation(s); {decision.action.value} by {', '.join(rules)}"
 
 
 def _sha(text: str) -> str:

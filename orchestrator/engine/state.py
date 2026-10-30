@@ -27,12 +27,15 @@ class NodeState(str, Enum):
 TRANSITIONS: dict[NodeState, frozenset[NodeState]] = {
     NodeState.PENDING: frozenset({NodeState.READY, NodeState.SKIPPED}),
     NodeState.READY: frozenset({NodeState.RUNNING, NodeState.BLOCKED, NodeState.SKIPPED}),
-    NodeState.RUNNING: frozenset({NodeState.VALIDATING, NodeState.RETRYING, NodeState.FAILED}),
+    # RUNNING -> AWAITING_APPROVAL: policy requires a human before proposed changes are applied
+    NodeState.RUNNING: frozenset(
+        {NodeState.VALIDATING, NodeState.RETRYING, NodeState.AWAITING_APPROVAL, NodeState.FAILED}
+    ),
     NodeState.VALIDATING: frozenset(
         {NodeState.SUCCEEDED, NodeState.RETRYING, NodeState.AWAITING_APPROVAL, NodeState.FAILED}
     ),
     NodeState.RETRYING: frozenset({NodeState.RUNNING, NodeState.FAILED}),
-    NodeState.AWAITING_APPROVAL: frozenset({NodeState.SUCCEEDED, NodeState.FAILED}),
+    NodeState.AWAITING_APPROVAL: frozenset({NodeState.VALIDATING, NodeState.SUCCEEDED, NodeState.FAILED}),
     NodeState.SUCCEEDED: frozenset({NodeState.STALE}),
     NodeState.FAILED: frozenset({NodeState.ROLLED_BACK}),
     NodeState.ROLLED_BACK: frozenset({NodeState.READY}),

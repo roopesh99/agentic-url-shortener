@@ -11,6 +11,7 @@ from orchestrator.engine.dag import load_workflow
 from orchestrator.engine.scheduler import Engine
 from orchestrator.engine.state import NodeState
 from orchestrator.gates.builtin import builtin_gates
+from orchestrator.policy.engine import PolicyEngine
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENT = (ROOT / "scenarios" / "greenfield.md").read_text()
@@ -19,7 +20,7 @@ REQUIREMENT = (ROOT / "scenarios" / "greenfield.md").read_text()
 def _engine(tmp_path, workflow, requirement=REQUIREMENT):
     return Engine(
         workflow, stub_agents(), builtin_gates(), AutoApprover(),
-        run_id="e2e", run_dir=tmp_path / "run", workspace=tmp_path / "ws", requirement=requirement,
+        policy=PolicyEngine.load(ROOT / "policies" / "default.yaml"), run_id="e2e", run_dir=tmp_path / "run", workspace=tmp_path / "ws", requirement=requirement,
     )
 
 

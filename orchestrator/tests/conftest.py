@@ -14,6 +14,7 @@ from orchestrator.approvals.service import AutoApprover
 from orchestrator.engine.models import AgentResult, GateResult, WorkflowSpec
 from orchestrator.engine.scheduler import Engine
 from orchestrator.gates.base import Gate, GateContext, GateRegistry
+from orchestrator.policy.engine import PolicyEngine
 
 
 class Recorder:
@@ -91,7 +92,8 @@ def gates() -> GateRegistry:
 
 @pytest.fixture
 def build_engine(tmp_path: Path, gates: GateRegistry):
-    def _build(workflow: dict, agents: dict[str, Callable[[], Agent]], approver=None, **kwargs) -> Engine:
+    def _build(workflow: dict, agents: dict[str, Callable[[], Agent]], approver=None, policy=None,
+               **kwargs) -> Engine:
         registry = AgentRegistry()
         for name, factory in agents.items():
             registry.register(name, factory)
@@ -100,6 +102,7 @@ def build_engine(tmp_path: Path, gates: GateRegistry):
             registry,
             gates,
             approver or AutoApprover(),
+            policy=policy or PolicyEngine.permissive(),
             run_id="test-run",
             run_dir=tmp_path / "run",
             workspace=tmp_path / "ws",

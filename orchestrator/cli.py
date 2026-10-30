@@ -14,8 +14,10 @@ from .engine.dag import load_workflow
 from .engine.events import EventStore, EventType, replay_states
 from .engine.scheduler import Engine
 from .gates.builtin import builtin_gates
+from .policy.engine import PolicyEngine
 
 DEFAULT_RUNS_DIR = Path("runs")
+DEFAULT_POLICY = Path("policies/default.yaml")
 
 
 def _new_run_id(workflow_name: str) -> str:
@@ -38,6 +40,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         stub_agents(),
         builtin_gates(),
         approver,
+        policy=PolicyEngine.load(Path(args.policy)),
         run_id=run_id,
         run_dir=run_dir,
         workspace=workspace,
@@ -60,6 +63,11 @@ def cmd_status(args: argparse.Namespace) -> int:
     for e in events:
         if e.type == EventType.STAGE_STATE:
             print(f"{e.ts}  {e.stage:<14} {e.payload['from']:>17} -> {e.payload['to']:<17} {e.payload['reason']}")
+        elif e.type == EventType.POLICY_EVALUATED:
+            print(f"{e.ts}  {e.stage:<14} policy: {e.payload['action']} ({e.payload['tier']} risk, "
+                  f"{len(e.payload['violations'])} violation(s), {len(e.payload['files'])} file(s))")
+            for v in e.payload["violations"]:
+                print(f"{'':<46}- [{v['rule']}] {v['path'] or ''}{':' + str(v['line']) if v['line'] else ''} {v['message']}")
         elif e.type == EventType.APPROVAL_DECIDED:
             verdict = "APPROVED" if e.payload["approved"] else "REJECTED"
             print(f"{e.ts}  {e.stage:<14} {verdict} by {e.payload['approver']}")
@@ -87,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--requirement", required=True, help="requirement markdown file")
     run.add_argument("--workspace", default=".", help="directory agents write into")
     run.add_argument("--run-id")
+    run.add_argument("--policy", default=str(DEFAULT_POLICY), help="governance policy YAML")
     run.add_argument("--max-parallel", type=int, default=4)
     run.add_argument("--auto-approve", action="store_true",
                      help="non-interactive approvals (recorded as non-human in the audit log)")
