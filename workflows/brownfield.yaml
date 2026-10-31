@@ -21,6 +21,7 @@ stages:
     # Vague change requests can need a third round (the ambiguous scenario did); still bounded.
     clarification: { max_rounds: 3 }
     approval: required
+    max_revisions: 2            # a rejection with a comment sends the comment back as a change request
 
   - id: impact
     agent: impact_analyst
@@ -31,6 +32,7 @@ stages:
       - name: outputs_present
         args: { keys: [impacted, risks, test_strategy] }
     approval: required          # a human signs off the plan before any code changes
+    max_revisions: 2
 
   - id: implement
     agent: coder

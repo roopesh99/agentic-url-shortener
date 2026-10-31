@@ -142,8 +142,8 @@ async def test_clarification_rounds_are_bounded(tmp_path):
                run_id="c", run_dir=tmp_path / "run", workspace=tmp_path / "ws", requirement=REQUIREMENT)
 
     # also drop the engine's verbatim copy of the answers, so the gate cannot see them
-    e._record_artifact = lambda stage, attempt, result, changes, inputs, clarifications=(), agent=None: \
-        Engine._record_artifact(e, stage, attempt, result, changes, inputs, (), agent)
+    e._record_artifact = lambda stage, attempt, result, changes, inputs, clarifications=(), *args: \
+        Engine._record_artifact(e, stage, attempt, result, changes, inputs, (), *args)
     result = await e.run()
     assert CountingApprover.rounds == wf.stage("requirements").clarification.max_rounds == 2
     assert result.states["requirements"] is NodeState.FAILED

@@ -57,6 +57,9 @@ class StageSpec(BaseModel):
     approval: ApprovalMode = ApprovalMode.NONE
     retry: RetryPolicy = Field(default_factory=RetryPolicy)
     clarification: ClarificationPolicy = Field(default_factory=ClarificationPolicy)
+    # A workflow-approval rejection *with a comment* sends the comment back to the agent as a binding
+    # change request and re-runs the stage, up to this many times. Without a comment it is final.
+    max_revisions: int = Field(default=0, ge=0, le=5)
     fallback: str | None = None  # alternate agent name, used after retries are exhausted
     write_scope: list[str] = Field(default_factory=list)  # glob patterns, relative to workspace
     read_scope: list[str] = Field(default_factory=list)   # files the agent is shown as context

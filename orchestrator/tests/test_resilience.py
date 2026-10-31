@@ -354,3 +354,62 @@ async def test_workflow_hash_is_recorded_and_a_change_on_resume_is_flagged(build
     assert (await resumed.run(resume=True)).succeeded
     last = events(resumed, EventType.RUN_RESUMED)[-1].payload
     assert last["workflow_changed"] is True and last["workflow_sha"] != started["workflow_sha"]
+
+
+# --- request changes -------------------------------------------------------------------------
+
+class ScriptedApprover(AutoApprover):
+    """Returns pre-set decisions in order: (approved, comment)."""
+
+    def __init__(self, *decisions):
+        super().__init__()
+        self.decisions = list(decisions)
+
+    async def decide(self, request):
+        from orchestrator.approvals.service import ApprovalDecision
+        approved, comment = self.decisions.pop(0)
+        return ApprovalDecision(approved=approved, approver="reviewer", comment=comment)
+
+
+async def test_rejection_with_a_comment_sends_it_back_as_a_change_request(build_engine, recorder):
+    engine = build_engine(wf(stage(approval="required", max_revisions=2)), {"x": make_agent(recorder)},
+                          approver=ScriptedApprover((False, "keep error code expired"), (True, "")))
+    assert (await engine.run()).succeeded
+    first, second = recorder.attempts("impl")
+    assert first["feedback"] == []
+    assert any("keep error code expired" in f and "binding" in f for f in second["feedback"])
+    [req] = events(engine, EventType.CHANGES_REQUESTED)
+    assert req.payload["requested_by"] == "reviewer" and req.payload["revision"] == 1
+    accepted = engine.artifacts["impl"].result.outputs
+    assert accepted["change_requests"] == ["keep error code expired"], "the instruction travels with the output"
+
+
+async def test_change_request_survives_a_later_gate_failure(build_engine, recorder, gates):
+    class FailsOnSecondAttempt(Gate):
+        name = "fails_on_second"
+
+        async def check(self, ctx):
+            attempt = int(ctx.artifact.produced_by.rsplit("#", 1)[1])
+            return self.result(attempt != 2, f"attempt {attempt} broke the build")
+
+    gates.register(FailsOnSecondAttempt.name, FailsOnSecondAttempt)
+    # attempt 1: passes gates, rejected with a comment; attempt 2: the gate fails; attempt 3: passes, approved
+    engine = build_engine(
+        wf(stage(approval="required", max_revisions=1, retry={"max_attempts": 2}, exit_gates=["fails_on_second"])),
+        {"x": make_agent(recorder)},
+        approver=ScriptedApprover((False, "use 403 for wrong tokens"), (True, "")))
+    assert (await engine.run()).succeeded
+    third = recorder.attempts("impl")[2]["feedback"]
+    assert any("use 403 for wrong tokens" in f for f in third), "the reviewer's instruction outlives the gate failure"
+    assert any("attempt 2 broke the build" in f for f in third), "and the gate evidence is there too"
+
+
+async def test_rejection_without_a_comment_is_final_and_revisions_are_bounded(build_engine, recorder):
+    silent = build_engine(wf(stage(approval="required", max_revisions=2)), {"x": make_agent(recorder)},
+                          approver=ScriptedApprover((False, "")))
+    assert (await silent.run()).states["impl"] is S.FAILED
+
+    bounded = build_engine(wf(stage("b", approval="required", max_revisions=1)), {"x": make_agent(recorder)},
+                           approver=ScriptedApprover((False, "change 1"), (False, "change 2")))
+    assert (await bounded.run()).states["b"] is S.FAILED
+    assert len(recorder.attempts("b")) == 2

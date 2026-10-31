@@ -61,9 +61,15 @@ class _StageProgress:
 
     attempt: int = 0
     rounds: int = 0
-    feedback: list[str] = field(default_factory=list)
+    revisions: int = 0
+    feedback: list[str] = field(default_factory=list)         # why the last attempt failed; replaced each time
+    change_requests: list[str] = field(default_factory=list)  # reviewer instructions; kept for every later attempt
     clarifications: list[dict[str, str]] = field(default_factory=list)
     reverted: set[str] = field(default_factory=set)
+
+    def agent_feedback(self) -> list[str]:
+        return [f"Change request {i} from a human reviewer (binding; apply it exactly): {c}"
+                for i, c in enumerate(self.change_requests, start=1)] + self.feedback
 
 
 @dataclass
@@ -266,7 +272,7 @@ class Engine:
                 requirement=self.requirement,
                 inputs=inputs,
                 attempt=attempt,
-                feedback=list(progress.feedback),
+                feedback=progress.agent_feedback(),
                 clarifications=list(progress.clarifications),
             )
             result = await self._invoke_agent(stage, ctx, agent)
@@ -285,7 +291,7 @@ class Engine:
                 continue
 
             artifact = self._record_artifact(stage, attempt, result, ctx.changes, inputs,
-                                             progress.clarifications, agent)
+                                             progress.clarifications, agent, progress.change_requests)
 
             policy = self._evaluate_policy(stage, attempt, ctx.changes)
             if policy.action is Action.BLOCK:
@@ -350,6 +356,19 @@ class Engine:
                 )
                 if not decision.approved:
                     self._revert(stage, ctx.changes, progress, f"rejected by {decision.approver}")
+                    comment = decision.comment.strip()
+                    if comment and progress.revisions < stage.max_revisions:
+                        progress.revisions += 1
+                        progress.change_requests.append(comment)
+                        progress.feedback = []
+                        self.events.append(EventType.CHANGES_REQUESTED, stage.id, revision=progress.revisions,
+                                           requested_by=decision.approver, comment=comment,
+                                           artifact=artifact.ref().model_dump())
+                        allowed += 1  # a revision is not a failure: it does not consume the retry budget
+                        clarified = True
+                        self._transition(stage.id, NodeState.RETRYING,
+                                         f"changes requested by {decision.approver} (revision {progress.revisions})")
+                        continue
                     return _Outcome.TERMINAL, f"rejected by {decision.approver}"
             self._accept(stage, artifact, ctx.changes)
             return _Outcome.SUCCEEDED, ""
@@ -531,7 +550,7 @@ class Engine:
 
     def _record_artifact(
         self, stage: StageSpec, attempt: int, result: AgentResult, changes: ChangeSet, inputs: dict[str, Artifact],
-        clarifications: list[dict[str, str]] = (), agent: str | None = None,
+        clarifications: list[dict[str, str]] = (), agent: str | None = None, change_requests: list[str] = (),
     ) -> Artifact:
         # The proposed change set is authoritative, not the agent's claim about what it wrote.
         result = result.model_copy(update={"files_written": changes.paths})
@@ -539,6 +558,8 @@ class Engine:
             # Human answers travel with the artifact verbatim, so downstream stages see them
             # even if the agent paraphrased or dropped one.
             result = result.model_copy(update={"outputs": {**result.outputs, "clarifications": list(clarifications)}})
+        if change_requests:
+            result = result.model_copy(update={"outputs": {**result.outputs, "change_requests": list(change_requests)}})
         version = self._versions.get(stage.id, 0) + 1
         self._versions[stage.id] = version
         file_hashes = changes.file_hashes()
