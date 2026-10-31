@@ -1,0 +1,28 @@
+{
+  "run_id": "live-brownfield-1",
+  "stage": "test",
+  "reason": "policy: high-risk change (2 violation(s); require_approval by high_impact_paths)",
+  "summary": "18 new tests for the 22-case plan in new classes, plus two minimal edits to existing tests; full suite 95/95 against the change",
+  "gate_evidence": [
+    "[change_control/high_impact_paths] url-shortener/src/test/java/com/example/shortener/PersistenceRestartTest.java: modifies high-impact path (matches '*/src/test/*')",
+    "[change_control/high_impact_paths] url-shortener/src/test/java/com/example/shortener/service/LinkServiceTest.java: modifies high-impact path (matches '*/src/test/*')"
+  ],
+  "files_changed": [
+    "url-shortener/src/test/java/com/example/shortener/ClickPersistenceAndUpgradeTest.java",
+    "url-shortener/src/test/java/com/example/shortener/PersistenceRestartTest.java",
+    "url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java",
+    "url-shortener/src/test/java/com/example/shortener/api/ClickFailureIsolationTest.java",
+    "url-shortener/src/test/java/com/example/shortener/api/LinkStatsTest.java",
+    "url-shortener/src/test/java/com/example/shortener/service/LinkServiceTest.java"
+  ],
+  "decisions": [
+    "Existing tests touched: LinkServiceTest only gains a mock ClickEventRepository constructor argument; PersistenceRestartTest only expects migrations 1,2 instead of 1. No assertion removed or weakened (agent)",
+    "TC-FR3-03 race: Two deterministic interleavings, each holding the first operation's transaction (and row lock) open while the second starts (agent)",
+    "TC-NFR1-01: A @MockitoBean ClickRecorder that throws, through the running context; TC-FR1-03 covers the controller in isolation (agent)",
+    "TC-NFR2-01: Redirect sent with remote address, User-Agent, X-Forwarded-For, Cookie and Referer probes; asserts the table has only ID, LINK_ID, CLICKED_AT, CLICK_DATE and no probe value is stored (agent)",
+    "TC-NFR4-01: Builds a real V1-only file database with Flyway target=1 holding a link and a tombstone, then starts the new build on it (agent)",
+    "TC-FR4-01..03, TC-NFR1-02, TC-NFR5-01: Covered by the existing LinkCreationTest, LinkLifecycleTest and RedirectLatencyTest, which run unchanged (redirect p99 about 1.1 ms with click recording) (agent)",
+    "Implementation review: No implementation defects found (agent)"
+  ],
+  "artifact_sha": "76b59bf49caf5049093bc66ca82c1027ed3363f5e440fff4785300ed14b00218"
+}

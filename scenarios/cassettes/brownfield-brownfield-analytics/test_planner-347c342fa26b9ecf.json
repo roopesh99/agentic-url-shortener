@@ -1,0 +1,247 @@
+{
+  "request": {
+    "agent": "test_planner",
+    "effort": "medium",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "decisions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "choice": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "topic": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "topic",
+              "choice",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "test_cases": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "check": {
+                "type": "string"
+              },
+              "covers": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "level": {
+                "enum": [
+                  "unit",
+                  "integration"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "covers",
+              "level",
+              "check"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "summary",
+        "test_cases",
+        "decisions"
+      ],
+      "type": "object"
+    },
+    "system": "You are the test planner in a governed software delivery pipeline. From the approved specification you design the test cases that will prove the service meets its acceptance criteria. You work in parallel with the implementation, so plan against the specification, not against code.\n\n- Cover every functional requirement and every testable non-functional requirement with at least one case; cover failure paths (invalid input, not found, conflicts, expiry, abuse limits) as well as the main path.\n- Give each case a stable id of the form `TC-<requirement id>-<nn>`, the requirement it `covers`, its `level` (\"unit\" for logic in isolation, \"integration\" for HTTP behaviour through the running Spring context), and a `check` written as a concrete, observable expectation.\n- Requirements that cannot be verified by an automated test in this environment (for example a p99 latency target) should still get a case describing the closest meaningful automated check, and a decision explaining the gap.\n- `summary`: one line with the number of cases and the coverage.",
+    "user": "<approved_specification>\n{\n  \"acceptance_criteria\": [\n    \"Given an active link, when a request receives the link's existing successful redirect response, then the response behavior is unchanged and the link's stats reflect one additional click.\",\n    \"Given a link with clicks, when a requester sends GET to its stats subresource with the matching X-Management-Token, then the response contains the lifetime total, exactly 30 daily entries for the current UTC day and preceding 29 days in oldest-first order (including zero-count days), and the most recent click timestamp in UTC.\",\n    \"Given a link with no clicks, when an authorized requester fetches its stats, then totalClicks is 0, each returned daily count is 0, and lastClickedAt is null.\",\n    \"Given an expired link, when an authorized requester fetches its stats, then stats are returned as for any other existing link.\",\n    \"Given an existing link, when a stats request omits X-Management-Token, then it returns 401; when the header contains a non-matching token, then it returns 403.\",\n    \"Given an unknown or deleted link, when a requester fetches its stats with a token header, then the endpoint returns 404 and does not return stats.\",\n    \"Given a link with recorded clicks, when the link is deleted, then the tombstone and removal of its click records occur in the same transaction, and subsequent stats requests return 404.\",\n    \"Given a service restart, when an authorized requester fetches stats for a link that remains available, then its previously persisted click data is still reflected.\",\n    \"Given a click-recording persistence failure during a redirect, when the redirect request is handled, then it still returns the existing successful redirect response; the failed click may be absent from stats.\",\n    \"Given click analytics data is recorded, when its stored representation is inspected, then it contains no visitor identifiers such as IP addresses, user agents, cookies, or fingerprints, and the stats response reports no unique-visitor metric.\",\n    \"When the existing test suite and redirect latency check run after the change, then the suite passes and the existing p99 < 50 ms check continues to pass.\"\n  ],\n  \"ambiguities\": [\n    {\n      \"question\": \"How many days of per-day history should the stats endpoint return?\",\n      \"rationale\": \"Decided by a human: this fixes the history window, timezone, ordering, and zero-fill behavior.\",\n      \"resolution\": \"30 days: the current UTC day plus the previous 29, oldest first, with a zero count for days without clicks.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"Are stats public like metadata, or must a requester provide the management token?\",\n      \"rationale\": \"Decided by a human: this defines the stats endpoint's access control and required status codes.\",\n      \"resolution\": \"Stats are private. Require the link's management token in the X-Management-Token header, as for DELETE: return 401 when the header is missing, 403 when the token does not match, and 404 for unknown or deleted links.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"Whether \\\"unique visitors\\\" should be reported.\",\n      \"rationale\": \"Decided by a human: this excludes unique-visitor metrics and specifies the privacy constraint for click data.\",\n      \"resolution\": \"No. Report clicks only and store no visitor identifiers: no IP addresses, user agents, cookies, or fingerprints.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"When a link is deleted, should its stored click data be erased or retained internally?\",\n      \"rationale\": \"Decided by a human: this specifies deletion and retention behavior for analytics data.\",\n      \"resolution\": \"Erase all click records in the same transaction that turns the link into a tombstone; retain nothing about past visits.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What event qualifies as a successful redirect and therefore a click?\",\n      \"rationale\": \"A shortener can observe its own redirect response but cannot reliably observe destination arrival; this is a conventional, low-risk server-side click definition.\",\n      \"resolution\": \"Count a request when the existing service returns its successful redirect response; do not require confirmation that the visitor reached the destination.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What route and response representation should the stats endpoint use, including the representation for a link that has never been clicked?\",\n      \"rationale\": \"A read-only GET subresource and explicit JSON fields are conventional for per-link stats; following the codebase's route and API conventions avoids imposing a conflicting API style.\",\n      \"resolution\": \"Use a GET stats subresource following the existing link route and API conventions. Return JSON with totalClicks as an integer, dailyClicks as an oldest-first array of objects containing date (YYYY-MM-DD) and clicks (integer), and lastClickedAt as an ISO 8601 UTC timestamp or null when there have been no clicks.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"Does total clicks mean all clicks or only clicks within the returned daily-history window?\",\n      \"rationale\": \"A lifetime total is the conventional interpretation of total clicks when recent daily history is requested separately.\",\n      \"resolution\": \"totalClicks is the lifetime count for the link; dailyClicks covers only the specified 30-day window.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"If click recording fails while a redirect is being handled, may the click be absent from stats?\",\n      \"rationale\": \"This prioritizes the explicit redirect reliability requirement over analytics availability during a recording failure, which is the conventional low-risk behavior for latency-sensitive analytics.\",\n      \"resolution\": \"The redirect must still return its existing successful response. Click recording is best-effort when its persistence operation fails, so that click may be absent from analytics.\",\n      \"source\": \"assumption\"\n    }\n  ],\n  \"clarifications\": [\n    {\n      \"answer\": \"30 days: the current UTC day plus the previous 29, oldest first, with a zero count for days without clicks.\",\n      \"question\": \"How many days of per-day history should the stats endpoint return?\"\n    },\n    {\n      \"answer\": \"Private. Stats require the link's management token in the X-Management-Token header, exactly like DELETE: 401 when the header is missing, 403 when the token does not match, 404 for unknown or deleted links.\",\n      \"question\": \"Are stats public like metadata, or must a requester provide the management token?\"\n    },\n    {\n      \"answer\": \"Erase it. Deleting a link removes all of its click records in the same transaction that turns the link into a tombstone; nothing about past visits is retained.\",\n      \"question\": \"When a link is deleted, should its stored click data be erased or retained internally?\"\n    },\n    {\n      \"answer\": \"No. Unique visitors are not reported. Analytics count clicks only and store no visitor identifiers: no IP addresses, user agents, cookies or fingerprints (NFR2).\",\n      \"question\": \"Whether \\\"unique visitors\\\" should be reported.\"\n    }\n  ],\n  \"functional\": [\n    {\n      \"id\": \"FR1\",\n      \"text\": \"Count each request for which the existing service returns a successful redirect response as one click on that link.\"\n    },\n    {\n      \"id\": \"FR2\",\n      \"text\": \"Provide a stats endpoint for a link that returns its lifetime total click count, daily click counts for the current UTC day and previous 29 days in oldest-first order (including zero-count days), and the timestamp of its most recent click.\"\n    },\n    {\n      \"id\": \"FR3\",\n      \"text\": \"Return stats for expired links. When a link is deleted, erase all of its click records in the same transaction that changes the link to a tombstone; deleted links have no stats.\"\n    },\n    {\n      \"id\": \"FR4\",\n      \"text\": \"Do not change the existing behavior of link creation, redirects, metadata, or deletion.\"\n    },\n    {\n      \"id\": \"FR5\",\n      \"text\": \"Report click counts only; do not report unique visitors.\"\n    }\n  ],\n  \"goal\": \"Add click counting to the existing URL shortener and provide private per-link statistics. Preserve existing behavior, keep redirects reliable and within the current latency target, and do not collect visitor identifiers.\",\n  \"non_functional\": [\n    {\n      \"id\": \"NFR1\",\n      \"text\": \"The existing redirect p99 < 50 ms check must continue to pass. A click-recording failure must not cause a redirect to fail.\"\n    },\n    {\n      \"id\": \"NFR2\",\n      \"text\": \"Do not build visitor profiles or store visitor identifiers for click analytics, including IP addresses, user agents, cookies, or fingerprints.\"\n    },\n    {\n      \"id\": \"NFR3\",\n      \"text\": \"Persist click data so it survives service restarts.\"\n    },\n    {\n      \"id\": \"NFR4\",\n      \"text\": \"Implement the enhancement using the existing codebase architecture and conventions.\"\n    },\n    {\n      \"id\": \"NFR5\",\n      \"text\": \"Keep the existing test suite passing and add tests covering the new behavior.\"\n    }\n  ]\n}\n</approved_specification>\n\n<approved_impact_analysis>\n{\n  \"api_changes\": [\n    {\n      \"change\": \"New private endpoint. Request: no body; require X-Management-Token. Response: 200 JSON {\\\"totalClicks\\\": integer, \\\"dailyClicks\\\": [{\\\"date\\\": \\\"YYYY-MM-DD\\\", \\\"clicks\\\": integer}], \\\"lastClickedAt\\\": ISO-8601 UTC timestamp or null}. Return exactly 30 daily entries, oldest first, covering the current UTC date and previous 29 dates, zero-filled. Return 401 with the existing error JSON convention when the token header is absent or blank; 403 when it does not match; 404 for unknown or deleted links. Expired links return stats normally.\",\n      \"method\": \"GET\",\n      \"path\": \"/api/links/{code}/stats\"\n    },\n    {\n      \"change\": \"Request and response contract unchanged: X-Management-Token header; 204 with no body on success, and the existing 401/403/404 error behavior. Internally, deletion now removes click events in the same transaction that marks the link as a tombstone.\",\n      \"method\": \"DELETE\",\n      \"path\": \"/api/links/{code}\"\n    }\n  ],\n  \"data_changes\": [\n    \"Create V2__create_click_events.sql; do not alter V1 or any other applied migration.\",\n    \"Add click_events with an identity primary key, non-null link_id foreign key to links.id, clicked_at as a microsecond-precision timestamp with time zone, and click_date as a UTC DATE for efficient and timezone-stable daily aggregation.\",\n    \"Add indexes supporting link_id plus click_date aggregation and link_id plus clicked_at latest-click lookup. Do not add visitor identifiers or unique-visitor data.\",\n    \"Delete all click_events for a link within the existing transactional deletion operation before/with the tombstone update; do not cascade-delete the links row because tombstones reserve codes.\"\n  ],\n  \"data_flows\": [\n    \"Redirect hot path: resolve the active link and destination as today; for a successful redirect, persist one click event using the service clock and UTC date. Do not read request IP, user-agent, cookies, or other visitor data for analytics. If persistence fails, contain the failure and still return the existing 302, Location, and no-store headers.\",\n    \"Click recording is synchronous and limited to a local event insert so the count is durable and visible to a stats request immediately after the redirect. Keep it bounded and indexed; the existing redirect latency check must measure this path.\",\n    \"Stats path: find the live link first, then check its management token; expired links remain live for this purpose. Query the lifetime event count, latest timestamp, and grouped counts for the 30-day UTC range, then construct all 30 dates with zeroes where no group exists.\",\n    \"Deletion path: after existing token authorization, remove click events and mark the link as a tombstone in one transaction. Coordinate event insertion with deletion so an in-flight redirect cannot commit a click after deletion has removed the link's events.\",\n    \"Click events are stored in the existing file-based H2 database and migrated by Flyway, so recorded data survives service restarts.\"\n  ],\n  \"impacted\": [\n    {\n      \"kind\": \"modify\",\n      \"path\": \"url-shortener/src/main/java/com/example/shortener/domain/Link.java\",\n      \"reason\": \"FR1/FR3: expose the persisted link id so click events can be recorded and removed for the correct link.\"\n    },\n    {\n      \"kind\": \"create\",\n      \"path\": \"url-shortener/src/main/java/com/example/shortener/domain/ClickEvent.java\",\n      \"reason\": \"FR1/NFR2/NFR3: model persisted click events with only link, UTC timestamp, and UTC date fields.\"\n    },\n    {\n      \"kind\": \"create\",\n      \"path\": \"url-shortener/src/main/java/com/example/shortener/domain/ClickEventRepository.java\",\n      \"reason\": \"FR1/FR2/FR3: provide persistence operations for click recording, lifetime/latest counts, UTC daily aggregation, and transactional deletion.\"\n    },\n    {\n      \"kind\": \"modify\",\n      \"path\": \"url-shortener/src/main/java/com/example/shortener/service/LinkService.java\",\n      \"reason\": \"FR1/FR2/FR3: resolve redirect targets for click recording, authorize and calculate stats, and erase click events within the tombstone transaction.\"\n    },\n    {\n      \"kind\": \"modify\",\n      \"path\": \"url-shortener/src/main/java/com/example/shortener/api/RedirectController.java\",\n      \"reason\": \"FR1/NFR1: record a click for a successful redirect without allowing click persistence failure to change the redirect response.\"\n    },\n    {\n      \"kind\": \"modify\",\n      \"path\": \"url-shortener/src/main/java/com/example/shortener/api/LinkController.java\",\n      \"reason\": \"FR2: expose the private GET stats subresource using the existing management-token header convention.\"\n    },\n    {\n      \"kind\": \"modify\",\n      \"path\": \"url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java\",\n      \"reason\": \"FR2/FR5: define the stats JSON representation with lifetime total, daily entries, and nullable latest-click timestamp, without visitor metrics.\"\n    },\n    {\n      \"kind\": \"create\",\n      \"path\": \"url-shortener/src/main/resources/db/migration/V2__create_click_events.sql\",\n      \"reason\": \"FR1/FR3/NFR2/NFR3: add the click-event table, link foreign key, UTC date and timestamp fields, and query indexes in a new migration.\"\n    },\n    {\n      \"kind\": \"create\",\n      \"path\": \"url-shortener/src/test/java/com/example/shortener/api/LinkStatsTest.java\",\n      \"reason\": \"FR1-FR5/NFR1-NFR3: test click counting, stats shape and authorization, expiration, deletion, privacy, and persistence-failure behavior.\"\n    },\n    {\n      \"kind\": \"modify\",\n      \"path\": \"url-shortener/src/test/java/com/example/shortener/service/LinkServiceTest.java\",\n      \"reason\": \"FR1/FR3: update service test setup for click persistence and cover the associated service behavior.\"\n    },\n    {\n      \"kind\": \"modify\",\n      \"path\": \"url-shortener/src/test/java/com/example/shortener/PersistenceRestartTest.java\",\n      \"reason\": \"NFR3: verify click data survives restart and update migration-version assertions for the new forward migration.\"\n    }\n  ],\n  \"risks\": [\n    {\n      \"detection\": \"Run RedirectLatencyTest against the updated redirect path and require its existing p99 < 50 ms assertion to pass.\",\n      \"mitigation\": \"Use a minimal event row and indexes suited to the insert and stats queries; avoid external calls, visitor-data processing, and unbounded work on redirects.\",\n      \"risk\": \"A synchronous database insert on every redirect could push the hot path above the existing p99 latency target.\"\n    },\n    {\n      \"detection\": \"Add a test that forces click persistence to fail and asserts the redirect remains 302 with its existing Location and Cache-Control headers.\",\n      \"mitigation\": \"Contain persistence exceptions at the redirect boundary and preserve the existing redirect response; analytics may omit the failed click as permitted by the specification.\",\n      \"risk\": \"A click-store outage or transaction-commit error could accidentally turn a successful redirect into an error.\"\n    },\n    {\n      \"detection\": \"Test concurrent redirect recording and deletion, then assert the tombstone remains and no click events for it remain.\",\n      \"mitigation\": \"Coordinate click insertion and tombstoning in transactions so deletion and recording cannot race into retaining post-deletion events.\",\n      \"risk\": \"Concurrent click recording and deletion could leave an event committed after the deletion transaction has erased prior events.\"\n    },\n    {\n      \"detection\": \"Use the controllable test clock to cover day boundaries, empty days, oldest-first order, and exactly 30 returned entries.\",\n      \"mitigation\": \"Derive and persist click_date from the injected UTC clock, use UTC window bounds, and construct all 30 dates explicitly in oldest-first order.\",\n      \"risk\": \"Local-time grouping or date-boundary errors could produce incorrect daily buckets, ordering, or zero filling.\"\n    },\n    {\n      \"detection\": \"Test missing and mismatched tokens on existing links, and verify unknown/deleted links return 404 even when a token header is supplied.\",\n      \"mitigation\": \"Follow the existing delete flow: find a non-deleted link before checking the token; return 401 for a missing token and 403 for a mismatch.\",\n      \"risk\": \"Authorization-order changes could expose stats or return the wrong status for unknown, deleted, or unauthorized links.\"\n    },\n    {\n      \"detection\": \"Run PersistenceRestartTest against a file-backed database across two application starts and assert both migrations are applied.\",\n      \"mitigation\": \"Add only a higher-numbered Flyway migration and keep Hibernate schema validation enabled.\",\n      \"risk\": \"An incorrect schema or migration-version expectation could prevent startup or break existing persisted databases.\"\n    },\n    {\n      \"detection\": \"Inspect persisted event fields and assert the stats response contains only the specified click metrics.\",\n      \"mitigation\": \"Keep the event schema limited to link id, click timestamp, and UTC date; do not pass request identity fields into analytics or add a unique-visitor response field.\",\n      \"risk\": \"Click data could inadvertently acquire visitor identifiers or expose an unapproved metric.\"\n    },\n    {\n      \"detection\": \"Test event removal on deletion and exercise lifetime and daily aggregate queries with multiple events.\",\n      \"mitigation\": \"Keep rows compact and indexed, and delete every event on link deletion; do not introduce retention or visitor-profile tables outside the approved behavior.\",\n      \"risk\": \"Per-click event storage grows for as long as links and their click history are retained.\"\n    }\n  ],\n  \"test_strategy\": [\n    \"Existing LinkLifecycleTest protects the 302 redirect headers, expiry behavior, public metadata, token-authorized deletion, and current 401/403/404 contracts.\",\n    \"Existing LinkCreationTest protects link creation request and response behavior, which must remain unchanged.\",\n    \"Existing RedirectLatencyTest protects the redirect p99 < 50 ms check and must run after click recording is added.\",\n    \"Existing PersistenceRestartTest protects file-based persistence and restart behavior; update it to assert click persistence and migration versions 1 and 2.\",\n    \"Existing LinkServiceTest protects service-level behavior; update its setup for click persistence and add service failure/deletion assertions where appropriate.\",\n    \"Add LinkStatsTest for one-click-per-successful-redirect, no count for failed/expired redirects, exact lifetime totals, UTC date-window ordering and zero filling, null latest timestamp for no clicks, expired-link stats, authorization status codes, unknown/deleted 404s, and atomic click cleanup on deletion.\",\n    \"Add a persistence-failure redirect test and a concurrent record/delete test; verify redirect status and headers survive persistence failure and no events remain after deletion.\",\n    \"Run the full existing suite, migration validation on both clean and file-backed databases, and RedirectLatencyTest.\"\n  ]\n}\n</approved_impact_analysis>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "decisions": [
+        {
+          "choice": "Run the existing RedirectLatencyTest with click persistence enabled; treat its p99 < 50 ms assertion as the automated check.",
+          "rationale": "Latency depends on the test environment and load conditions, so this is the closest available automated verification of the specified target rather than a universal performance guarantee.",
+          "topic": "Redirect p99 latency verification"
+        },
+        {
+          "choice": "Use application startup, Flyway migration, and schema-validation checks as automated integration coverage.",
+          "rationale": "The tests can verify compatibility with the existing persistence and Spring startup conventions, but cannot fully judge architectural conformity; code review remains necessary for that part.",
+          "topic": "NFR4 architecture-convention verification"
+        },
+        {
+          "choice": "Inspect persisted schema and event rows and verify the stats response has no visitor fields.",
+          "rationale": "These checks detect visitor identifiers in the approved storage and response surfaces, but cannot prove that no untested code path ever reads or processes such data.",
+          "topic": "NFR2 privacy verification"
+        }
+      ],
+      "summary": "22 cases covering all functional requirements, all testable non-functional requirements, specified API behavior, and identified failure and concurrency paths.",
+      "test_cases": [
+        {
+          "check": "Create an active link and GET its redirect route; assert the existing successful 302 response, Location and no-store headers are unchanged, then fetch authorized stats and assert totalClicks increased by exactly one.",
+          "covers": "FR1",
+          "id": "TC-FR1-01",
+          "level": "integration"
+        },
+        {
+          "check": "Request a nonexistent and an expired redirect; assert each retains its existing non-success response and neither request creates a click event.",
+          "covers": "FR1",
+          "id": "TC-FR1-02",
+          "level": "integration"
+        },
+        {
+          "check": "Force the click-event persistence operation to throw while handling a successful redirect; assert the redirect result remains 302 with the original Location and no-store headers.",
+          "covers": "FR1",
+          "id": "TC-FR1-03",
+          "level": "unit"
+        },
+        {
+          "check": "With a fixed UTC clock and click events spanning the 30-day window plus an older event, request authorized stats; assert totalClicks includes all events, dailyClicks has exactly 30 YYYY-MM-DD entries in oldest-first order, every empty day is zero, boundary-day clicks are assigned to the correct UTC dates, and lastClickedAt is the latest event timestamp in ISO-8601 UTC.",
+          "covers": "FR2",
+          "id": "TC-FR2-01",
+          "level": "integration"
+        },
+        {
+          "check": "Request authorized stats for a link with no events; assert totalClicks is 0, dailyClicks contains exactly 30 zero-count entries in oldest-first order, and lastClickedAt is null.",
+          "covers": "FR2",
+          "id": "TC-FR2-02",
+          "level": "integration"
+        },
+        {
+          "check": "Request stats for an existing link without X-Management-Token and with a blank header; assert both requests return 401 using the existing error JSON convention and disclose no stats.",
+          "covers": "FR2",
+          "id": "TC-FR2-03",
+          "level": "integration"
+        },
+        {
+          "check": "Request stats for an existing link with a non-matching management token; assert the response is 403 using the existing error JSON convention and contains no stats.",
+          "covers": "FR2",
+          "id": "TC-FR2-04",
+          "level": "integration"
+        },
+        {
+          "check": "Request stats for an unknown code with a token header; assert the response is 404 and contains no stats.",
+          "covers": "FR2",
+          "id": "TC-FR2-05",
+          "level": "integration"
+        },
+        {
+          "check": "Create an expired but not deleted link with recorded clicks and request stats using its management token; assert stats return 200 with the persisted counts and latest timestamp.",
+          "covers": "FR3",
+          "id": "TC-FR3-01",
+          "level": "integration"
+        },
+        {
+          "check": "Record clicks, delete the link with its management token, and assert the delete response remains 204, the link is a tombstone, no click events remain for its link id, and a subsequent stats request returns 404.",
+          "covers": "FR3",
+          "id": "TC-FR3-02",
+          "level": "integration"
+        },
+        {
+          "check": "Coordinate a redirect click-recording operation with deletion of the same link; after both operations complete, assert the link remains a tombstone and the database contains no click events for it.",
+          "covers": "FR3",
+          "id": "TC-FR3-03",
+          "level": "integration"
+        },
+        {
+          "check": "Request stats for a deleted link with a token header; assert the response is 404 and contains no stats.",
+          "covers": "FR3",
+          "id": "TC-FR3-04",
+          "level": "integration"
+        },
+        {
+          "check": "Run the existing link-creation contract test and assert request validation, status, response fields, and created-link behavior are unchanged.",
+          "covers": "FR4",
+          "id": "TC-FR4-01",
+          "level": "integration"
+        },
+        {
+          "check": "Run the existing public metadata contract test and assert its response status, JSON fields, and behavior are unchanged by click analytics.",
+          "covers": "FR4",
+          "id": "TC-FR4-02",
+          "level": "integration"
+        },
+        {
+          "check": "Run the existing deletion lifecycle contract test and assert its authorization statuses and successful 204 response with no body remain unchanged.",
+          "covers": "FR4",
+          "id": "TC-FR4-03",
+          "level": "integration"
+        },
+        {
+          "check": "Record clicks and fetch stats; assert the JSON contains only totalClicks, dailyClicks, and lastClickedAt as click metrics and has no unique-visitor field or visitor count.",
+          "covers": "FR5",
+          "id": "TC-FR5-01",
+          "level": "integration"
+        },
+        {
+          "check": "Run the redirect persistence-failure scenario through the running Spring context; assert the response remains the existing 302 with its Location and no-store headers even when click insertion fails.",
+          "covers": "NFR1",
+          "id": "TC-NFR1-01",
+          "level": "integration"
+        },
+        {
+          "check": "Run the existing RedirectLatencyTest with click recording enabled and assert its p99 redirect latency remains below 50 ms.",
+          "covers": "NFR1",
+          "id": "TC-NFR1-02",
+          "level": "integration"
+        },
+        {
+          "check": "Record clicks while supplying request IP, user-agent, cookie, and other visitor-like headers; inspect the persisted click-event schema and rows and stats JSON, and assert no visitor identifiers, fingerprints, or unique-visitor data are stored or returned.",
+          "covers": "NFR2",
+          "id": "TC-NFR2-01",
+          "level": "integration"
+        },
+        {
+          "check": "Record clicks in the file-backed database, stop and restart the application against the same database, then request authorized stats and assert the lifetime total, daily counts, and latest timestamp still reflect the recorded events.",
+          "covers": "NFR3",
+          "id": "TC-NFR3-01",
+          "level": "integration"
+        },
+        {
+          "check": "Start the Spring application against both a clean database and an existing file-backed database; assert Flyway applies V2 without modifying V1, schema validation succeeds, and the click-event table and indexes are available.",
+          "covers": "NFR4",
+          "id": "TC-NFR4-01",
+          "level": "integration"
+        },
+        {
+          "check": "Run the complete existing and added automated test suite; assert all tests pass, including link creation, lifecycle, stats, restart persistence, and redirect latency tests.",
+          "covers": "NFR5",
+          "id": "TC-NFR5-01",
+          "level": "integration"
+        }
+      ]
+    },
+    "duration_ms": 23569,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_f1dc3b8e9a4c454ea1a2079f394b7be6",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 4657,
+      "output_tokens": 3007
+    }
+  }
+}

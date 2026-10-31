@@ -1,0 +1,30 @@
+{
+  "run_id": "live-brownfield-1",
+  "stage": "implement",
+  "reason": "policy: high-risk change (1 violation(s); require_approval by high_impact_paths)",
+  "summary": "Click analytics per the approved impact analysis: click_events table (V2), best-effort click recording on redirect, private stats endpoint, click erasure on delete under a row lock",
+  "gate_evidence": [
+    "[change_control/high_impact_paths] url-shortener/src/main/resources/db/migration/V2__create_click_events.sql: creates high-impact path (matches '*/db/migration/*')"
+  ],
+  "files_changed": [
+    "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+    "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+    "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+    "url-shortener/src/main/java/com/example/shortener/domain/ClickEvent.java",
+    "url-shortener/src/main/java/com/example/shortener/domain/ClickEventRepository.java",
+    "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+    "url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java",
+    "url-shortener/src/main/java/com/example/shortener/service/ClickRecorder.java",
+    "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+    "url-shortener/src/main/resources/db/migration/V2__create_click_events.sql"
+  ],
+  "decisions": [
+    "Deletion race: Click recording and deletion both take a PESSIMISTIC_WRITE lock on the link row (SELECT ... FOR UPDATE); recording only inserts if the link is not deleted (agent)",
+    "Failure isolation: ClickRecorder runs in its own transaction after the redirect lookup; RedirectController catches any RuntimeException from it and still returns the 302 (agent)",
+    "Existing API compatibility: resolveForRedirect(String) keeps its signature (now delegating to resolve(String)), so existing callers and tests keep working (agent)",
+    "Daily buckets: click_date is stored as the UTC day at write time; stats query days >= today-29 and zero-fill in Java, oldest first (agent)",
+    "Privacy: click_events holds only id, link_id, clicked_at, click_date; the request is never inspected for analytics (agent)",
+    "Migration: V2__create_click_events.sql adds the table, a foreign key to links and two indexes; V1 untouched. Verified by upgrading a real v1 database: existing links and tombstones unaffected (agent)"
+  ],
+  "artifact_sha": "d46b3ae4e502b394698f4f7295d7ffc385e6725f616c5c731fdfb9391a7d0074"
+}

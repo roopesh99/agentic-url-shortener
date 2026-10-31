@@ -1,0 +1,11 @@
+{
+  "run_id": "live-brownfield-1",
+  "stage": "requirements",
+  "round": 2,
+  "questions": [
+    {
+      "question": "Whether \"unique visitors\" should be reported.",
+      "why": "This was not answered. Unique-visitor reporting changes the requested metrics and may require identifying or correlating visitors, so it cannot be inferred safely from the click-count requirements or the privacy constraint."
+    }
+  ]
+}

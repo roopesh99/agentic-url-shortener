@@ -1,0 +1,18 @@
+{
+  "run_id": "live-brownfield-1",
+  "stage": "impact",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Add private, persistent per-link click statistics using UTC click events, while preserving existing endpoint contracts and keeping redirect recording best-effort.",
+  "gate_evidence": [
+    "outputs_present: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "Click storage representation: Store one compact event row per click, containing only link id, clicked_at, and UTC click_date. (agent)",
+    "UTC daily aggregation: Persist a UTC-derived click_date alongside the UTC timestamp and aggregate on that indexed date. (agent)",
+    "Redirect recording: Perform a minimal synchronous insert and contain persistence failures rather than making recording asynchronous. (agent)",
+    "Stats route and authorization: Use GET /api/links/{code}/stats and the existing X-Management-Token convention, with the specified 401/403/404 distinctions. (agent)",
+    "Existing API contracts: Keep creation, redirect, metadata, and deletion request/response contracts unchanged; add only the stats subresource and deletion's internal analytics cleanup. (agent)"
+  ],
+  "artifact_sha": "6a87b4b8edf929151637a3c75026f066390d091f3d21e74ac44671531dfc267b"
+}

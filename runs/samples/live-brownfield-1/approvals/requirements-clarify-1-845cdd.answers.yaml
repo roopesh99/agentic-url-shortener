@@ -1,0 +1,16 @@
+# Open questions from stage 'requirements' (run live-brownfield-1, round 1).
+# These are product decisions the agent would not guess. Fill in every `answer`,
+# then submit:  orch answer live-brownfield-1 requirements-clarify-1-845cdd
+# Your answers become binding human decisions in the audit log.
+
+- question: How many days of per-day history should the stats endpoint return?
+  why: The duration is an explicit open point and determines the product-visible data window and response.
+  answer: ''
+- question: Are stats public like metadata, or must a requester provide the management token?
+  why: This is an access-control decision affecting who can see link performance data; choosing incorrectly
+    could expose sensitive business information.
+  answer: ''
+- question: When a link is deleted, should its stored click data be erased or retained internally?
+  why: FR3 requires deleted links to have no stats available but does not specify data erasure. Retention
+    and deletion are privacy and data-lifecycle decisions.
+  answer: ''

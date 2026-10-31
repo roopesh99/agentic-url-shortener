@@ -1,0 +1,18 @@
+{
+  "run_id": "live-brownfield-1",
+  "stage": "requirements",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Normalized 5 functional and 5 non-functional requirements; 8 ambiguities resolved by recorded decisions or conventional assumptions, 0 left open.",
+  "gate_evidence": [
+    "outputs_present: PASS",
+    "ambiguities_resolved: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "What event qualifies as a successful redirect and therefore a click?: Count a request when the existing service returns its successful redirect response; do not require confirmation that the visitor reached the destination. (assumption)",
+    "What route and response representation should the stats endpoint use, including the representation for a link that has never been clicked?: Use a GET stats subresource following the existing link route and API conventions. Return JSON with totalClicks as an integer, dailyClicks as an oldest-first array of objects containing date (YYYY-MM-DD) and clicks (integer), and lastClickedAt as an ISO 8601 UTC timestamp or null when there have been no clicks. (assumption)",
+    "Does total clicks mean all clicks or only clicks within the returned daily-history window?: totalClicks is the lifetime count for the link; dailyClicks covers only the specified 30-day window. (assumption)",
+    "If click recording fails while a redirect is being handled, may the click be absent from stats?: The redirect must still return its existing successful response. Click recording is best-effort when its persistence operation fails, so that click may be absent from analytics. (assumption)"
+  ],
+  "artifact_sha": "5e4bb73becd0b9419faa75313d45125a3910451bf6bccad892407ef9cd6b9c7a"
+}

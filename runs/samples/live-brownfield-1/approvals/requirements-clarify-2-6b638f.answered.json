@@ -1,0 +1,10 @@
+{
+  "answers": [
+    {
+      "question": "Whether \"unique visitors\" should be reported.",
+      "answer": "No. Unique visitors are not reported. Analytics count clicks only and store no visitor identifiers: no IP addresses, user agents, cookies or fingerprints (NFR2)."
+    }
+  ],
+  "answered_by": "roopeshkotte",
+  "source": "human"
+}

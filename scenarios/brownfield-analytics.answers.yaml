@@ -1,0 +1,16 @@
+# Answers to the analyst's open questions for scenarios/brownfield-analytics.md.
+# Drafted by Claude Code; question 2 decided by the product owner (roopeshkotte): stats are private; round 2: no unique visitors.
+# Questions 1 and 3 use Claude Code's suggestions, accepted on submission. 2026-10-31.
+# Question text matches the recorded analyst output exactly, so replays answer deterministically.
+
+- question: How many days of per-day history should the stats endpoint return?
+  answer: '30 days: the current UTC day plus the previous 29, oldest first, with a zero count for days without clicks.'
+- question: Are stats public like metadata, or must a requester provide the management token?
+  answer: 'Private. Stats require the link''s management token in the X-Management-Token header, exactly like DELETE:
+    401 when the header is missing, 403 when the token does not match, 404 for unknown or deleted links.'
+- question: When a link is deleted, should its stored click data be erased or retained internally?
+  answer: Erase it. Deleting a link removes all of its click records in the same transaction that turns the link
+    into a tombstone; nothing about past visits is retained.
+- question: Whether "unique visitors" should be reported.
+  answer: 'No. Unique visitors are not reported. Analytics count clicks only and store no visitor identifiers: no
+    IP addresses, user agents, cookies or fingerprints (NFR2).'

@@ -1,0 +1,10 @@
+# Open questions from stage 'requirements' (run live-brownfield-1, round 2).
+# These are product decisions the agent would not guess. Fill in every `answer`,
+# then submit:  orch answer live-brownfield-1 requirements-clarify-2-6b638f
+# Your answers become binding human decisions in the audit log.
+
+- question: Whether "unique visitors" should be reported.
+  why: This was not answered. Unique-visitor reporting changes the requested metrics and may require identifying
+    or correlating visitors, so it cannot be inferred safely from the click-count requirements or the
+    privacy constraint.
+  answer: ''

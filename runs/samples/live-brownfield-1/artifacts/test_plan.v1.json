@@ -1,0 +1,180 @@
+{
+  "name": "test_plan",
+  "version": 1,
+  "sha": "c40f3b89c0e60a5ee89a41ff8c782aefc0fd1f5a7ce1010f90653552d8cdf598",
+  "produced_by": "test_plan/test_planner#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "5e4bb73becd0b9419faa75313d45125a3910451bf6bccad892407ef9cd6b9c7a"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "6a87b4b8edf929151637a3c75026f066390d091f3d21e74ac44671531dfc267b"
+    }
+  ],
+  "result": {
+    "summary": "22 cases covering all functional requirements, all testable non-functional requirements, specified API behavior, and identified failure and concurrency paths.",
+    "outputs": {
+      "test_cases": [
+        {
+          "id": "TC-FR1-01",
+          "covers": "FR1",
+          "level": "integration",
+          "check": "Create an active link and GET its redirect route; assert the existing successful 302 response, Location and no-store headers are unchanged, then fetch authorized stats and assert totalClicks increased by exactly one."
+        },
+        {
+          "id": "TC-FR1-02",
+          "covers": "FR1",
+          "level": "integration",
+          "check": "Request a nonexistent and an expired redirect; assert each retains its existing non-success response and neither request creates a click event."
+        },
+        {
+          "id": "TC-FR1-03",
+          "covers": "FR1",
+          "level": "unit",
+          "check": "Force the click-event persistence operation to throw while handling a successful redirect; assert the redirect result remains 302 with the original Location and no-store headers."
+        },
+        {
+          "id": "TC-FR2-01",
+          "covers": "FR2",
+          "level": "integration",
+          "check": "With a fixed UTC clock and click events spanning the 30-day window plus an older event, request authorized stats; assert totalClicks includes all events, dailyClicks has exactly 30 YYYY-MM-DD entries in oldest-first order, every empty day is zero, boundary-day clicks are assigned to the correct UTC dates, and lastClickedAt is the latest event timestamp in ISO-8601 UTC."
+        },
+        {
+          "id": "TC-FR2-02",
+          "covers": "FR2",
+          "level": "integration",
+          "check": "Request authorized stats for a link with no events; assert totalClicks is 0, dailyClicks contains exactly 30 zero-count entries in oldest-first order, and lastClickedAt is null."
+        },
+        {
+          "id": "TC-FR2-03",
+          "covers": "FR2",
+          "level": "integration",
+          "check": "Request stats for an existing link without X-Management-Token and with a blank header; assert both requests return 401 using the existing error JSON convention and disclose no stats."
+        },
+        {
+          "id": "TC-FR2-04",
+          "covers": "FR2",
+          "level": "integration",
+          "check": "Request stats for an existing link with a non-matching management token; assert the response is 403 using the existing error JSON convention and contains no stats."
+        },
+        {
+          "id": "TC-FR2-05",
+          "covers": "FR2",
+          "level": "integration",
+          "check": "Request stats for an unknown code with a token header; assert the response is 404 and contains no stats."
+        },
+        {
+          "id": "TC-FR3-01",
+          "covers": "FR3",
+          "level": "integration",
+          "check": "Create an expired but not deleted link with recorded clicks and request stats using its management token; assert stats return 200 with the persisted counts and latest timestamp."
+        },
+        {
+          "id": "TC-FR3-02",
+          "covers": "FR3",
+          "level": "integration",
+          "check": "Record clicks, delete the link with its management token, and assert the delete response remains 204, the link is a tombstone, no click events remain for its link id, and a subsequent stats request returns 404."
+        },
+        {
+          "id": "TC-FR3-03",
+          "covers": "FR3",
+          "level": "integration",
+          "check": "Coordinate a redirect click-recording operation with deletion of the same link; after both operations complete, assert the link remains a tombstone and the database contains no click events for it."
+        },
+        {
+          "id": "TC-FR3-04",
+          "covers": "FR3",
+          "level": "integration",
+          "check": "Request stats for a deleted link with a token header; assert the response is 404 and contains no stats."
+        },
+        {
+          "id": "TC-FR4-01",
+          "covers": "FR4",
+          "level": "integration",
+          "check": "Run the existing link-creation contract test and assert request validation, status, response fields, and created-link behavior are unchanged."
+        },
+        {
+          "id": "TC-FR4-02",
+          "covers": "FR4",
+          "level": "integration",
+          "check": "Run the existing public metadata contract test and assert its response status, JSON fields, and behavior are unchanged by click analytics."
+        },
+        {
+          "id": "TC-FR4-03",
+          "covers": "FR4",
+          "level": "integration",
+          "check": "Run the existing deletion lifecycle contract test and assert its authorization statuses and successful 204 response with no body remain unchanged."
+        },
+        {
+          "id": "TC-FR5-01",
+          "covers": "FR5",
+          "level": "integration",
+          "check": "Record clicks and fetch stats; assert the JSON contains only totalClicks, dailyClicks, and lastClickedAt as click metrics and has no unique-visitor field or visitor count."
+        },
+        {
+          "id": "TC-NFR1-01",
+          "covers": "NFR1",
+          "level": "integration",
+          "check": "Run the redirect persistence-failure scenario through the running Spring context; assert the response remains the existing 302 with its Location and no-store headers even when click insertion fails."
+        },
+        {
+          "id": "TC-NFR1-02",
+          "covers": "NFR1",
+          "level": "integration",
+          "check": "Run the existing RedirectLatencyTest with click recording enabled and assert its p99 redirect latency remains below 50 ms."
+        },
+        {
+          "id": "TC-NFR2-01",
+          "covers": "NFR2",
+          "level": "integration",
+          "check": "Record clicks while supplying request IP, user-agent, cookie, and other visitor-like headers; inspect the persisted click-event schema and rows and stats JSON, and assert no visitor identifiers, fingerprints, or unique-visitor data are stored or returned."
+        },
+        {
+          "id": "TC-NFR3-01",
+          "covers": "NFR3",
+          "level": "integration",
+          "check": "Record clicks in the file-backed database, stop and restart the application against the same database, then request authorized stats and assert the lifetime total, daily counts, and latest timestamp still reflect the recorded events."
+        },
+        {
+          "id": "TC-NFR4-01",
+          "covers": "NFR4",
+          "level": "integration",
+          "check": "Start the Spring application against both a clean database and an existing file-backed database; assert Flyway applies V2 without modifying V1, schema validation succeeds, and the click-event table and indexes are available."
+        },
+        {
+          "id": "TC-NFR5-01",
+          "covers": "NFR5",
+          "level": "integration",
+          "check": "Run the complete existing and added automated test suite; assert all tests pass, including link creation, lifecycle, stats, restart persistence, and redirect latency tests."
+        }
+      ]
+    },
+    "files_written": [
+      "docs/test-plan.md"
+    ],
+    "decisions": [
+      {
+        "topic": "Redirect p99 latency verification",
+        "choice": "Run the existing RedirectLatencyTest with click persistence enabled; treat its p99 < 50 ms assertion as the automated check.",
+        "rationale": "Latency depends on the test environment and load conditions, so this is the closest available automated verification of the specified target rather than a universal performance guarantee.",
+        "source": "agent"
+      },
+      {
+        "topic": "NFR4 architecture-convention verification",
+        "choice": "Use application startup, Flyway migration, and schema-validation checks as automated integration coverage.",
+        "rationale": "The tests can verify compatibility with the existing persistence and Spring startup conventions, but cannot fully judge architectural conformity; code review remains necessary for that part.",
+        "source": "agent"
+      },
+      {
+        "topic": "NFR2 privacy verification",
+        "choice": "Inspect persisted schema and event rows and verify the stats response has no visitor fields.",
+        "rationale": "These checks detect visitor identifiers in the approved storage and response surfaces, but cannot prove that no untested code path ever reads or processes such data.",
+        "source": "agent"
+      }
+    ]
+  }
+}

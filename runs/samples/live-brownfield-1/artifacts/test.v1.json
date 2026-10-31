@@ -1,0 +1,94 @@
+{
+  "name": "test",
+  "version": 1,
+  "sha": "76b59bf49caf5049093bc66ca82c1027ed3363f5e440fff4785300ed14b00218",
+  "produced_by": "test/tester#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "5e4bb73becd0b9419faa75313d45125a3910451bf6bccad892407ef9cd6b9c7a"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "6a87b4b8edf929151637a3c75026f066390d091f3d21e74ac44671531dfc267b"
+    },
+    {
+      "name": "implement",
+      "version": 1,
+      "sha": "d46b3ae4e502b394698f4f7295d7ffc385e6725f616c5c731fdfb9391a7d0074"
+    },
+    {
+      "name": "test_plan",
+      "version": 1,
+      "sha": "c40f3b89c0e60a5ee89a41ff8c782aefc0fd1f5a7ce1010f90653552d8cdf598"
+    }
+  ],
+  "result": {
+    "summary": "18 new tests for the 22-case plan in new classes, plus two minimal edits to existing tests; full suite 95/95 against the change",
+    "outputs": {
+      "files": [
+        "url-shortener/src/test/java/com/example/shortener/ClickPersistenceAndUpgradeTest.java",
+        "url-shortener/src/test/java/com/example/shortener/PersistenceRestartTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/ClickFailureIsolationTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/LinkStatsTest.java",
+        "url-shortener/src/test/java/com/example/shortener/service/LinkServiceTest.java"
+      ],
+      "implementation_defects": []
+    },
+    "files_written": [
+      "url-shortener/src/test/java/com/example/shortener/ClickPersistenceAndUpgradeTest.java",
+      "url-shortener/src/test/java/com/example/shortener/PersistenceRestartTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/ClickFailureIsolationTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/LinkStatsTest.java",
+      "url-shortener/src/test/java/com/example/shortener/service/LinkServiceTest.java"
+    ],
+    "decisions": [
+      {
+        "topic": "Existing tests touched",
+        "choice": "LinkServiceTest only gains a mock ClickEventRepository constructor argument; PersistenceRestartTest only expects migrations 1,2 instead of 1. No assertion removed or weakened",
+        "rationale": "Both edits are forced by the approved design (new constructor dependency, new forward migration); all other existing tests are unchanged and pass",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-FR3-03 race",
+        "choice": "Two deterministic interleavings, each holding the first operation's transaction (and row lock) open while the second starts",
+        "rationale": "A plain concurrent loop would pass by luck; verified by mutation: without the row locks both tests fail",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-NFR1-01",
+        "choice": "A @MockitoBean ClickRecorder that throws, through the running context; TC-FR1-03 covers the controller in isolation",
+        "rationale": "Proves the 302 survives any recorder failure, end to end and at the unit",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-NFR2-01",
+        "choice": "Redirect sent with remote address, User-Agent, X-Forwarded-For, Cookie and Referer probes; asserts the table has only ID, LINK_ID, CLICKED_AT, CLICK_DATE and no probe value is stored",
+        "rationale": "Turns the privacy requirement into an executable check",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-NFR4-01",
+        "choice": "Builds a real V1-only file database with Flyway target=1 holding a link and a tombstone, then starts the new build on it",
+        "rationale": "The upgrade path existing deployments take; V1 checksum validated unchanged",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-FR4-01..03, TC-NFR1-02, TC-NFR5-01",
+        "choice": "Covered by the existing LinkCreationTest, LinkLifecycleTest and RedirectLatencyTest, which run unchanged (redirect p99 about 1.1 ms with click recording)",
+        "rationale": "The existing suite is the contract for unchanged behaviour",
+        "source": "agent"
+      },
+      {
+        "topic": "Implementation review",
+        "choice": "No implementation defects found",
+        "rationale": "Recorded so the absence of defects is an explicit finding",
+        "source": "agent"
+      }
+    ]
+  }
+}

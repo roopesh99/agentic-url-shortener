@@ -1,0 +1,183 @@
+{
+  "name": "requirements",
+  "version": 1,
+  "sha": "12ca46301b11de711b401a616b78c29441a1fd8d4d0d62655bfb66cf708f8413",
+  "produced_by": "requirements/analyst#1",
+  "inputs": [],
+  "result": {
+    "summary": "9 requirements (4 functional, 5 non-functional); 11 ambiguities: 8 resolved by assumption and 3 unresolved.",
+    "outputs": {
+      "goal": "Add click analytics to the existing URL shortener: count successful short-link redirects and provide per-link click statistics. Preserve the existing service’s behavior and keep redirects reliable and within the existing latency target.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "Each successful short-link redirect response counts as exactly one click for that link."
+        },
+        {
+          "id": "FR2",
+          "text": "Provide a stats endpoint for a link that returns its cumulative click total, daily click counts for a recent period, and the time it was last clicked."
+        },
+        {
+          "id": "FR3",
+          "text": "Stats remain available for expired links. A deleted link has no stats available through the stats endpoint."
+        },
+        {
+          "id": "FR4",
+          "text": "Creating, redirecting, retrieving metadata for, and deleting links retain their existing behavior."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "The existing redirect p99 < 50 ms check must continue to pass. Failure to record analytics must not cause a redirect to fail."
+        },
+        {
+          "id": "NFR2",
+          "text": "Click analytics must not build profiles of visitors."
+        },
+        {
+          "id": "NFR3",
+          "text": "Persist click data so it survives service restarts, as link data does."
+        },
+        {
+          "id": "NFR4",
+          "text": "Implement the change using the existing codebase’s architecture and conventions."
+        },
+        {
+          "id": "NFR5",
+          "text": "The existing test suite must continue to pass, and new behavior must be covered by new tests."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "How many days of per-day history should the stats endpoint return?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "The duration is an explicit open point and determines the product-visible data window and response."
+        },
+        {
+          "question": "Are stats public like metadata, or must a requester provide the management token?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "This is an access-control decision affecting who can see link performance data; choosing incorrectly could expose sensitive business information."
+        },
+        {
+          "question": "Should the endpoint report unique visitors, and what visitor-level information may analytics collect?",
+          "resolution": "Do not report unique visitors or collect visitor identifiers for analytics; report click counts only.",
+          "source": "assumption",
+          "rationale": "Unique visitors are not among the requested metrics, and aggregate click counts avoid visitor profiling while satisfying the stated goal."
+        },
+        {
+          "question": "When a link is deleted, should its stored click data be erased or retained internally?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "FR3 requires deleted links to have no stats available but does not specify data erasure. Retention and deletion are privacy and data-lifecycle decisions."
+        },
+        {
+          "question": "What route and response representation should the stats endpoint use?",
+          "resolution": "Add a read-only stats subresource using the existing link identifier, routing, and response-format conventions in the codebase.",
+          "source": "assumption",
+          "rationale": "Following established API conventions is the lowest-risk choice for a brownfield enhancement. The exact route and field serialization should be confirmed against the existing service."
+        },
+        {
+          "question": "What timezone and treatment of zero-click days should daily counts use?",
+          "resolution": "Use UTC calendar days and return a count for every day in the configured history window, including days with zero clicks.",
+          "source": "assumption",
+          "rationale": "UTC avoids dependence on server or requester locale, and zero-filled days provide a consistent daily time series."
+        },
+        {
+          "question": "What should the last-click value be when a link has no recorded clicks, and how should timestamps be represented?",
+          "resolution": "Return null when there are no recorded clicks; represent non-null timestamps in UTC using the service’s existing timestamp format.",
+          "source": "assumption",
+          "rationale": "Null expresses the absence of an event without inventing a timestamp, while reusing the existing timestamp format preserves API consistency."
+        },
+        {
+          "question": "What should the stats endpoint return for an unknown or deleted link?",
+          "resolution": "Use the existing not-found response convention for link lookups; do not return a stats object.",
+          "source": "assumption",
+          "rationale": "This matches conventional resource lookup behavior and FR3’s requirement that deleted links have no stats available."
+        },
+        {
+          "question": "If click persistence fails, how should the system reconcile counting every successful redirect with the requirement that analytics recording never fail a redirect?",
+          "resolution": "Prioritize the redirect: return the existing successful redirect response even if analytics persistence fails. Such a click may be absent from stats if it could not be recorded.",
+          "source": "assumption",
+          "rationale": "NFR1 explicitly prioritizes redirect success. Best-effort analytics is a conventional, low-risk failure mode for non-critical analytics, though it means FR1 cannot be guaranteed during analytics storage failures."
+        },
+        {
+          "question": "Can click history before analytics is introduced be included for existing links?",
+          "resolution": "Count clicks from the analytics feature’s activation onward; do not imply historical counts that the service did not record.",
+          "source": "assumption",
+          "rationale": "Historical clicks cannot be reconstructed if they were not previously recorded, so a clear measurement baseline avoids presenting fabricated data."
+        },
+        {
+          "question": "Do repeated redirects or redirects from automated clients count as clicks?",
+          "resolution": "Count every successful redirect response, including repeated requests and automated clients; do not apply visitor deduplication or bot filtering.",
+          "source": "assumption",
+          "rationale": "FR1 says every successful redirect counts, and no filtering or deduplication rule is requested."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given an existing link and working analytics storage, when its redirect succeeds, then the link’s click total increases by exactly one.",
+        "Given a link with recorded clicks, when an authorized requester calls its stats endpoint, then the response contains the cumulative total, daily counts for the approved history window, and the latest click time.",
+        "Given a link that has expired but has not been deleted, when an authorized requester calls its stats endpoint, then its recorded stats are returned.",
+        "Given a deleted or unknown link, when a requester calls its stats endpoint, then no stats object is returned and the existing not-found response convention is used.",
+        "Given a link with no recorded clicks, when its stats are requested, then the total is zero, daily counts follow the agreed window and zero-fill rule, and the last-click value is null.",
+        "Given an analytics persistence failure during a redirect, when the redirect is requested, then the service still returns the existing successful redirect response; the failed click may not appear in stats.",
+        "Given persisted click data, when the service restarts, then the recorded data remains available for non-deleted links.",
+        "Given the enhancement is deployed, when the existing test suite and p99 < 50 ms check run, then they continue to pass; new tests cover click counting, stats, expired and deleted links, persistence, and analytics-write failure behavior.",
+        "Once the unresolved history-window and stats-visibility decisions are supplied, verify that the endpoint returns exactly the approved date window and enforces the approved visibility rule."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Should the endpoint report unique visitors, and what visitor-level information may analytics collect?",
+        "choice": "Do not report unique visitors or collect visitor identifiers for analytics; report click counts only.",
+        "rationale": "Unique visitors are not among the requested metrics, and aggregate click counts avoid visitor profiling while satisfying the stated goal.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What route and response representation should the stats endpoint use?",
+        "choice": "Add a read-only stats subresource using the existing link identifier, routing, and response-format conventions in the codebase.",
+        "rationale": "Following established API conventions is the lowest-risk choice for a brownfield enhancement. The exact route and field serialization should be confirmed against the existing service.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What timezone and treatment of zero-click days should daily counts use?",
+        "choice": "Use UTC calendar days and return a count for every day in the configured history window, including days with zero clicks.",
+        "rationale": "UTC avoids dependence on server or requester locale, and zero-filled days provide a consistent daily time series.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What should the last-click value be when a link has no recorded clicks, and how should timestamps be represented?",
+        "choice": "Return null when there are no recorded clicks; represent non-null timestamps in UTC using the service’s existing timestamp format.",
+        "rationale": "Null expresses the absence of an event without inventing a timestamp, while reusing the existing timestamp format preserves API consistency.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What should the stats endpoint return for an unknown or deleted link?",
+        "choice": "Use the existing not-found response convention for link lookups; do not return a stats object.",
+        "rationale": "This matches conventional resource lookup behavior and FR3’s requirement that deleted links have no stats available.",
+        "source": "assumption"
+      },
+      {
+        "topic": "If click persistence fails, how should the system reconcile counting every successful redirect with the requirement that analytics recording never fail a redirect?",
+        "choice": "Prioritize the redirect: return the existing successful redirect response even if analytics persistence fails. Such a click may be absent from stats if it could not be recorded.",
+        "rationale": "NFR1 explicitly prioritizes redirect success. Best-effort analytics is a conventional, low-risk failure mode for non-critical analytics, though it means FR1 cannot be guaranteed during analytics storage failures.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Can click history before analytics is introduced be included for existing links?",
+        "choice": "Count clicks from the analytics feature’s activation onward; do not imply historical counts that the service did not record.",
+        "rationale": "Historical clicks cannot be reconstructed if they were not previously recorded, so a clear measurement baseline avoids presenting fabricated data.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Do repeated redirects or redirects from automated clients count as clicks?",
+        "choice": "Count every successful redirect response, including repeated requests and automated clients; do not apply visitor deduplication or bot filtering.",
+        "rationale": "FR1 says every successful redirect counts, and no filtering or deduplication rule is requested.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

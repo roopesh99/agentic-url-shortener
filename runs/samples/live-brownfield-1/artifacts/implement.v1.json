@@ -1,0 +1,85 @@
+{
+  "name": "implement",
+  "version": 1,
+  "sha": "d46b3ae4e502b394698f4f7295d7ffc385e6725f616c5c731fdfb9391a7d0074",
+  "produced_by": "implement/coder#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "5e4bb73becd0b9419faa75313d45125a3910451bf6bccad892407ef9cd6b9c7a"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "6a87b4b8edf929151637a3c75026f066390d091f3d21e74ac44671531dfc267b"
+    }
+  ],
+  "result": {
+    "summary": "Click analytics per the approved impact analysis: click_events table (V2), best-effort click recording on redirect, private stats endpoint, click erasure on delete under a row lock",
+    "outputs": {
+      "files": [
+        "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+        "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+        "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+        "url-shortener/src/main/java/com/example/shortener/domain/ClickEvent.java",
+        "url-shortener/src/main/java/com/example/shortener/domain/ClickEventRepository.java",
+        "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+        "url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java",
+        "url-shortener/src/main/java/com/example/shortener/service/ClickRecorder.java",
+        "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+        "url-shortener/src/main/resources/db/migration/V2__create_click_events.sql"
+      ]
+    },
+    "files_written": [
+      "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+      "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+      "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+      "url-shortener/src/main/java/com/example/shortener/domain/ClickEvent.java",
+      "url-shortener/src/main/java/com/example/shortener/domain/ClickEventRepository.java",
+      "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+      "url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java",
+      "url-shortener/src/main/java/com/example/shortener/service/ClickRecorder.java",
+      "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+      "url-shortener/src/main/resources/db/migration/V2__create_click_events.sql"
+    ],
+    "decisions": [
+      {
+        "topic": "Deletion race",
+        "choice": "Click recording and deletion both take a PESSIMISTIC_WRITE lock on the link row (SELECT ... FOR UPDATE); recording only inserts if the link is not deleted",
+        "rationale": "Impact risk 3: a click committed after deletion erased the link's clicks would violate the erase-on-delete decision. Concurrent redirects of one link briefly serialize on that lock, acceptable for a single node",
+        "source": "agent"
+      },
+      {
+        "topic": "Failure isolation",
+        "choice": "ClickRecorder runs in its own transaction after the redirect lookup; RedirectController catches any RuntimeException from it and still returns the 302",
+        "rationale": "NFR1 and the owner's decision that redirect reliability comes first; a failed click is logged by exception type only",
+        "source": "agent"
+      },
+      {
+        "topic": "Existing API compatibility",
+        "choice": "resolveForRedirect(String) keeps its signature (now delegating to resolve(String)), so existing callers and tests keep working",
+        "rationale": "FR4 and minimal churn for the existing suite; LinkService does gain a ClickEventRepository constructor argument, so LinkServiceTest setup must be updated in the test stage",
+        "source": "agent"
+      },
+      {
+        "topic": "Daily buckets",
+        "choice": "click_date is stored as the UTC day at write time; stats query days >= today-29 and zero-fill in Java, oldest first",
+        "rationale": "Time-zone-stable grouping, bounded indexed query, exactly 30 entries (FR2/AC2)",
+        "source": "agent"
+      },
+      {
+        "topic": "Privacy",
+        "choice": "click_events holds only id, link_id, clicked_at, click_date; the request is never inspected for analytics",
+        "rationale": "NFR2 and the owner's no-unique-visitors decision; nothing to profile visitors with",
+        "source": "agent"
+      },
+      {
+        "topic": "Migration",
+        "choice": "V2__create_click_events.sql adds the table, a foreign key to links and two indexes; V1 untouched. Verified by upgrading a real v1 database: existing links and tombstones unaffected",
+        "rationale": "Forward-only Flyway convention and the upgrade path existing deployments will take",
+        "source": "agent"
+      }
+    ]
+  }
+}

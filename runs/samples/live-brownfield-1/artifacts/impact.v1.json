@@ -1,0 +1,185 @@
+{
+  "name": "impact",
+  "version": 1,
+  "sha": "6a87b4b8edf929151637a3c75026f066390d091f3d21e74ac44671531dfc267b",
+  "produced_by": "impact/impact_analyst#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "5e4bb73becd0b9419faa75313d45125a3910451bf6bccad892407ef9cd6b9c7a"
+    }
+  ],
+  "result": {
+    "summary": "Add private, persistent per-link click statistics using UTC click events, while preserving existing endpoint contracts and keeping redirect recording best-effort.",
+    "outputs": {
+      "impacted": [
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+          "kind": "modify",
+          "reason": "FR1/FR3: expose the persisted link id so click events can be recorded and removed for the correct link."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/domain/ClickEvent.java",
+          "kind": "create",
+          "reason": "FR1/NFR2/NFR3: model persisted click events with only link, UTC timestamp, and UTC date fields."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/domain/ClickEventRepository.java",
+          "kind": "create",
+          "reason": "FR1/FR2/FR3: provide persistence operations for click recording, lifetime/latest counts, UTC daily aggregation, and transactional deletion."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+          "kind": "modify",
+          "reason": "FR1/FR2/FR3: resolve redirect targets for click recording, authorize and calculate stats, and erase click events within the tombstone transaction."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+          "kind": "modify",
+          "reason": "FR1/NFR1: record a click for a successful redirect without allowing click persistence failure to change the redirect response."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+          "kind": "modify",
+          "reason": "FR2: expose the private GET stats subresource using the existing management-token header convention."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+          "kind": "modify",
+          "reason": "FR2/FR5: define the stats JSON representation with lifetime total, daily entries, and nullable latest-click timestamp, without visitor metrics."
+        },
+        {
+          "path": "url-shortener/src/main/resources/db/migration/V2__create_click_events.sql",
+          "kind": "create",
+          "reason": "FR1/FR3/NFR2/NFR3: add the click-event table, link foreign key, UTC date and timestamp fields, and query indexes in a new migration."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/LinkStatsTest.java",
+          "kind": "create",
+          "reason": "FR1-FR5/NFR1-NFR3: test click counting, stats shape and authorization, expiration, deletion, privacy, and persistence-failure behavior."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/service/LinkServiceTest.java",
+          "kind": "modify",
+          "reason": "FR1/FR3: update service test setup for click persistence and cover the associated service behavior."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/PersistenceRestartTest.java",
+          "kind": "modify",
+          "reason": "NFR3: verify click data survives restart and update migration-version assertions for the new forward migration."
+        }
+      ],
+      "api_changes": [
+        {
+          "method": "GET",
+          "path": "/api/links/{code}/stats",
+          "change": "New private endpoint. Request: no body; require X-Management-Token. Response: 200 JSON {\"totalClicks\": integer, \"dailyClicks\": [{\"date\": \"YYYY-MM-DD\", \"clicks\": integer}], \"lastClickedAt\": ISO-8601 UTC timestamp or null}. Return exactly 30 daily entries, oldest first, covering the current UTC date and previous 29 dates, zero-filled. Return 401 with the existing error JSON convention when the token header is absent or blank; 403 when it does not match; 404 for unknown or deleted links. Expired links return stats normally."
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/links/{code}",
+          "change": "Request and response contract unchanged: X-Management-Token header; 204 with no body on success, and the existing 401/403/404 error behavior. Internally, deletion now removes click events in the same transaction that marks the link as a tombstone."
+        }
+      ],
+      "data_changes": [
+        "Create V2__create_click_events.sql; do not alter V1 or any other applied migration.",
+        "Add click_events with an identity primary key, non-null link_id foreign key to links.id, clicked_at as a microsecond-precision timestamp with time zone, and click_date as a UTC DATE for efficient and timezone-stable daily aggregation.",
+        "Add indexes supporting link_id plus click_date aggregation and link_id plus clicked_at latest-click lookup. Do not add visitor identifiers or unique-visitor data.",
+        "Delete all click_events for a link within the existing transactional deletion operation before/with the tombstone update; do not cascade-delete the links row because tombstones reserve codes."
+      ],
+      "data_flows": [
+        "Redirect hot path: resolve the active link and destination as today; for a successful redirect, persist one click event using the service clock and UTC date. Do not read request IP, user-agent, cookies, or other visitor data for analytics. If persistence fails, contain the failure and still return the existing 302, Location, and no-store headers.",
+        "Click recording is synchronous and limited to a local event insert so the count is durable and visible to a stats request immediately after the redirect. Keep it bounded and indexed; the existing redirect latency check must measure this path.",
+        "Stats path: find the live link first, then check its management token; expired links remain live for this purpose. Query the lifetime event count, latest timestamp, and grouped counts for the 30-day UTC range, then construct all 30 dates with zeroes where no group exists.",
+        "Deletion path: after existing token authorization, remove click events and mark the link as a tombstone in one transaction. Coordinate event insertion with deletion so an in-flight redirect cannot commit a click after deletion has removed the link's events.",
+        "Click events are stored in the existing file-based H2 database and migrated by Flyway, so recorded data survives service restarts."
+      ],
+      "risks": [
+        {
+          "risk": "A synchronous database insert on every redirect could push the hot path above the existing p99 latency target.",
+          "mitigation": "Use a minimal event row and indexes suited to the insert and stats queries; avoid external calls, visitor-data processing, and unbounded work on redirects.",
+          "detection": "Run RedirectLatencyTest against the updated redirect path and require its existing p99 < 50 ms assertion to pass."
+        },
+        {
+          "risk": "A click-store outage or transaction-commit error could accidentally turn a successful redirect into an error.",
+          "mitigation": "Contain persistence exceptions at the redirect boundary and preserve the existing redirect response; analytics may omit the failed click as permitted by the specification.",
+          "detection": "Add a test that forces click persistence to fail and asserts the redirect remains 302 with its existing Location and Cache-Control headers."
+        },
+        {
+          "risk": "Concurrent click recording and deletion could leave an event committed after the deletion transaction has erased prior events.",
+          "mitigation": "Coordinate click insertion and tombstoning in transactions so deletion and recording cannot race into retaining post-deletion events.",
+          "detection": "Test concurrent redirect recording and deletion, then assert the tombstone remains and no click events for it remain."
+        },
+        {
+          "risk": "Local-time grouping or date-boundary errors could produce incorrect daily buckets, ordering, or zero filling.",
+          "mitigation": "Derive and persist click_date from the injected UTC clock, use UTC window bounds, and construct all 30 dates explicitly in oldest-first order.",
+          "detection": "Use the controllable test clock to cover day boundaries, empty days, oldest-first order, and exactly 30 returned entries."
+        },
+        {
+          "risk": "Authorization-order changes could expose stats or return the wrong status for unknown, deleted, or unauthorized links.",
+          "mitigation": "Follow the existing delete flow: find a non-deleted link before checking the token; return 401 for a missing token and 403 for a mismatch.",
+          "detection": "Test missing and mismatched tokens on existing links, and verify unknown/deleted links return 404 even when a token header is supplied."
+        },
+        {
+          "risk": "An incorrect schema or migration-version expectation could prevent startup or break existing persisted databases.",
+          "mitigation": "Add only a higher-numbered Flyway migration and keep Hibernate schema validation enabled.",
+          "detection": "Run PersistenceRestartTest against a file-backed database across two application starts and assert both migrations are applied."
+        },
+        {
+          "risk": "Click data could inadvertently acquire visitor identifiers or expose an unapproved metric.",
+          "mitigation": "Keep the event schema limited to link id, click timestamp, and UTC date; do not pass request identity fields into analytics or add a unique-visitor response field.",
+          "detection": "Inspect persisted event fields and assert the stats response contains only the specified click metrics."
+        },
+        {
+          "risk": "Per-click event storage grows for as long as links and their click history are retained.",
+          "mitigation": "Keep rows compact and indexed, and delete every event on link deletion; do not introduce retention or visitor-profile tables outside the approved behavior.",
+          "detection": "Test event removal on deletion and exercise lifetime and daily aggregate queries with multiple events."
+        }
+      ],
+      "test_strategy": [
+        "Existing LinkLifecycleTest protects the 302 redirect headers, expiry behavior, public metadata, token-authorized deletion, and current 401/403/404 contracts.",
+        "Existing LinkCreationTest protects link creation request and response behavior, which must remain unchanged.",
+        "Existing RedirectLatencyTest protects the redirect p99 < 50 ms check and must run after click recording is added.",
+        "Existing PersistenceRestartTest protects file-based persistence and restart behavior; update it to assert click persistence and migration versions 1 and 2.",
+        "Existing LinkServiceTest protects service-level behavior; update its setup for click persistence and add service failure/deletion assertions where appropriate.",
+        "Add LinkStatsTest for one-click-per-successful-redirect, no count for failed/expired redirects, exact lifetime totals, UTC date-window ordering and zero filling, null latest timestamp for no clicks, expired-link stats, authorization status codes, unknown/deleted 404s, and atomic click cleanup on deletion.",
+        "Add a persistence-failure redirect test and a concurrent record/delete test; verify redirect status and headers survive persistence failure and no events remain after deletion.",
+        "Run the full existing suite, migration validation on both clean and file-backed databases, and RedirectLatencyTest."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Click storage representation",
+        "choice": "Store one compact event row per click, containing only link id, clicked_at, and UTC click_date.",
+        "rationale": "Event rows support an exact latest timestamp and lifetime/daily counts while allowing complete deletion of visit records without collecting visitor identifiers.",
+        "source": "agent"
+      },
+      {
+        "topic": "UTC daily aggregation",
+        "choice": "Persist a UTC-derived click_date alongside the UTC timestamp and aggregate on that indexed date.",
+        "rationale": "This avoids database-session timezone ambiguity and keeps the 30-day grouped query bounded and predictable.",
+        "source": "agent"
+      },
+      {
+        "topic": "Redirect recording",
+        "choice": "Perform a minimal synchronous insert and contain persistence failures rather than making recording asynchronous.",
+        "rationale": "Synchronous persistence makes a successful redirect's click immediately visible and durable while matching the explicit allowance for a click to be absent only when persistence fails.",
+        "source": "agent"
+      },
+      {
+        "topic": "Stats route and authorization",
+        "choice": "Use GET /api/links/{code}/stats and the existing X-Management-Token convention, with the specified 401/403/404 distinctions.",
+        "rationale": "This follows the existing link resource route and token-authorized DELETE behavior while keeping stats private.",
+        "source": "agent"
+      },
+      {
+        "topic": "Existing API contracts",
+        "choice": "Keep creation, redirect, metadata, and deletion request/response contracts unchanged; add only the stats subresource and deletion's internal analytics cleanup.",
+        "rationale": "This preserves the explicitly protected existing behavior while implementing the new requirements.",
+        "source": "agent"
+      }
+    ]
+  }
+}
