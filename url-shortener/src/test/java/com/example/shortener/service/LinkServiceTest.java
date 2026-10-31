@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import java.security.SecureRandom;
 
+import com.example.shortener.domain.ClickEventRepository;
 import com.example.shortener.domain.Link;
 import com.example.shortener.domain.LinkRepository;
 import com.example.shortener.support.MutableClock;
@@ -30,7 +31,7 @@ class LinkServiceTest {
         codes = mock(CodeGenerator.class);
         when(repository.saveAndFlush(any(Link.class))).thenAnswer(invocation -> invocation.getArgument(0));
         service = new LinkService(repository, new DestinationPolicy(new StubHostResolver()), new AliasPolicy(), codes,
-                new TokenService(new SecureRandom()), new MutableClock());
+                new TokenService(new SecureRandom()), mock(ClickEventRepository.class), new MutableClock());
     }
 
     /** TC-FR1-05: active and tombstoned codes both count as taken; the first unused code wins. */

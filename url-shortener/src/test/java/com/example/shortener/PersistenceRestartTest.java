@@ -57,7 +57,7 @@ class PersistenceRestartTest {
                     .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
 
             assertThat(second.getBean(Flyway.class).info().applied()).extracting(m -> m.getVersion().getVersion())
-                    .containsExactly("1");
+                    .containsExactly("1", "2");
             second.getBean(CreateRateLimiter.class).acquire("192.0.2.10"); // in-memory limit reset by the restart
         }
     }
@@ -67,7 +67,7 @@ class PersistenceRestartTest {
     void TC_NFR4_02_startsLocallyAndReportsHealthy() {
         try (ConfigurableApplicationContext app = start()) {
             assertThat(app.getBean(HealthController.class).health().getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(app.getBean(Flyway.class).info().current().getVersion().getVersion()).isEqualTo("1");
+            assertThat(app.getBean(Flyway.class).info().current().getVersion().getVersion()).isEqualTo("2");
         }
     }
 
