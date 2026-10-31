@@ -102,6 +102,20 @@ class StubTestPlanner(Agent):
         )
 
 
+class StubImpactAnalyst(Agent):
+    """Lists the files in its read scope as 'modify' candidates: enough to exercise the stage."""
+
+    name = "impact_analyst"
+
+    async def run(self, ctx: AgentContext) -> AgentResult:
+        files = sorted(ctx.context_files())
+        return AgentResult(
+            summary=f"{len(files)} existing file(s) in scope",
+            outputs={"impacted": [{"path": p, "kind": "modify", "reason": "in scope"} for p in files],
+                     "api_changes": [], "data_changes": [], "data_flows": [], "risks": [], "test_strategy": []},
+        )
+
+
 class _TemplateAgent(Agent):
     """Copies a slice of the skeleton template into the workspace (through the scope check)."""
 
@@ -136,6 +150,6 @@ class StubTester(_TemplateAgent):
 
 def stub_agents() -> AgentRegistry:
     registry = AgentRegistry()
-    for agent in (StubAnalyst, StubTestPlanner, StubCoder, StubTester):
+    for agent in (StubAnalyst, StubImpactAnalyst, StubTestPlanner, StubCoder, StubTester):
         registry.register(agent.name, agent)
     return registry

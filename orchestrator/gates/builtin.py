@@ -58,7 +58,8 @@ class AmbiguitiesResolvedGate(Gate):
 
 class MavenTestGate(Gate):
     """Runs the real build. args: project: dir relative to workspace; goal: default 'test';
-    timeout_seconds: default 600."""
+    timeout_seconds: default 600; min_tests: fail unless at least this many tests ran (guards a
+    brownfield change against deleting or skipping the existing suite)."""
 
     name = "maven_test"
 
@@ -84,6 +85,11 @@ class MavenTestGate(Gate):
         log = out.decode(errors="replace")
         if proc.returncode != 0:
             return self.result(False, f"mvn {goal} exit {proc.returncode}\n{_failure_excerpt(log)}")
+        ran = _tests_run(project)
+        minimum = self.args.get("min_tests")
+        if minimum is not None and ran < minimum:
+            return self.result(False, f"mvn {goal} passed but only {ran} tests ran; at least {minimum} required "
+                                      "(existing tests must not be removed or skipped)")
         return self.result(True, f"mvn {goal} passed{_surefire_summary(project)}")
 
 
@@ -91,6 +97,14 @@ def _failure_excerpt(log: str, limit: int = 60) -> str:
     """Keep the lines an engineer (or a retrying agent) needs: errors and failures."""
     interesting = [l for l in log.splitlines() if re.search(r"ERROR|FAIL|Tests run|expected|Exception", l)]
     return "\n".join((interesting or log.splitlines())[-limit:])
+
+
+def _tests_run(project) -> int:
+    total = 0
+    for report in (project / "target" / "surefire-reports").glob("*.txt"):
+        m = re.search(r"Tests run: (\d+)", report.read_text(errors="replace"))
+        total += int(m.group(1)) if m else 0
+    return total
 
 
 def _surefire_summary(project) -> str:

@@ -45,6 +45,35 @@ class CodeOutput(BaseModel):
     decisions: list[DecisionOut]
 
 
+class ImpactedFile(BaseModel):
+    path: str
+    kind: Literal["modify", "create"]
+    reason: str
+
+
+class ApiChange(BaseModel):
+    method: str
+    path: str
+    change: str    # request, response and status codes, or "unchanged" guarantees
+
+
+class Risk(BaseModel):
+    risk: str
+    mitigation: str
+    detection: str  # which test catches it if the mitigation fails
+
+
+class ImpactOutput(BaseModel):
+    summary: str
+    impacted: list[ImpactedFile]
+    api_changes: list[ApiChange]
+    data_changes: list[str]
+    data_flows: list[str]
+    risks: list[Risk]
+    test_strategy: list[str]
+    decisions: list[DecisionOut]
+
+
 class TestCase(BaseModel):
     id: str
     covers: str    # requirement id

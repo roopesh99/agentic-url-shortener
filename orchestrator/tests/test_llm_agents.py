@@ -164,3 +164,46 @@ async def test_full_pipeline_with_llm_agents_and_real_build(tmp_path):
     tester_prompt = llm.prompts("tester")[0]
     assert "ShortUrlController.java" in tester_prompt, "tester sees the implementation it tests"
     assert "TC-FR1-01" in tester_prompt
+
+
+# --- brownfield: impact analysis ---------------------------------------------------------------
+
+IMPACT = {
+    "summary": "2 files to modify, 1 migration",
+    "impacted": [{"path": "url-shortener/src/main/java/App.java", "kind": "modify", "reason": "FR1"}],
+    "api_changes": [{"method": "GET", "path": "/api/links/{code}/stats", "change": "new; 200/404"}],
+    "data_changes": ["V2__clicks.sql: new table"],
+    "data_flows": ["redirect -> record click asynchronously"],
+    "risks": [{"risk": "slower redirects", "mitigation": "async write", "detection": "RedirectLatencyTest"}],
+    "test_strategy": ["keep LinkLifecycleTest green"],
+    "decisions": [{"topic": "write path", "choice": "async", "rationale": "keeps p99"}],
+}
+
+
+async def test_impact_analyst_reads_existing_code_and_its_plan_reaches_coder_and_planner(tmp_path):
+    ws = tmp_path / "ws"
+    (ws / "url-shortener" / "src" / "main").mkdir(parents=True)
+    (ws / "url-shortener" / "src" / "main" / "App.java").write_text("class App { /* existing */ }")
+    (ws / "url-shortener" / "pom.xml").write_text("<project/>")
+    llm = ScriptedLLM({"analyst": [SPEC], "impact_analyst": [IMPACT], "test_planner": [PLAN],
+                       "coder": [code([])]})
+    wf = without(ROOT / "workflows" / "brownfield.yaml", "test")
+    wf.stage("implement").exit_gates = []
+
+    result = await engine(tmp_path, llm, wf).run()
+
+    assert result.succeeded, result.states
+    [impact_prompt] = llm.prompts("impact_analyst")
+    assert "approved_specification" in impact_prompt and "class App { /* existing */ }" in impact_prompt
+    for agent in ("coder", "test_planner"):
+        prompt = llm.prompts(agent)[0]
+        assert "approved_impact_analysis" in prompt and "/api/links/{code}/stats" in prompt, agent
+
+
+async def test_greenfield_prompts_are_unchanged_without_an_impact_stage(tmp_path):
+    """Adding the impact section must not perturb greenfield requests (their cassettes must still match)."""
+    llm = ScriptedLLM({"analyst": [SPEC], "test_planner": [PLAN], "coder": [code([])]})
+    wf = without(ROOT / "workflows" / "skeleton.yaml", "test")
+    wf.stage("implement").exit_gates = []
+    await engine(tmp_path, llm, wf).run()
+    assert "approved_impact_analysis" not in llm.prompts("coder")[0] + llm.prompts("test_planner")[0]

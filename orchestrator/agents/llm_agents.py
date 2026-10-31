@@ -19,7 +19,7 @@ from ..engine.models import AgentResult, Decision
 from ..llm.client import LLMClient, LLMRequest
 from ..llm.schema import strict_schema
 from .base import Agent, AgentContext, AgentRegistry, FatalAgentError
-from .outputs import AnalystOutput, CodeOutput, TestPlanOutput
+from .outputs import AnalystOutput, CodeOutput, ImpactOutput, TestPlanOutput
 
 PROMPTS = Path(__file__).parent / "prompts"
 MAX_CONTEXT_CHARS = 400_000  # ~100k tokens; refuse rather than silently truncate
@@ -92,6 +92,12 @@ class LLMAgent(Agent):
         return _tag("approved_specification", _canonical(spec.outputs))
 
     @staticmethod
+    def impact_section(ctx: AgentContext) -> list[str]:
+        """The approved impact analysis, when the workflow has one (brownfield)."""
+        impact = ctx.inputs.get("impact")
+        return [_tag("approved_impact_analysis", _canonical(impact.result.outputs))] if impact else []
+
+    @staticmethod
     def files_section(ctx: AgentContext, name: str = "existing_files") -> str:
         files = ctx.context_files()
         if not files:
@@ -146,6 +152,21 @@ class AnalystAgent(LLMAgent):
         return AgentResult(summary=out.summary, outputs=outputs, decisions=decisions)
 
 
+class ImpactAgent(LLMAgent):
+    name = "impact_analyst"
+    prompts = ("impact",)
+    output_model = ImpactOutput
+    effort = "high"
+    max_tokens = 32000
+
+    def task(self, ctx):
+        return [self.spec_section(ctx), self.files_section(ctx)]
+
+    def to_result(self, ctx, out: ImpactOutput):
+        return AgentResult(summary=out.summary, outputs=out.model_dump(exclude={"summary", "decisions"}),
+                           decisions=_decisions(out.decisions))
+
+
 class TestPlannerAgent(LLMAgent):
     name = "test_planner"
     prompts = ("test_planner",)
@@ -154,7 +175,7 @@ class TestPlannerAgent(LLMAgent):
     max_tokens = 32000
 
     def task(self, ctx):
-        return [self.spec_section(ctx)]
+        return [self.spec_section(ctx), *self.impact_section(ctx)]
 
     def to_result(self, ctx, out: TestPlanOutput):
         lines = ["# Test plan", "", f"_{out.summary}_", "", "| Id | Covers | Level | Check |", "|---|---|---|---|"]
@@ -174,7 +195,7 @@ class CoderAgent(LLMAgent):
     effort = "high"
 
     def task(self, ctx):
-        return [self.spec_section(ctx), self.files_section(ctx), self.scope_section(ctx)]
+        return [self.spec_section(ctx), *self.impact_section(ctx), self.files_section(ctx), self.scope_section(ctx)]
 
     def to_result(self, ctx, out: CodeOutput):
         self.propose(ctx, out)
@@ -192,6 +213,7 @@ class TesterAgent(LLMAgent):
         plan = ctx.inputs["test_plan"].result.outputs
         return [
             self.spec_section(ctx),
+            *self.impact_section(ctx),
             _tag("test_plan", _canonical(plan)),
             self.files_section(ctx, "implementation_and_existing_tests"),
             self.scope_section(ctx),
@@ -207,7 +229,7 @@ class TesterAgent(LLMAgent):
         )
 
 
-AGENT_TYPES = (AnalystAgent, TestPlannerAgent, CoderAgent, TesterAgent)
+AGENT_TYPES = (AnalystAgent, ImpactAgent, TestPlannerAgent, CoderAgent, TesterAgent)
 LLM_AGENT_NAMES = [a.name for a in AGENT_TYPES]
 
 

@@ -174,3 +174,10 @@ def test_policy_hash_changes_when_policy_changes(tmp_path):
     first = PolicyEngine.load(p).policy_sha
     p.write_text("rules:\n  secrets: {action: block}\n")
     assert PolicyEngine.load(p).policy_sha != first
+
+
+def test_modifying_an_existing_test_requires_approval_but_adding_one_does_not():
+    path = "url-shortener/src/test/java/com/example/LinkTest.java"
+    assert evaluate({path: "class LinkTest {}"}).action is Action.ALLOW
+    d = evaluate({path: "class LinkTest { /* weakened */ }"}, previous={path: "class LinkTest { @Test void t() {} }"})
+    assert d.action is Action.REQUIRE_APPROVAL and "high_impact_paths" in rules_hit(d)

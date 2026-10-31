@@ -68,3 +68,18 @@ async def test_maven_gate_fails_on_a_failing_java_test(tmp_path):
     result = await MavenTestGate(project="url-shortener").check(GateContext(stage, tmp_path, None, {}))
     assert not result.passed
     assert "unknownCodeReturns404" in result.evidence, "evidence must name the failing test for retry feedback"
+
+
+@pytest.mark.maven
+@pytest.mark.skipif(shutil.which("mvn") is None, reason="Maven not installed")
+async def test_maven_gate_enforces_a_minimum_test_count(tmp_path):
+    from orchestrator.agents.stubs import TEMPLATES
+    from orchestrator.gates.base import GateContext
+    from orchestrator.gates.builtin import MavenTestGate
+
+    shutil.copytree(TEMPLATES, tmp_path, dirs_exist_ok=True)  # the template has 4 passing tests
+    stage = load_workflow(ROOT / "workflows" / "skeleton.yaml").stage("test")
+    ctx = GateContext(stage, tmp_path, None, {})
+    assert (await MavenTestGate(project="url-shortener", min_tests=4).check(ctx)).passed
+    short = await MavenTestGate(project="url-shortener", min_tests=5).check(ctx)
+    assert not short.passed and "only 4 tests ran" in short.evidence

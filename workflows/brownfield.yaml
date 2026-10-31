@@ -1,0 +1,61 @@
+# Brownfield change to the existing url-shortener: understand the change, analyse its
+# impact on the real code, get the plan approved, then implement and test without regressions.
+#
+#   requirements ──► impact ──┬──► implement ──┐
+#     (approve)     (approve) └──► test_plan ──┴──► test   (full suite: existing + new tests)
+#
+# Run it against the repository root: the run works on a new orch/<run-id> branch (the tree
+# must be clean), one commit per stage; main is untouched until a person merges the branch.
+name: brownfield
+version: "1"
+description: Requirement -> spec -> impact analysis on existing code -> code + test plan -> regression-safe tests
+
+stages:
+  - id: requirements
+    agent: analyst
+    description: Normalize the change request; surface and resolve ambiguities
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [goal, functional, non_functional] }
+      - ambiguities_resolved
+    clarification: { max_rounds: 2 }
+    approval: required
+
+  - id: impact
+    agent: impact_analyst
+    needs: [requirements]
+    description: Read the existing code; list impacted files, API and data changes, risks
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/**"]
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [impacted, risks, test_strategy] }
+    approval: required          # a human signs off the plan before any code changes
+
+  - id: implement
+    agent: coder
+    needs: [impact]
+    write_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
+    exit_gates:
+      - name: maven_test
+        args: { project: url-shortener, goal: compile, timeout_seconds: 600 }
+    retry: { max_attempts: 3, backoff_seconds: 1 }
+
+  - id: test_plan
+    agent: test_planner
+    needs: [impact]
+    write_scope: ["docs/test-plan.md"]
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [test_cases] }
+
+  - id: test
+    agent: tester
+    needs: [implement, test_plan]
+    write_scope: ["url-shortener/src/test/**"]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**", "url-shortener/src/test/**"]
+    exit_gates:
+      - name: maven_test
+        # 77 tests existed before this change: fewer means the suite was cut, not extended
+        args: { project: url-shortener, timeout_seconds: 900, min_tests: 78 }
+    retry: { max_attempts: 3, backoff_seconds: 1 }
