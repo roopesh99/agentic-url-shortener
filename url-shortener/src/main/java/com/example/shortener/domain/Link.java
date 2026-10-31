@@ -70,6 +70,10 @@ public class Link {
         this.tokenHash = null;
     }
 
+    public Long getId() {
+        return id;
+    }
+
     public String getCode() {
         return code;
     }

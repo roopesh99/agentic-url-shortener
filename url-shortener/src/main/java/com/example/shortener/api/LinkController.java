@@ -5,6 +5,7 @@ import java.net.URI;
 import com.example.shortener.api.LinkDtos.CreateLinkRequest;
 import com.example.shortener.api.LinkDtos.CreateLinkResponse;
 import com.example.shortener.api.LinkDtos.LinkMetadata;
+import com.example.shortener.api.LinkDtos.StatsResponse;
 import com.example.shortener.service.ApiException;
 import com.example.shortener.service.CreateRateLimiter;
 import com.example.shortener.service.LinkService;
@@ -50,6 +51,12 @@ public class LinkController {
     @GetMapping("/{code}")
     public LinkMetadata metadata(@PathVariable String code) {
         return LinkMetadata.of(links.metadata(code));
+    }
+
+    @GetMapping("/{code}/stats")
+    public StatsResponse stats(@PathVariable String code,
+                               @RequestHeader(name = TOKEN_HEADER, required = false) String token) {
+        return StatsResponse.of(links.stats(code, token));
     }
 
     @DeleteMapping("/{code}")

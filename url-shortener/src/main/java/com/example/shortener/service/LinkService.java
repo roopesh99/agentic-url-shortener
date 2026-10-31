@@ -2,8 +2,16 @@ package com.example.shortener.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
+import com.example.shortener.domain.ClickEventRepository;
+import com.example.shortener.domain.ClickEventRepository.DailyCount;
 import com.example.shortener.domain.Link;
 import com.example.shortener.domain.LinkRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -11,31 +19,45 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Link lifecycle: create, resolve for redirect, read metadata, delete into a tombstone. */
+/** Link lifecycle: create, resolve for redirect, read metadata and stats, delete into a tombstone. */
 @Service
 public class LinkService {
 
     static final int MAX_CODE_ATTEMPTS = 10;
+    static final int STATS_DAYS = 30;
 
     private final LinkRepository repository;
     private final DestinationPolicy destinationPolicy;
     private final AliasPolicy aliasPolicy;
     private final CodeGenerator codeGenerator;
     private final TokenService tokenService;
+    private final ClickEventRepository clicks;
     private final Clock clock;
 
     public LinkService(LinkRepository repository, DestinationPolicy destinationPolicy, AliasPolicy aliasPolicy,
-                       CodeGenerator codeGenerator, TokenService tokenService, Clock clock) {
+                       CodeGenerator codeGenerator, TokenService tokenService, ClickEventRepository clicks,
+                       Clock clock) {
         this.repository = repository;
         this.destinationPolicy = destinationPolicy;
         this.aliasPolicy = aliasPolicy;
         this.codeGenerator = codeGenerator;
         this.tokenService = tokenService;
+        this.clicks = clicks;
         this.clock = clock;
     }
 
     /** The plaintext management token is returned here and nowhere else. */
     public record CreatedLink(Link link, String managementToken) {
+    }
+
+    /** What a redirect needs: where to send the visitor, and which link to count the click for. */
+    public record Redirect(Long linkId, String destination) {
+    }
+
+    public record DailyClicks(LocalDate date, long clicks) {
+    }
+
+    public record LinkStats(long totalClicks, List<DailyClicks> dailyClicks, Instant lastClickedAt) {
     }
 
     @Transactional
@@ -73,11 +95,36 @@ public class LinkService {
     /** Destination for an active link: 404 if unknown or deleted, 410 if expired. */
     @Transactional(readOnly = true)
     public String resolveForRedirect(String code) {
+        return resolve(code).destination();
+    }
+
+    @Transactional(readOnly = true)
+    public Redirect resolve(String code) {
         Link link = findLive(code);
         if (link.isExpiredAt(now())) {
             throw new ApiException(HttpStatus.GONE, "expired", "link has expired");
         }
-        return link.getOriginalUrl();
+        return new Redirect(link.getId(), link.getOriginalUrl());
+    }
+
+    /**
+     * Private stats (FR2): the same token rules as deletion. Expired links still have stats;
+     * deleted ones do not. Daily counts cover the current UTC day and the previous 29, oldest
+     * first, with zeroes for days without clicks.
+     */
+    @Transactional(readOnly = true)
+    public LinkStats stats(String code, String managementToken) {
+        Link link = findLive(code);
+        authorize(link, managementToken);
+        LocalDate today = LocalDate.ofInstant(now(), ZoneOffset.UTC);
+        LocalDate from = today.minusDays(STATS_DAYS - 1);
+        Map<LocalDate, Long> perDay = clicks.countPerDaySince(link.getId(), from).stream()
+                .collect(Collectors.toMap(DailyCount::getDay, DailyCount::getClicks));
+        List<DailyClicks> daily = new ArrayList<>(STATS_DAYS);
+        for (LocalDate day = from; !day.isAfter(today); day = day.plusDays(1)) {
+            daily.add(new DailyClicks(day, perDay.getOrDefault(day, 0L)));
+        }
+        return new LinkStats(clicks.countByLinkId(link.getId()), daily, clicks.findLastClickedAt(link.getId()));
     }
 
     /** Public metadata; expired links are still described, deleted ones are not. */
@@ -86,17 +133,26 @@ public class LinkService {
         return findLive(code);
     }
 
+    /**
+     * Tombstones the link and erases its clicks in one transaction (FR3), under the link's row
+     * lock so a concurrent redirect cannot commit a click in between.
+     */
     @Transactional
     public void delete(String code, String managementToken) {
-        Link link = findLive(code);
+        Link link = repository.lockByCode(code).filter(l -> !l.isDeleted()).orElseThrow(ApiException::notFound);
+        authorize(link, managementToken);
+        clicks.deleteByLinkId(link.getId());
+        link.markDeleted(now());
+        repository.save(link);
+    }
+
+    private void authorize(Link link, String managementToken) {
         if (managementToken == null || managementToken.isBlank()) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "missing_token", "X-Management-Token header is required");
         }
         if (!tokenService.matches(managementToken, link.getTokenHash())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "invalid_token", "management token does not match");
         }
-        link.markDeleted(now());
-        repository.save(link);
     }
 
     private Link findLive(String code) {
