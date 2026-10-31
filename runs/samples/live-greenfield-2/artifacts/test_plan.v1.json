@@ -1,0 +1,253 @@
+{
+  "name": "test_plan",
+  "version": 1,
+  "sha": "dffd6cc99d9b83638e6816697b83d9ab4b964efa32460231c12fa6df0955a870",
+  "produced_by": "test_plan/test_planner#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "6658ec012c9e51001e51f3dba23f3d7abbe4a6d7dac742d574532ed94ed96416"
+    }
+  ],
+  "result": {
+    "summary": "32 cases covering all functional requirements (FR1–FR6), all testable non-functional requirements (NFR1–NFR5), and the specified success and failure paths.",
+    "outputs": {
+      "test_cases": [
+        {
+          "id": "TC-FR1-01",
+          "covers": "FR1 — generated-code creation response",
+          "level": "integration",
+          "check": "POST a valid HTTP URL without optional fields; assert HTTP 201, an 8-character code matching [A-Za-z0-9_-], a relative shortPath corresponding to the code, and a managementToken in the creation response."
+        },
+        {
+          "id": "TC-FR1-02",
+          "covers": "FR1 — custom alias creation",
+          "level": "integration",
+          "check": "POST a valid URL with a valid custom alias; assert HTTP 201 and that the response code and shortPath use that exact, case-sensitive alias."
+        },
+        {
+          "id": "TC-FR1-03",
+          "covers": "FR1 — custom alias validation",
+          "level": "integration",
+          "check": "For aliases shorter than 3 characters, longer than 32 characters, containing characters outside [A-Za-z0-9_-], or equal to a reserved service path (including api, health, and links), assert HTTP 400 and no link is created."
+        },
+        {
+          "id": "TC-FR1-04",
+          "covers": "FR1 — alias conflicts",
+          "level": "integration",
+          "check": "Create an active link with an alias, then POST another link using that alias; assert HTTP 409. Repeat with an alias reserved by a tombstone and assert HTTP 409."
+        },
+        {
+          "id": "TC-FR1-05",
+          "covers": "FR1 — generated-code collision handling",
+          "level": "unit",
+          "check": "Make the code generator produce a code already assigned to an active link, then a code reserved by a tombstone, followed by an unused code; assert the service retries and returns only the unused code."
+        },
+        {
+          "id": "TC-FR2-01",
+          "covers": "FR2 — expiry boundary",
+          "level": "integration",
+          "check": "Create a link expiring at a controlled future instant; assert redirect succeeds before that instant and returns HTTP 410 at and after it."
+        },
+        {
+          "id": "TC-FR2-02",
+          "covers": "FR2 — invalid expiry",
+          "level": "integration",
+          "check": "POST a link with an expiry at or before its creation time and with a malformed expiry value; assert HTTP 400 and no link is created."
+        },
+        {
+          "id": "TC-FR2-03",
+          "covers": "FR2 — expiry does not delete metadata",
+          "level": "integration",
+          "check": "After a link expires, GET /api/links/{code}; assert HTTP 200 and that its public metadata remains available."
+        },
+        {
+          "id": "TC-FR3-01",
+          "covers": "FR3 — active redirect",
+          "level": "integration",
+          "check": "GET an active, unexpired code; assert HTTP 302, Location exactly equals the original URL, and Cache-Control includes no-store."
+        },
+        {
+          "id": "TC-FR3-02",
+          "covers": "FR3 — expired redirect",
+          "level": "integration",
+          "check": "GET a code whose expiry has passed; assert HTTP 410 and that no redirect Location is returned."
+        },
+        {
+          "id": "TC-FR3-03",
+          "covers": "FR3 — unknown and deleted redirects",
+          "level": "integration",
+          "check": "GET an unknown code and a previously deleted code; assert HTTP 404 for both and no redirect Location."
+        },
+        {
+          "id": "TC-FR4-01",
+          "covers": "FR4 — public metadata",
+          "level": "integration",
+          "check": "GET metadata for an active link without credentials; assert HTTP 200 and the exact originalUrl, a creation timestamp, and expiresAt (null when no expiry was set)."
+        },
+        {
+          "id": "TC-FR4-02",
+          "covers": "FR4 — metadata for unknown and deleted codes",
+          "level": "integration",
+          "check": "GET metadata for an unknown code and a deleted code; assert HTTP 404 for both."
+        },
+        {
+          "id": "TC-FR5-01",
+          "covers": "FR5 — authorized deletion and tombstone",
+          "level": "integration",
+          "check": "DELETE an active link with its management token; assert HTTP 204 and an empty response body, then verify the destination is erased, redirects and metadata return 404, and creating the same alias returns 409."
+        },
+        {
+          "id": "TC-FR5-02",
+          "covers": "FR5 — missing deletion token",
+          "level": "integration",
+          "check": "DELETE an active link without X-Management-Token; assert HTTP 401 and verify the link still redirects to its original URL."
+        },
+        {
+          "id": "TC-FR5-03",
+          "covers": "FR5 — invalid deletion token",
+          "level": "integration",
+          "check": "DELETE an active link with an incorrect X-Management-Token; assert HTTP 403 and verify the link is not deleted."
+        },
+        {
+          "id": "TC-FR5-04",
+          "covers": "FR5 — deletion of missing or already-deleted code",
+          "level": "integration",
+          "check": "DELETE an unknown code and a previously deleted code with a token header; assert HTTP 404 for both."
+        },
+        {
+          "id": "TC-FR5-05",
+          "covers": "FR5 — token confidentiality and hash-only storage",
+          "level": "integration",
+          "check": "Create a link and inspect its persisted record and subsequent metadata/redirect responses; assert the plaintext management token is absent outside the create response and only a SHA-256 token hash is persisted."
+        },
+        {
+          "id": "TC-FR6-01",
+          "covers": "FR6 — healthy service and persistence store",
+          "level": "integration",
+          "check": "With the Spring service and H2 store available, GET /health and assert HTTP 200 with status UP."
+        },
+        {
+          "id": "TC-FR6-02",
+          "covers": "FR6 — unavailable persistence store",
+          "level": "integration",
+          "check": "Make the persistence health check fail while the application remains running; GET /health and assert HTTP 503."
+        },
+        {
+          "id": "TC-NFR1-01",
+          "covers": "NFR1 — indicative redirect latency",
+          "level": "integration",
+          "check": "Run 1,000 sequential redirect warm-up requests followed by 1,000 sequential measured requests from one in-process client on the local machine; calculate measured p99 and assert it is below 50 ms."
+        },
+        {
+          "id": "TC-NFR2-01",
+          "covers": "NFR2 — URL syntax, scheme, and length",
+          "level": "integration",
+          "check": "POST malformed URLs, a URL longer than 2,048 characters, and URLs using non-HTTP(S) schemes; assert HTTP 400 for each and verify no link is created."
+        },
+        {
+          "id": "TC-NFR2-02",
+          "covers": "NFR2 — prohibited localhost and address literals",
+          "level": "unit",
+          "check": "Validate localhost and representative loopback, private, link-local, unique-local, and multicast IPv4 and IPv6 literals; assert every prohibited destination is rejected."
+        },
+        {
+          "id": "TC-NFR2-03",
+          "covers": "NFR2 — prohibited DNS results",
+          "level": "unit",
+          "check": "With a deterministic resolver, test a hostname resolving only to prohibited addresses and one resolving to a mix of allowed and prohibited addresses across IPv4 and IPv6; assert both are rejected."
+        },
+        {
+          "id": "TC-NFR2-04",
+          "covers": "NFR2 — DNS resolution failure",
+          "level": "unit",
+          "check": "Make the resolver time out, fail, or return no usable addresses; assert URL validation fails closed."
+        },
+        {
+          "id": "TC-NFR2-05",
+          "covers": "NFR2 — valid public destination",
+          "level": "unit",
+          "check": "With a deterministic resolver returning only permitted addresses, validate syntactically valid HTTP and HTTPS URLs at or below the 2,048-character limit; assert they are accepted."
+        },
+        {
+          "id": "TC-NFR2-06",
+          "covers": "NFR2 — destination is never fetched",
+          "level": "unit",
+          "check": "Create a link using a permitted test hostname and a spy on outbound HTTP clients; assert creation succeeds and no request is made to the destination."
+        },
+        {
+          "id": "TC-NFR3-01",
+          "covers": "NFR3 — per-IP creation limit",
+          "level": "integration",
+          "check": "From one peer IP, send 20 create requests within the configured minute and then a 21st; assert the first 20 are processed and the limited request returns HTTP 429 with a Retry-After header."
+        },
+        {
+          "id": "TC-NFR3-02",
+          "covers": "NFR3 — IP isolation and forwarded-header handling",
+          "level": "integration",
+          "check": "Exhaust the creation bucket for one peer IP, then send a create request from a different peer IP and assert it is not limited; verify changing X-Forwarded-For alone does not change the bucket identity."
+        },
+        {
+          "id": "TC-NFR3-03",
+          "covers": "NFR3 — rejected attempts count and restart reset",
+          "level": "integration",
+          "check": "Use an invalid create request among requests from one IP and verify it consumes a bucket token; after the limit is reached, restart the service and assert that IP can create again."
+        },
+        {
+          "id": "TC-NFR4-01",
+          "covers": "NFR4 — persistence and Flyway migrations",
+          "level": "integration",
+          "check": "Start the service with a temporary ./data H2 store, create a link and a tombstone, restart using the same store, and assert the active link and reserved tombstone remain available and Flyway reports its migrations applied."
+        },
+        {
+          "id": "TC-NFR4-02",
+          "covers": "NFR4 — local startup",
+          "level": "integration",
+          "check": "Run the documented single local startup command in an environment without external infrastructure; assert the service starts, applies migrations to the file-based H2 store under ./data, and responds to an HTTP health request."
+        },
+        {
+          "id": "TC-NFR5-01",
+          "covers": "NFR5 — automated functional and failure-path coverage",
+          "level": "integration",
+          "check": "Run the automated service test suite and assert it includes executable tests for creation, validation, alias conflicts, expiry, redirects, metadata, authorized and rejected deletion, rate limiting, restart persistence, health, and redirect latency."
+        }
+      ]
+    },
+    "files_written": [
+      "docs/test-plan.md"
+    ],
+    "decisions": [
+      {
+        "topic": "NFR1 latency measurement",
+        "choice": "Run the specified sequential 1,000-request warm-up and 1,000-request measured test in-process, and assert p99 is below 50 ms.",
+        "rationale": "The test is environment-sensitive and indicative; it cannot establish a production latency guarantee, consistent with the specification's explicit limitation.",
+        "source": "agent"
+      },
+      {
+        "topic": "NFR2 DNS and destination checks",
+        "choice": "Use deterministic resolver results for automated URL-validation tests, and verify creation makes no outbound destination request.",
+        "rationale": "External DNS and network state are not reliably controllable in tests. DNS changes after creation are explicitly accepted, and testing the no-fetch rule verifies the service does not contact destinations.",
+        "source": "agent"
+      },
+      {
+        "topic": "FR6 persistence-unavailable health check",
+        "choice": "Exercise the health endpoint with a controlled failing persistence health dependency.",
+        "rationale": "Reliably taking a real H2 store offline while the application remains available is environment-dependent; a controlled dependency failure verifies the observable HTTP 503 behavior.",
+        "source": "agent"
+      },
+      {
+        "topic": "NFR4 local startup and restart",
+        "choice": "Use an isolated temporary data directory for automated startup and restart tests.",
+        "rationale": "This verifies file-based persistence and migrations without depending on or modifying a developer's real ./data directory; the documented command remains the startup contract.",
+        "source": "agent"
+      },
+      {
+        "topic": "NFR5 coverage requirement",
+        "choice": "Treat the suite-coverage case as a test inventory/run check rather than a numeric coverage threshold.",
+        "rationale": "The specification requires exercise of every functional flow and important failure path but sets no percentage target.",
+        "source": "agent"
+      }
+    ]
+  }
+}

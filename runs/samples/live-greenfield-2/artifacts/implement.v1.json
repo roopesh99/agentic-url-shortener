@@ -1,0 +1,116 @@
+{
+  "name": "implement",
+  "version": 1,
+  "sha": "299c5033dcffa1fe1f8a27802b51fcf98c4293096b30f1c0b6f31fa2a4943034",
+  "produced_by": "implement/coder#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "6658ec012c9e51001e51f3dba23f3d7abbe4a6d7dac742d574532ed94ed96416"
+    }
+  ],
+  "result": {
+    "summary": "Spring Boot 3.4.5 URL shortener: create/redirect/metadata/delete with tombstones, destination policy, per-IP rate limit, file-based H2 + Flyway, health check",
+    "outputs": {
+      "files": [
+        "url-shortener/pom.xml",
+        "url-shortener/src/main/java/com/example/shortener/ShortenerApplication.java",
+        "url-shortener/src/main/java/com/example/shortener/api/ApiExceptionHandler.java",
+        "url-shortener/src/main/java/com/example/shortener/api/HealthController.java",
+        "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+        "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+        "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+        "url-shortener/src/main/java/com/example/shortener/config/AppConfig.java",
+        "url-shortener/src/main/java/com/example/shortener/config/ShortenerProperties.java",
+        "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+        "url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java",
+        "url-shortener/src/main/java/com/example/shortener/service/AliasPolicy.java",
+        "url-shortener/src/main/java/com/example/shortener/service/ApiException.java",
+        "url-shortener/src/main/java/com/example/shortener/service/CodeGenerator.java",
+        "url-shortener/src/main/java/com/example/shortener/service/CreateRateLimiter.java",
+        "url-shortener/src/main/java/com/example/shortener/service/DestinationPolicy.java",
+        "url-shortener/src/main/java/com/example/shortener/service/HostResolver.java",
+        "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+        "url-shortener/src/main/java/com/example/shortener/service/RateLimitedException.java",
+        "url-shortener/src/main/java/com/example/shortener/service/TokenService.java",
+        "url-shortener/src/main/resources/application.yml",
+        "url-shortener/src/main/resources/db/migration/V1__create_links.sql"
+      ]
+    },
+    "files_written": [
+      "url-shortener/pom.xml",
+      "url-shortener/src/main/java/com/example/shortener/ShortenerApplication.java",
+      "url-shortener/src/main/java/com/example/shortener/api/ApiExceptionHandler.java",
+      "url-shortener/src/main/java/com/example/shortener/api/HealthController.java",
+      "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+      "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+      "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+      "url-shortener/src/main/java/com/example/shortener/config/AppConfig.java",
+      "url-shortener/src/main/java/com/example/shortener/config/ShortenerProperties.java",
+      "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+      "url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java",
+      "url-shortener/src/main/java/com/example/shortener/service/AliasPolicy.java",
+      "url-shortener/src/main/java/com/example/shortener/service/ApiException.java",
+      "url-shortener/src/main/java/com/example/shortener/service/CodeGenerator.java",
+      "url-shortener/src/main/java/com/example/shortener/service/CreateRateLimiter.java",
+      "url-shortener/src/main/java/com/example/shortener/service/DestinationPolicy.java",
+      "url-shortener/src/main/java/com/example/shortener/service/HostResolver.java",
+      "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+      "url-shortener/src/main/java/com/example/shortener/service/RateLimitedException.java",
+      "url-shortener/src/main/java/com/example/shortener/service/TokenService.java",
+      "url-shortener/src/main/resources/application.yml",
+      "url-shortener/src/main/resources/db/migration/V1__create_links.sql"
+    ],
+    "decisions": [
+      {
+        "topic": "Persistence",
+        "choice": "File-based H2 under shortener.data-dir (./data) with Flyway V1 migration; Hibernate ddl-auto=validate",
+        "rationale": "NFR4 and the human decision require durable local storage; Flyway owns the schema so Hibernate only verifies it",
+        "source": "agent"
+      },
+      {
+        "topic": "Deletion model",
+        "choice": "Soft delete into a tombstone row that keeps the code and erases original_url and token_hash, enforced by a CHECK constraint",
+        "rationale": "Codes and aliases are never reused (human decision); the constraint makes a half-deleted row impossible",
+        "source": "agent"
+      },
+      {
+        "topic": "Management token",
+        "choice": "256-bit SecureRandom token, unpadded base64url, stored as SHA-256 hex, compared with MessageDigest.isEqual",
+        "rationale": "Human decision to store only a hash; constant-time comparison avoids a timing side channel",
+        "source": "agent"
+      },
+      {
+        "topic": "Destination validation",
+        "choice": "Scheme, length and host checks, then resolve all addresses once at creation via an injectable HostResolver and fail closed on any prohibited address or resolution failure; fc00",
+        "rationale": "/7 checked explicitly::Java's isSiteLocalAddress covers only the deprecated fec0::/10; the resolver seam lets tests avoid real DNS",
+        "source": "agent"
+      },
+      {
+        "topic": "Rate limiting",
+        "choice": "Bucket4j (com.bucket4j:bucket4j_jdk17-core 8.14.0, on the allowlist) per network peer address, 20 per minute refilled intervally, every create attempt counts, forwarding headers not trusted",
+        "rationale": "Matches NFR3; counting invalid attempts also throttles probing; one bucket per distinct IP, acceptable for a single node",
+        "source": "agent"
+      },
+      {
+        "topic": "Reserved aliases",
+        "choice": "api, health, links, error, actuator, matched case-insensitively",
+        "rationale": "Prevents aliases shadowing service routes, including case variants",
+        "source": "agent"
+      },
+      {
+        "topic": "Testability seams",
+        "choice": "Clock, SecureRandom and HostResolver are beans; shortener.data-dir and shortener.rate-limit.creates-per-minute are configurable",
+        "rationale": "Tests can pin time, stub DNS, use an isolated database and lower the limit without waiting a minute",
+        "source": "agent"
+      },
+      {
+        "topic": "Timestamps",
+        "choice": "Instants truncated to microseconds before storing",
+        "rationale": "H2 TIMESTAMP(6) stores microseconds; truncating keeps creation and metadata responses identical",
+        "source": "agent"
+      }
+    ]
+  }
+}

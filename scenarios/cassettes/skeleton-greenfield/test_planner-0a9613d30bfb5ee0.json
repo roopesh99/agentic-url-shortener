@@ -1,0 +1,323 @@
+{
+  "request": {
+    "agent": "test_planner",
+    "effort": "medium",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "decisions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "choice": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "topic": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "topic",
+              "choice",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "test_cases": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "check": {
+                "type": "string"
+              },
+              "covers": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "level": {
+                "enum": [
+                  "unit",
+                  "integration"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "covers",
+              "level",
+              "check"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "summary",
+        "test_cases",
+        "decisions"
+      ],
+      "type": "object"
+    },
+    "system": "You are the test planner in a governed software delivery pipeline. From the approved specification you design the test cases that will prove the service meets its acceptance criteria. You work in parallel with the implementation, so plan against the specification, not against code.\n\n- Cover every functional requirement and every testable non-functional requirement with at least one case; cover failure paths (invalid input, not found, conflicts, expiry, abuse limits) as well as the main path.\n- Give each case a stable id of the form `TC-<requirement id>-<nn>`, the requirement it `covers`, its `level` (\"unit\" for logic in isolation, \"integration\" for HTTP behaviour through the running Spring context), and a `check` written as a concrete, observable expectation.\n- Requirements that cannot be verified by an automated test in this environment (for example a p99 latency target) should still get a case describing the closest meaningful automated check, and a decision explaining the gap.\n- `summary`: one line with the number of cases and the coverage.",
+    "user": "<approved_specification>\n{\n  \"acceptance_criteria\": [\n    \"Given a valid HTTP or HTTPS URL and no optional fields, when a client POSTs it to /api/links, then the service returns 201 with an 8-character code, a relative shortPath, and a management token shown only in that response.\",\n    \"Given a valid custom alias and future expiry, when a client creates the link, then the service returns 201 and the metadata contains the alias, original URL, creation timestamp, and normalized UTC expiry timestamp.\",\n    \"Given a custom alias shorter than 3 characters, longer than 32 characters, containing disallowed characters, or reserved for a service path, when a client creates a link, then the service returns 400.\",\n    \"Given an alias already assigned to an active link or tombstone, when a client creates a link with that alias, then the service returns 409 Conflict.\",\n    \"Given an invalid URL, a URL over 2,048 characters, a non-HTTP(S) scheme, localhost, or a host that is or resolves to a prohibited IPv4 or IPv6 address, when a client creates a link, then the service rejects it with HTTP 400 and does not create a link.\",\n    \"Given a hostname that fails DNS resolution or resolves to any prohibited address among its results, when a client creates a link, then the service rejects it; after a link is created, the service does not fetch its destination.\",\n    \"Given an active, unexpired link, when a client GETs /{code}, then the service returns 302 with the original URL in Location and Cache-Control: no-store.\",\n    \"Given an expired link, when a client GETs /{code}, then the service returns 410 and does not redirect; when a client GETs /api/links/{code}, then the service still returns its public metadata.\",\n    \"Given an unknown or deleted code, when a client GETs /{code} or GETs /api/links/{code}, then the service returns 404.\",\n    \"Given an active link, when a client GETs /api/links/{code} without credentials, then the service returns HTTP 200 with the original URL, created timestamp, and expiry value.\",\n    \"Given an active link, when a client DELETEs /api/links/{code} with its management token, then the service returns 204, erases the destination, and retains a tombstone reserving the code.\",\n    \"Given a missing or invalid management token for an active link deletion, when a client sends DELETE, then the service returns 401 or 403 respectively and does not delete the link.\",\n    \"Given a deleted code, when a client visits it, then the service returns 404; when a client attempts to create a link using that alias, then the service returns 409.\",\n    \"Given 20 create requests from one client IP within the configured minute, when that IP sends a further create request while limited, then the service returns 429 with Retry-After; a service restart resets the in-memory limit.\",\n    \"Given a created link or tombstone, when the service restarts using the same ./data store, then the link or reserved tombstone remains available and Flyway migrations have been applied.\",\n    \"Given the service and H2 store are available, when an operations client GETs /health, then it receives HTTP 200; when persistence is unavailable, then it receives HTTP 503.\",\n    \"Given the automated redirect latency test, when it performs 1,000 sequential warm-up requests followed by 1,000 measured requests from a single client on the local machine, then the measured in-process p99 is below 50 ms.\",\n    \"Given the automated test suite, when it runs, then it exercises every functional requirement and the specified important success and failure paths.\"\n  ],\n  \"ambiguities\": [\n    {\n      \"question\": \"What characters, length limits, and case-sensitivity rules apply to custom aliases?\",\n      \"rationale\": \"Decided by a human: Apply the provided alias constraints and reserve every service route so aliases cannot shadow endpoints.\",\n      \"resolution\": \"Custom aliases are 3-32 characters from [A-Za-z0-9_-], case-sensitive (consistent with generated codes). Reserved words are rejected: api, health, links (and any path the service itself uses).\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What rate limit applies to link creation, over what interval, and how are clients identified (for example, by IP address)?\",\n      \"rationale\": \"Decided by a human: The threshold, interval, response, storage, and library are binding; a 20-token bucket and counting all create requests are conventional abuse-resistant interpretations.\",\n      \"resolution\": \"20 link creations per minute per client IP address. Exceeding it returns 429 Too Many Requests with a Retry-After header. Limits are held in memory (Bucket4j); a restart resets them. Interpret this as a bucket with capacity 20 refilled at 20 per minute; count requests to the create endpoint, including rejected attempts.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"Who is allowed to fetch metadata or delete a link, and is authentication or authorization required?\",\n      \"rationale\": \"Decided by a human: Implement public metadata and token-based deletion without user accounts, and persist no plaintext management token.\",\n      \"resolution\": \"Metadata (GET) is public. Creating a link returns a one-time management token; DELETE requires that token (e.g. an X-Management-Token header), so only the creator can delete. No user accounts in v1. Store only a hash of the token, never the token itself.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"Must links survive service restarts, and where should local link data be stored?\",\n      \"rationale\": \"Decided by a human: Use the specified local H2 file store and Flyway migrations as the persistence design.\",\n      \"resolution\": \"Yes, links must survive restarts. Use file-based H2 under ./data with Flyway-managed schema migrations.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"Precisely which destinations count as malicious or internal, and should validation cover DNS-resolved addresses, IPv4, IPv6, and address changes over time?\",\n      \"rationale\": \"Decided by a human: Enforce the specified schemes, length, address classes, one-time DNS check, and no-fetch limitation.\",\n      \"resolution\": \"Accept only http/https URLs up to 2048 characters. Reject localhost and any host that is, or resolves to, a loopback, private, link-local, unique-local or multicast address (IPv4 and IPv6), checked once at creation. Re-pointing DNS after creation is an accepted, documented limitation: the service never fetches the URL.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What traffic volume, concurrency, measurement window, and runtime conditions define the p99 latency target?\",\n      \"rationale\": \"Decided by a human: Use the specified test scope and treat the result as indicative rather than a production guarantee.\",\n      \"resolution\": \"Measured in-process by an automated test: 1,000 redirect requests after a warm-up, single client, local machine, asserting p99 < 50 ms. Documented as an indicative check, not a production SLO.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"After deletion, may a short code or custom alias be reused for a new link?\",\n      \"rationale\": \"Decided by a human: Retain tombstones, erase the destination, and permanently reserve deleted codes and aliases.\",\n      \"resolution\": \"No. Codes and custom aliases are never reused. Deleting a link keeps a tombstone record that reserves the code and erases the destination URL; a deleted code returns 404 like an unknown one, and creating a link with a deleted alias returns 409 Conflict.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What short-code length and alphabet should generated codes use?\",\n      \"rationale\": \"The requirement leaves generated-code format open; an 8-character URL-safe code provides a practical namespace, and retrying collisions is a standard low-risk implementation.\",\n      \"resolution\": \"Use 8-character generated codes from [A-Za-z0-9_-], case-sensitive. Regenerate a code if it collides with an active code, tombstone, or service route.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What redirect status code should the service return (301 vs 302)?\",\n      \"rationale\": \"A temporary redirect is safer because links can expire or be deleted; preventing caching helps those changes take effect for subsequent visits.\",\n      \"resolution\": \"Return 302 Found and include Cache-Control: no-store.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What should happen when a custom alias is already taken?\",\n      \"rationale\": \"A conflict response is the conventional way to report a unique-resource naming collision and is consistent with the human decision that deleted aliases remain reserved.\",\n      \"resolution\": \"Return HTTP 409 Conflict for an alias assigned to either an active link or a tombstone.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What HTTP paths, payload fields, and successful response bodies should the v1 API use?\",\n      \"rationale\": \"The requirement names the operations but not their contract; these conventional REST routes and explicit fields make the v1 API testable without adding capabilities.\",\n      \"resolution\": \"Use POST /api/links with JSON fields `url`, optional `alias`, and optional `expiresAt`; return 201 with `code`, `shortPath`, and `managementToken`. Use GET /{code} for redirects, GET /api/links/{code} for metadata, DELETE /api/links/{code} for deletion, and GET /health for health. Metadata fields are `originalUrl`, `createdAt`, and `expiresAt`.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What format should expiry use, and how should an expiry at or before creation time be handled?\",\n      \"rationale\": \"An explicit UTC instant is an unambiguous conventional timestamp format; rejecting a non-future expiry avoids creating a link that is already expired.\",\n      \"resolution\": \"Use an ISO-8601 UTC instant in the `expiresAt` field, normalize returned timestamps to UTC, and reject an expiry at or before creation time with HTTP 400.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What response behavior should apply to unknown, deleted, expired, malformed, and unauthorized requests?\",\n      \"rationale\": \"The requirement does not define error statuses; these standard distinctions make failures observable, while 410 distinguishes expiry from an unknown or deleted link.\",\n      \"resolution\": \"Return HTTP 400 for malformed or invalid create input, 409 for a taken alias, 429 with Retry-After when rate-limited, 302 for an active redirect, 410 for an expired redirect, and 404 for an unknown or deleted code. Metadata for an expired non-deleted link returns 200; metadata for an unknown or deleted code returns 404. On deletion, return 401 for a missing token, 403 for an invalid token, 204 on success, and 404 for an unknown or deleted code.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"Should the create response contain an absolute short URL, and how is its public origin determined?\",\n      \"rationale\": \"The requirement does not define a canonical public origin; returning a relative path avoids trusting request Host or proxy headers and needs no deployment configuration.\",\n      \"resolution\": \"Return the relative `shortPath` and code, not an absolute URL; clients combine the path with the service origin they already use.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"How should the management token be generated, exposed, and validated?\",\n      \"rationale\": \"High-entropy random bearer tokens and one-time display with hash-only storage are conventional safeguards for a token that authorizes deletion.\",\n      \"resolution\": \"Generate a cryptographically random 256-bit token, encode it as unpadded base64url, return it only in the creation response, and store a SHA-256 hash. Accept it in X-Management-Token and keep it valid until successful deletion; do not persist or log the plaintext token.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What should happen if DNS resolution fails or returns both allowed and prohibited addresses during URL validation?\",\n      \"rationale\": \"Failing closed is the low-risk interpretation of the requirement to reject hosts that resolve to prohibited destinations.\",\n      \"resolution\": \"Fail closed: reject the URL if resolution fails, times out, yields no usable address, or any returned address is prohibited.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"How should the service identify a client IP when requests may include forwarding headers?\",\n      \"rationale\": \"The service has no specified proxy deployment; using the peer address avoids spoofable client-supplied headers and is a safe local default.\",\n      \"resolution\": \"Use the network peer address by default and do not trust forwarding headers unless a trusted-proxy configuration is explicitly provided.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What does the health endpoint check?\",\n      \"rationale\": \"Checking both the application and the persistence store is a conventional operational health check for a service whose link operations depend on that store.\",\n      \"resolution\": \"Return HTTP 200 with an UP status when the service and H2 store are available; return HTTP 503 otherwise.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What qualifies as meaningful automated test coverage?\",\n      \"rationale\": \"Behavior-focused coverage directly verifies the requested capabilities without inventing an arbitrary percentage threshold.\",\n      \"resolution\": \"Tests must exercise every functional requirement and the important validation, authorization, expiry, rate-limit, persistence, and redirect failure paths; no numeric coverage percentage is required.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"How many requests should the latency test use for warm-up, and should measured requests be concurrent?\",\n      \"rationale\": \"The human decision specifies a warm-up and a single client but not its size or concurrency; a fixed sequential warm-up makes the test repeatable and allows runtime initialization.\",\n      \"resolution\": \"Use 1,000 sequential warm-up requests followed by the 1,000 measured requests from a single client.\",\n      \"source\": \"assumption\"\n    }\n  ],\n  \"clarifications\": [\n    {\n      \"answer\": \"Custom aliases are 3-32 characters from [A-Za-z0-9_-], case-sensitive (consistent with generated codes). Reserved words are rejected: api, health, links (and any path the service itself uses).\",\n      \"question\": \"What characters, length limits, and case-sensitivity rules apply to custom aliases?\"\n    },\n    {\n      \"answer\": \"20 link creations per minute per client IP address. Exceeding it returns 429 Too Many Requests with a Retry-After header. Limits are held in memory (Bucket4j); a restart resets them.\",\n      \"question\": \"What rate limit applies to link creation, over what interval, and how are clients identified (for example, by IP address)?\"\n    },\n    {\n      \"answer\": \"Metadata (GET) is public. Creating a link returns a one-time management token; DELETE requires that token (e.g. an X-Management-Token header), so only the creator can delete. No user accounts in v1. Store only a hash of the token, never the token itself.\",\n      \"question\": \"Who is allowed to fetch metadata or delete a link, and is authentication or authorization required?\"\n    },\n    {\n      \"answer\": \"Yes, links must survive restarts. Use file-based H2 under ./data with Flyway-managed schema migrations.\",\n      \"question\": \"Must links survive service restarts, and where should local link data be stored?\"\n    },\n    {\n      \"answer\": \"Accept only http/https URLs up to 2048 characters. Reject localhost and any host that is, or resolves to, a loopback, private, link-local, unique-local or multicast address (IPv4 and IPv6), checked once at creation. Re-pointing DNS after creation is an accepted, documented limitation: the service never fetches the URL.\",\n      \"question\": \"Precisely which destinations count as malicious or internal, and should validation cover DNS-resolved addresses, IPv4, IPv6, and address changes over time?\"\n    },\n    {\n      \"answer\": \"Measured in-process by an automated test: 1,000 redirect requests after a warm-up, single client, local machine, asserting p99 < 50 ms. Documented as an indicative check, not a production SLO.\",\n      \"question\": \"What traffic volume, concurrency, measurement window, and runtime conditions define the p99 latency target?\"\n    },\n    {\n      \"answer\": \"No. Codes and custom aliases are never reused. Deleting a link keeps a tombstone record that reserves the code and erases the destination URL; a deleted code returns 404 like an unknown one, and creating a link with a deleted alias returns 409 Conflict.\",\n      \"question\": \"After deletion, may a short code or custom alias be reused for a new link?\"\n    }\n  ],\n  \"functional\": [\n    {\n      \"id\": \"FR1\",\n      \"text\": \"Create a link with POST /api/links using a JSON body with required `url` and optional `alias` and `expiresAt` fields. Return HTTP 201 with the code, relative `shortPath`, and a management token that is returned only in the creation response. Generated codes are 8 characters from `[A-Za-z0-9_-]`, case-sensitive. Custom aliases are 3\\u201332 characters from `[A-Za-z0-9_-]`, case-sensitive; reject reserved service paths and invalid aliases with HTTP 400. Reject a custom alias already assigned to an active or tombstoned link with HTTP 409.\"\n    },\n    {\n      \"id\": \"FR2\",\n      \"text\": \"Accept an optional future expiry timestamp in UTC. At or after that instant, do not redirect the link; return HTTP 410 Gone. Expiry does not delete the link or prevent public metadata retrieval.\"\n    },\n    {\n      \"id\": \"FR3\",\n      \"text\": \"GET /{code} redirects an active, unexpired link to its original URL using HTTP 302 Found and a Location header. Do not cache redirect responses. Return HTTP 410 Gone for expired links and HTTP 404 Not Found for unknown or deleted codes.\"\n    },\n    {\n      \"id\": \"FR4\",\n      \"text\": \"GET /api/links/{code} returns public metadata for a non-deleted link: original URL, creation timestamp, and expiry timestamp (null when no expiry is set). Return HTTP 404 Not Found for unknown or deleted codes. Expired links remain available through this endpoint.\"\n    },\n    {\n      \"id\": \"FR5\",\n      \"text\": \"DELETE /api/links/{code} requires the link's management token in the X-Management-Token header. Return HTTP 204 No Content on successful deletion; return HTTP 401 for a missing token, HTTP 403 for an invalid token, and HTTP 404 for an unknown or already-deleted code. Deletion retains a tombstone reserving the code and erases the destination URL; neither generated codes nor custom aliases are reused. Store only a hash of the management token, never the plaintext token.\"\n    },\n    {\n      \"id\": \"FR6\",\n      \"text\": \"GET /health provides an operations health check, returning HTTP 200 when the service and its persistence store are available and HTTP 503 otherwise.\"\n    }\n  ],\n  \"goal\": \"Provide a locally runnable HTTP service that creates shareable short links for validated HTTP/HTTPS URLs and redirects visitors to their destinations. Provide public link metadata, token-authorized deletion, expiry handling, and an operations health endpoint.\",\n  \"non_functional\": [\n    {\n      \"id\": \"NFR1\",\n      \"text\": \"An automated indicative performance check must measure 1,000 redirect requests after a warm-up, from a single client on the local machine, and assert p99 latency below 50 ms in-process. This check is not a production SLO.\"\n    },\n    {\n      \"id\": \"NFR2\",\n      \"text\": \"Accept only syntactically valid HTTP or HTTPS URLs up to 2,048 characters. At creation, reject localhost and any host that is itself or resolves to a loopback, private, link-local, unique-local, or multicast IPv4 or IPv6 address. Check DNS-resolved addresses once at creation; DNS changes after creation are an accepted limitation. The service must not fetch destination URLs.\"\n    },\n    {\n      \"id\": \"NFR3\",\n      \"text\": \"Protect link creation with an in-memory Bucket4j rate limit of 20 create requests per minute per client IP. Return HTTP 429 Too Many Requests with a Retry-After header when limited. A service restart resets the limit state.\"\n    },\n    {\n      \"id\": \"NFR4\",\n      \"text\": \"Run locally with one command and no external infrastructure. Persist links and tombstones across restarts using file-based H2 under ./data, with Flyway-managed schema migrations.\"\n    },\n    {\n      \"id\": \"NFR5\",\n      \"text\": \"Provide automated tests covering each functional flow and important failure paths, including URL and alias validation, expiry, deletion authorization, rate limiting, persistence across restart, and redirect latency.\"\n    }\n  ]\n}\n</approved_specification>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "decisions": [
+        {
+          "choice": "Run the specified sequential 1,000-request warm-up and 1,000-request measured test in-process, and assert p99 is below 50 ms.",
+          "rationale": "The test is environment-sensitive and indicative; it cannot establish a production latency guarantee, consistent with the specification's explicit limitation.",
+          "topic": "NFR1 latency measurement"
+        },
+        {
+          "choice": "Use deterministic resolver results for automated URL-validation tests, and verify creation makes no outbound destination request.",
+          "rationale": "External DNS and network state are not reliably controllable in tests. DNS changes after creation are explicitly accepted, and testing the no-fetch rule verifies the service does not contact destinations.",
+          "topic": "NFR2 DNS and destination checks"
+        },
+        {
+          "choice": "Exercise the health endpoint with a controlled failing persistence health dependency.",
+          "rationale": "Reliably taking a real H2 store offline while the application remains available is environment-dependent; a controlled dependency failure verifies the observable HTTP 503 behavior.",
+          "topic": "FR6 persistence-unavailable health check"
+        },
+        {
+          "choice": "Use an isolated temporary data directory for automated startup and restart tests.",
+          "rationale": "This verifies file-based persistence and migrations without depending on or modifying a developer's real ./data directory; the documented command remains the startup contract.",
+          "topic": "NFR4 local startup and restart"
+        },
+        {
+          "choice": "Treat the suite-coverage case as a test inventory/run check rather than a numeric coverage threshold.",
+          "rationale": "The specification requires exercise of every functional flow and important failure path but sets no percentage target.",
+          "topic": "NFR5 coverage requirement"
+        }
+      ],
+      "summary": "32 cases covering all functional requirements (FR1\u2013FR6), all testable non-functional requirements (NFR1\u2013NFR5), and the specified success and failure paths.",
+      "test_cases": [
+        {
+          "check": "POST a valid HTTP URL without optional fields; assert HTTP 201, an 8-character code matching [A-Za-z0-9_-], a relative shortPath corresponding to the code, and a managementToken in the creation response.",
+          "covers": "FR1 \u2014 generated-code creation response",
+          "id": "TC-FR1-01",
+          "level": "integration"
+        },
+        {
+          "check": "POST a valid URL with a valid custom alias; assert HTTP 201 and that the response code and shortPath use that exact, case-sensitive alias.",
+          "covers": "FR1 \u2014 custom alias creation",
+          "id": "TC-FR1-02",
+          "level": "integration"
+        },
+        {
+          "check": "For aliases shorter than 3 characters, longer than 32 characters, containing characters outside [A-Za-z0-9_-], or equal to a reserved service path (including api, health, and links), assert HTTP 400 and no link is created.",
+          "covers": "FR1 \u2014 custom alias validation",
+          "id": "TC-FR1-03",
+          "level": "integration"
+        },
+        {
+          "check": "Create an active link with an alias, then POST another link using that alias; assert HTTP 409. Repeat with an alias reserved by a tombstone and assert HTTP 409.",
+          "covers": "FR1 \u2014 alias conflicts",
+          "id": "TC-FR1-04",
+          "level": "integration"
+        },
+        {
+          "check": "Make the code generator produce a code already assigned to an active link, then a code reserved by a tombstone, followed by an unused code; assert the service retries and returns only the unused code.",
+          "covers": "FR1 \u2014 generated-code collision handling",
+          "id": "TC-FR1-05",
+          "level": "unit"
+        },
+        {
+          "check": "Create a link expiring at a controlled future instant; assert redirect succeeds before that instant and returns HTTP 410 at and after it.",
+          "covers": "FR2 \u2014 expiry boundary",
+          "id": "TC-FR2-01",
+          "level": "integration"
+        },
+        {
+          "check": "POST a link with an expiry at or before its creation time and with a malformed expiry value; assert HTTP 400 and no link is created.",
+          "covers": "FR2 \u2014 invalid expiry",
+          "id": "TC-FR2-02",
+          "level": "integration"
+        },
+        {
+          "check": "After a link expires, GET /api/links/{code}; assert HTTP 200 and that its public metadata remains available.",
+          "covers": "FR2 \u2014 expiry does not delete metadata",
+          "id": "TC-FR2-03",
+          "level": "integration"
+        },
+        {
+          "check": "GET an active, unexpired code; assert HTTP 302, Location exactly equals the original URL, and Cache-Control includes no-store.",
+          "covers": "FR3 \u2014 active redirect",
+          "id": "TC-FR3-01",
+          "level": "integration"
+        },
+        {
+          "check": "GET a code whose expiry has passed; assert HTTP 410 and that no redirect Location is returned.",
+          "covers": "FR3 \u2014 expired redirect",
+          "id": "TC-FR3-02",
+          "level": "integration"
+        },
+        {
+          "check": "GET an unknown code and a previously deleted code; assert HTTP 404 for both and no redirect Location.",
+          "covers": "FR3 \u2014 unknown and deleted redirects",
+          "id": "TC-FR3-03",
+          "level": "integration"
+        },
+        {
+          "check": "GET metadata for an active link without credentials; assert HTTP 200 and the exact originalUrl, a creation timestamp, and expiresAt (null when no expiry was set).",
+          "covers": "FR4 \u2014 public metadata",
+          "id": "TC-FR4-01",
+          "level": "integration"
+        },
+        {
+          "check": "GET metadata for an unknown code and a deleted code; assert HTTP 404 for both.",
+          "covers": "FR4 \u2014 metadata for unknown and deleted codes",
+          "id": "TC-FR4-02",
+          "level": "integration"
+        },
+        {
+          "check": "DELETE an active link with its management token; assert HTTP 204 and an empty response body, then verify the destination is erased, redirects and metadata return 404, and creating the same alias returns 409.",
+          "covers": "FR5 \u2014 authorized deletion and tombstone",
+          "id": "TC-FR5-01",
+          "level": "integration"
+        },
+        {
+          "check": "DELETE an active link without X-Management-Token; assert HTTP 401 and verify the link still redirects to its original URL.",
+          "covers": "FR5 \u2014 missing deletion token",
+          "id": "TC-FR5-02",
+          "level": "integration"
+        },
+        {
+          "check": "DELETE an active link with an incorrect X-Management-Token; assert HTTP 403 and verify the link is not deleted.",
+          "covers": "FR5 \u2014 invalid deletion token",
+          "id": "TC-FR5-03",
+          "level": "integration"
+        },
+        {
+          "check": "DELETE an unknown code and a previously deleted code with a token header; assert HTTP 404 for both.",
+          "covers": "FR5 \u2014 deletion of missing or already-deleted code",
+          "id": "TC-FR5-04",
+          "level": "integration"
+        },
+        {
+          "check": "Create a link and inspect its persisted record and subsequent metadata/redirect responses; assert the plaintext management token is absent outside the create response and only a SHA-256 token hash is persisted.",
+          "covers": "FR5 \u2014 token confidentiality and hash-only storage",
+          "id": "TC-FR5-05",
+          "level": "integration"
+        },
+        {
+          "check": "With the Spring service and H2 store available, GET /health and assert HTTP 200 with status UP.",
+          "covers": "FR6 \u2014 healthy service and persistence store",
+          "id": "TC-FR6-01",
+          "level": "integration"
+        },
+        {
+          "check": "Make the persistence health check fail while the application remains running; GET /health and assert HTTP 503.",
+          "covers": "FR6 \u2014 unavailable persistence store",
+          "id": "TC-FR6-02",
+          "level": "integration"
+        },
+        {
+          "check": "Run 1,000 sequential redirect warm-up requests followed by 1,000 sequential measured requests from one in-process client on the local machine; calculate measured p99 and assert it is below 50 ms.",
+          "covers": "NFR1 \u2014 indicative redirect latency",
+          "id": "TC-NFR1-01",
+          "level": "integration"
+        },
+        {
+          "check": "POST malformed URLs, a URL longer than 2,048 characters, and URLs using non-HTTP(S) schemes; assert HTTP 400 for each and verify no link is created.",
+          "covers": "NFR2 \u2014 URL syntax, scheme, and length",
+          "id": "TC-NFR2-01",
+          "level": "integration"
+        },
+        {
+          "check": "Validate localhost and representative loopback, private, link-local, unique-local, and multicast IPv4 and IPv6 literals; assert every prohibited destination is rejected.",
+          "covers": "NFR2 \u2014 prohibited localhost and address literals",
+          "id": "TC-NFR2-02",
+          "level": "unit"
+        },
+        {
+          "check": "With a deterministic resolver, test a hostname resolving only to prohibited addresses and one resolving to a mix of allowed and prohibited addresses across IPv4 and IPv6; assert both are rejected.",
+          "covers": "NFR2 \u2014 prohibited DNS results",
+          "id": "TC-NFR2-03",
+          "level": "unit"
+        },
+        {
+          "check": "Make the resolver time out, fail, or return no usable addresses; assert URL validation fails closed.",
+          "covers": "NFR2 \u2014 DNS resolution failure",
+          "id": "TC-NFR2-04",
+          "level": "unit"
+        },
+        {
+          "check": "With a deterministic resolver returning only permitted addresses, validate syntactically valid HTTP and HTTPS URLs at or below the 2,048-character limit; assert they are accepted.",
+          "covers": "NFR2 \u2014 valid public destination",
+          "id": "TC-NFR2-05",
+          "level": "unit"
+        },
+        {
+          "check": "Create a link using a permitted test hostname and a spy on outbound HTTP clients; assert creation succeeds and no request is made to the destination.",
+          "covers": "NFR2 \u2014 destination is never fetched",
+          "id": "TC-NFR2-06",
+          "level": "unit"
+        },
+        {
+          "check": "From one peer IP, send 20 create requests within the configured minute and then a 21st; assert the first 20 are processed and the limited request returns HTTP 429 with a Retry-After header.",
+          "covers": "NFR3 \u2014 per-IP creation limit",
+          "id": "TC-NFR3-01",
+          "level": "integration"
+        },
+        {
+          "check": "Exhaust the creation bucket for one peer IP, then send a create request from a different peer IP and assert it is not limited; verify changing X-Forwarded-For alone does not change the bucket identity.",
+          "covers": "NFR3 \u2014 IP isolation and forwarded-header handling",
+          "id": "TC-NFR3-02",
+          "level": "integration"
+        },
+        {
+          "check": "Use an invalid create request among requests from one IP and verify it consumes a bucket token; after the limit is reached, restart the service and assert that IP can create again.",
+          "covers": "NFR3 \u2014 rejected attempts count and restart reset",
+          "id": "TC-NFR3-03",
+          "level": "integration"
+        },
+        {
+          "check": "Start the service with a temporary ./data H2 store, create a link and a tombstone, restart using the same store, and assert the active link and reserved tombstone remain available and Flyway reports its migrations applied.",
+          "covers": "NFR4 \u2014 persistence and Flyway migrations",
+          "id": "TC-NFR4-01",
+          "level": "integration"
+        },
+        {
+          "check": "Run the documented single local startup command in an environment without external infrastructure; assert the service starts, applies migrations to the file-based H2 store under ./data, and responds to an HTTP health request.",
+          "covers": "NFR4 \u2014 local startup",
+          "id": "TC-NFR4-02",
+          "level": "integration"
+        },
+        {
+          "check": "Run the automated service test suite and assert it includes executable tests for creation, validation, alias conflicts, expiry, redirects, metadata, authorized and rejected deletion, rate limiting, restart persistence, health, and redirect latency.",
+          "covers": "NFR5 \u2014 automated functional and failure-path coverage",
+          "id": "TC-NFR5-01",
+          "level": "integration"
+        }
+      ]
+    },
+    "duration_ms": 33308,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_bed1c39f4a9e4481bce4b262dd6aee6f",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 4944,
+      "output_tokens": 4075
+    }
+  }
+}

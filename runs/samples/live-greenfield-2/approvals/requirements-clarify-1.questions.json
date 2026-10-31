@@ -1,0 +1,31 @@
+{
+  "run_id": "live-greenfield-2",
+  "stage": "requirements",
+  "round": 1,
+  "questions": [
+    {
+      "question": "What characters, length limits, and case-sensitivity rules apply to custom aliases?",
+      "why": "Alias rules affect which user-chosen links are accepted and whether distinct spellings identify the same link; the requirement supplies no product policy."
+    },
+    {
+      "question": "What rate limit applies to link creation, over what interval, and how are clients identified (for example, by IP address)?",
+      "why": "The requirement explicitly leaves thresholds open. Limits and client identity affect both abuse resistance and legitimate use, and there is no universally safe default."
+    },
+    {
+      "question": "Who is allowed to fetch metadata or delete a link, and is authentication or authorization required?",
+      "why": "Access to original URLs and the ability to delete links are security and privacy policy decisions. Assuming either public access or ownership-based access could expose data or prevent intended use."
+    },
+    {
+      "question": "Must links survive service restarts, and where should local link data be stored?",
+      "why": "Running without external infrastructure does not specify whether storage may be ephemeral or must be durable. Restart data loss could materially affect users."
+    },
+    {
+      "question": "Precisely which destinations count as malicious or internal, and should validation cover DNS-resolved addresses, IPv4, IPv6, and address changes over time?",
+      "why": "The requirement does not define a destination policy. A wrong allow/block rule can create security exposure or reject legitimate URLs, so the policy and its validation point require a product/security decision."
+    },
+    {
+      "question": "What traffic volume, concurrency, measurement window, and runtime conditions define the p99 latency target?",
+      "why": "A p99 target cannot be reproduced or meaningfully verified without a workload and measurement conditions; these determine whether the target is met."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "run_id": "live-greenfield-2",
+  "stage": "implement",
+  "reason": "policy: high-risk change (1 violation(s); require_approval by high_impact_paths)",
+  "summary": "Spring Boot 3.4.5 URL shortener: create/redirect/metadata/delete with tombstones, destination policy, per-IP rate limit, file-based H2 + Flyway, health check",
+  "gate_evidence": [
+    "[change_control/high_impact_paths] url-shortener/src/main/resources/db/migration/V1__create_links.sql: creates high-impact path (matches '*/db/migration/*')"
+  ],
+  "files_changed": [
+    "url-shortener/pom.xml",
+    "url-shortener/src/main/java/com/example/shortener/ShortenerApplication.java",
+    "url-shortener/src/main/java/com/example/shortener/api/ApiExceptionHandler.java",
+    "url-shortener/src/main/java/com/example/shortener/api/HealthController.java",
+    "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+    "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+    "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+    "url-shortener/src/main/java/com/example/shortener/config/AppConfig.java",
+    "url-shortener/src/main/java/com/example/shortener/config/ShortenerProperties.java",
+    "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+    "url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java",
+    "url-shortener/src/main/java/com/example/shortener/service/AliasPolicy.java",
+    "url-shortener/src/main/java/com/example/shortener/service/ApiException.java",
+    "url-shortener/src/main/java/com/example/shortener/service/CodeGenerator.java",
+    "url-shortener/src/main/java/com/example/shortener/service/CreateRateLimiter.java",
+    "url-shortener/src/main/java/com/example/shortener/service/DestinationPolicy.java",
+    "url-shortener/src/main/java/com/example/shortener/service/HostResolver.java",
+    "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+    "url-shortener/src/main/java/com/example/shortener/service/RateLimitedException.java",
+    "url-shortener/src/main/java/com/example/shortener/service/TokenService.java",
+    "url-shortener/src/main/resources/application.yml",
+    "url-shortener/src/main/resources/db/migration/V1__create_links.sql"
+  ],
+  "decisions": [
+    "Persistence: File-based H2 under shortener.data-dir (./data) with Flyway V1 migration; Hibernate ddl-auto=validate (agent)",
+    "Deletion model: Soft delete into a tombstone row that keeps the code and erases original_url and token_hash, enforced by a CHECK constraint (agent)",
+    "Management token: 256-bit SecureRandom token, unpadded base64url, stored as SHA-256 hex, compared with MessageDigest.isEqual (agent)",
+    "Destination validation: Scheme, length and host checks, then resolve all addresses once at creation via an injectable HostResolver and fail closed on any prohibited address or resolution failure; fc00 (agent)",
+    "Rate limiting: Bucket4j (com.bucket4j:bucket4j_jdk17-core 8.14.0, on the allowlist) per network peer address, 20 per minute refilled intervally, every create attempt counts, forwarding headers not trusted (agent)",
+    "Reserved aliases: api, health, links, error, actuator, matched case-insensitively (agent)",
+    "Testability seams: Clock, SecureRandom and HostResolver are beans; shortener.data-dir and shortener.rate-limit.creates-per-minute are configurable (agent)",
+    "Timestamps: Instants truncated to microseconds before storing (agent)"
+  ]
+}

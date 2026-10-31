@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: url-shortener
+  datasource:
+    # File-based H2 so links and tombstones survive restarts (NFR4). No external infrastructure.
+    url: jdbc:h2:file:${shortener.data-dir}/shortener;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate   # Flyway owns the schema; Hibernate only checks it matches the entities
+  flyway:
+    enabled: true
+
+server:
+  port: 8080
+
+shortener:
+  data-dir: ./data
+  rate-limit:
+    creates-per-minute: 20
+  code-length: 8

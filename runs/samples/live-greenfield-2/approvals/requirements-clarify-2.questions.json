@@ -1,0 +1,11 @@
+{
+  "run_id": "live-greenfield-2",
+  "stage": "requirements",
+  "round": 2,
+  "questions": [
+    {
+      "question": "After deletion, may a short code or custom alias be reused for a new link?",
+      "why": "Reusing a deleted code can cause an old shared URL to lead to a different destination; permanently reserving it requires a different storage policy. Neither the requirement nor the clarifications specify which behavior is desired, and a wrong choice could create user or security surprises."
+    }
+  ]
+}

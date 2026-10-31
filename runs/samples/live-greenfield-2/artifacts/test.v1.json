@@ -1,0 +1,109 @@
+{
+  "name": "test",
+  "version": 1,
+  "sha": "b3e90dff6a9c9f29793bc6f102aa697f0f2bdf011183da9edb1d0a69b1e621df",
+  "produced_by": "test/tester#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "6658ec012c9e51001e51f3dba23f3d7abbe4a6d7dac742d574532ed94ed96416"
+    },
+    {
+      "name": "implement",
+      "version": 1,
+      "sha": "299c5033dcffa1fe1f8a27802b51fcf98c4293096b30f1c0b6f31fa2a4943034"
+    },
+    {
+      "name": "test_plan",
+      "version": 1,
+      "sha": "dffd6cc99d9b83638e6816697b83d9ab4b964efa32460231c12fa6df0955a870"
+    }
+  ],
+  "result": {
+    "summary": "JUnit 5 suite for all 33 planned cases (77 tests): MockMvc integration over an isolated in-memory H2, unit tests for destination policy and code generation, full-app restart test on a file-based store",
+    "outputs": {
+      "files": [
+        "url-shortener/src/test/java/com/example/shortener/PersistenceRestartTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/HealthTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/LinkCreationTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/LinkLifecycleTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/NoOutboundFetchTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/RateLimitTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/RedirectLatencyTest.java",
+        "url-shortener/src/test/java/com/example/shortener/service/DestinationPolicyTest.java",
+        "url-shortener/src/test/java/com/example/shortener/service/LinkServiceTest.java",
+        "url-shortener/src/test/java/com/example/shortener/support/IntegrationTest.java",
+        "url-shortener/src/test/java/com/example/shortener/support/MutableClock.java",
+        "url-shortener/src/test/java/com/example/shortener/support/StubHostResolver.java",
+        "url-shortener/src/test/java/com/example/shortener/support/TestSupportConfig.java"
+      ],
+      "implementation_defects": []
+    },
+    "files_written": [
+      "url-shortener/src/test/java/com/example/shortener/PersistenceRestartTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/HealthTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/LinkCreationTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/LinkLifecycleTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/NoOutboundFetchTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/RateLimitTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/RedirectLatencyTest.java",
+      "url-shortener/src/test/java/com/example/shortener/service/DestinationPolicyTest.java",
+      "url-shortener/src/test/java/com/example/shortener/service/LinkServiceTest.java",
+      "url-shortener/src/test/java/com/example/shortener/support/IntegrationTest.java",
+      "url-shortener/src/test/java/com/example/shortener/support/MutableClock.java",
+      "url-shortener/src/test/java/com/example/shortener/support/StubHostResolver.java",
+      "url-shortener/src/test/java/com/example/shortener/support/TestSupportConfig.java"
+    ],
+    "decisions": [
+      {
+        "topic": "Test isolation",
+        "choice": "Integration tests share one Spring context over jdbc:h2:mem with a random name, a settable MutableClock and a StubHostResolver; unique aliases per test",
+        "rationale": "Deterministic expiry boundaries and no real DNS, without restarting Spring per test",
+        "source": "agent"
+      },
+      {
+        "topic": "Class naming",
+        "choice": "All test classes end in Test",
+        "rationale": "Surefire runs only *Test/*Tests/Test*/*TestCase under mvn test; *IT classes would be silently skipped by the gate",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-FR6-02",
+        "choice": "The 503 path is tested against HealthController with a JdbcTemplate that refuses connections, not by stopping the shared database",
+        "rationale": "Stopping the shared store would break every other test in the context",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-NFR2-06",
+        "choice": "Verified that no HTTP client beans exist and that create plus redirect perform exactly one DNS lookup through the resolver and no other network access",
+        "rationale": "The service has no outbound HTTP code path to spy on; these are the observable guarantees",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-NFR3-03 restart",
+        "choice": "Limiter reset is checked with a fresh CreateRateLimiter, and again by the full application restart in PersistenceRestartTest",
+        "rationale": "State is in-memory by design, so a new instance is exactly what a restart produces",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-NFR4-01/02",
+        "choice": "The real application is started twice with SpringApplicationBuilder on a @TempDir data directory, passing settings as command-line args",
+        "rationale": "builder.properties() are defaults that application.yml overrides; an earlier draft silently used ./data and the file-existence assertion caught it",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-NFR5-01",
+        "choice": "Satisfied by the suite as a whole (every case id appears as a test method), not a separate executable test",
+        "rationale": "A test asserting that tests exist adds no verification",
+        "source": "agent"
+      },
+      {
+        "topic": "Implementation review",
+        "choice": "No implementation defects found; all 77 tests pass against the implementation as shown (redirect p99 about 2 ms locally)",
+        "rationale": "Recorded so the absence of defects is an explicit finding",
+        "source": "agent"
+      }
+    ]
+  }
+}

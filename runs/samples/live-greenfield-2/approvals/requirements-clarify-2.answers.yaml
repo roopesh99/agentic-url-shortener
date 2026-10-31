@@ -1,0 +1,10 @@
+# Open questions from stage 'requirements' (run live-greenfield-2, round 2).
+# These are product decisions the agent would not guess. Fill in every `answer`,
+# then submit:  orch answer live-greenfield-2 requirements-clarify-2
+# Your answers become binding human decisions in the audit log.
+
+- question: After deletion, may a short code or custom alias be reused for a new link?
+  why: Reusing a deleted code can cause an old shared URL to lead to a different destination; permanently
+    reserving it requires a different storage policy. Neither the requirement nor the clarifications specify
+    which behavior is desired, and a wrong choice could create user or security surprises.
+  answer: ''

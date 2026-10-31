@@ -1,0 +1,26 @@
+{
+  "run_id": "live-greenfield-2",
+  "stage": "requirements",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "11 requirements (6 functional, 5 non-functional); 20 ambiguities resolved as assumptions, 0 unresolved.",
+  "gate_evidence": [
+    "outputs_present: PASS",
+    "ambiguities_resolved: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "What short-code length and alphabet should generated codes use?: Use 8-character generated codes from [A-Za-z0-9_-], case-sensitive. Regenerate a code if it collides with an active code, tombstone, or service route. (assumption)",
+    "What redirect status code should the service return (301 vs 302)?: Return 302 Found and include Cache-Control: no-store. (assumption)",
+    "What should happen when a custom alias is already taken?: Return HTTP 409 Conflict for an alias assigned to either an active link or a tombstone. (assumption)",
+    "What HTTP paths, payload fields, and successful response bodies should the v1 API use?: Use POST /api/links with JSON fields `url`, optional `alias`, and optional `expiresAt`; return 201 with `code`, `shortPath`, and `managementToken`. Use GET /{code} for redirects, GET /api/links/{code} for metadata, DELETE /api/links/{code} for deletion, and GET /health for health. Metadata fields are `originalUrl`, `createdAt`, and `expiresAt`. (assumption)",
+    "What format should expiry use, and how should an expiry at or before creation time be handled?: Use an ISO-8601 UTC instant in the `expiresAt` field, normalize returned timestamps to UTC, and reject an expiry at or before creation time with HTTP 400. (assumption)",
+    "What response behavior should apply to unknown, deleted, expired, malformed, and unauthorized requests?: Return HTTP 400 for malformed or invalid create input, 409 for a taken alias, 429 with Retry-After when rate-limited, 302 for an active redirect, 410 for an expired redirect, and 404 for an unknown or deleted code. Metadata for an expired non-deleted link returns 200; metadata for an unknown or deleted code returns 404. On deletion, return 401 for a missing token, 403 for an invalid token, 204 on success, and 404 for an unknown or deleted code. (assumption)",
+    "Should the create response contain an absolute short URL, and how is its public origin determined?: Return the relative `shortPath` and code, not an absolute URL; clients combine the path with the service origin they already use. (assumption)",
+    "How should the management token be generated, exposed, and validated?: Generate a cryptographically random 256-bit token, encode it as unpadded base64url, return it only in the creation response, and store a SHA-256 hash. Accept it in X-Management-Token and keep it valid until successful deletion; do not persist or log the plaintext token. (assumption)",
+    "What should happen if DNS resolution fails or returns both allowed and prohibited addresses during URL validation?: Fail closed: reject the URL if resolution fails, times out, yields no usable address, or any returned address is prohibited. (assumption)",
+    "How should the service identify a client IP when requests may include forwarding headers?: Use the network peer address by default and do not trust forwarding headers unless a trusted-proxy configuration is explicitly provided. (assumption)",
+    "What does the health endpoint check?: Return HTTP 200 with an UP status when the service and H2 store are available; return HTTP 503 otherwise. (assumption)",
+    "What qualifies as meaningful automated test coverage?: Tests must exercise every functional requirement and the important validation, authorization, expiry, rate-limit, persistence, and redirect failure paths; no numeric coverage percentage is required. (assumption)",
+    "How many requests should the latency test use for warm-up, and should measured requests be concurrent?: Use 1,000 sequential warm-up requests followed by the 1,000 measured requests from a single client. (assumption)"
+  ]
+}

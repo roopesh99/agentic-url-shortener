@@ -1,0 +1,286 @@
+{
+  "request": {
+    "agent": "analyst",
+    "effort": "high",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ambiguities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "enum": [
+                  "assumption",
+                  "unresolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "resolution",
+              "source",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "non_functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "goal",
+        "functional",
+        "non_functional",
+        "ambiguities",
+        "acceptance_criteria"
+      ],
+      "type": "object"
+    },
+    "system": "You are the requirements analyst in a governed software delivery pipeline. You turn a product owner's requirement into a normalized engineering specification that the architect, coders and testers downstream will build from. You do not write code.\n\nYour output is checked by automated gates and then reviewed by a human before any design or code work starts, so precision matters more than polish.\n\nHow to work:\n- Restate the goal in one or two sentences an engineer could act on.\n- List functional and non-functional requirements as atomic, testable statements. Keep the requirement's own ids (FR1, NFR2, ...) when it provides them; otherwise assign them. Do not invent scope the requirement does not ask for.\n- Surface every ambiguity: anything an engineer would have to guess about (formats, limits, error behaviour, status codes, security posture). Include the requirement's own \"open points\" and any you find yourself.\n- For each ambiguity, decide whether a safe, conventional default exists.\n  - If it does, set `source` to \"assumption\", put the default in `resolution`, and explain in `rationale` why it is the conventional and low-risk choice. These become recorded decisions a human will review.\n  - If the answer is a genuine product decision (who may see data, business rules, legal or compliance posture, anything where a wrong guess would be costly to reverse), set `source` to \"unresolved\" and `resolution` to null. This stops the pipeline until a human answers, which is the intended behaviour. Do not guess on these to keep things moving.\n- Write acceptance criteria as observable behaviours (request \u2192 expected response), covering the main path and the important failure paths.\n- `summary`: one line, e.g. counts of requirements and how many ambiguities were resolved vs. left open.",
+    "user": "<requirement>\n# Requirement: URL Shortener Service (v1, greenfield)\n\n> Input to the orchestrator. Written as a product owner would: intentionally\n> mostly-specified, with a few open points the Analyst agent must surface.\n\n## Goal\nProvide an HTTP service that turns long URLs into short, shareable links and\nredirects visitors from the short link to the original URL.\n\n## Functional requirements\n- FR1 Create a short link for a long URL. Optionally accept a custom alias.\n- FR2 Optionally accept an expiry; expired links must stop redirecting.\n- FR3 Visiting a short link redirects to the original URL.\n- FR4 Fetch metadata for a short link (original URL, created, expiry).\n- FR5 Delete a short link.\n- FR6 Health endpoint for operations.\n\n## Non-functional requirements\n- NFR1 Redirect path is latency-sensitive (target p99 < 50 ms in-process).\n- NFR2 Only `http`/`https` URLs are accepted; reject obviously malicious or\n  internal-network targets.\n- NFR3 Protect the create endpoint from abuse.\n- NFR4 Runs locally with a single command; no external infrastructure.\n- NFR5 Automated tests with meaningful coverage.\n\n## Known open points (for the Analyst to resolve or flag)\n- Short-code length / alphabet not specified.\n- Redirect status code (301 vs 302) not specified.\n- Behaviour when a custom alias is already taken.\n- Rate-limit thresholds not specified.\n</requirement>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "acceptance_criteria": [
+        "Given a valid HTTP(S) URL, when a client submits it to POST /links, the service returns 201 with a unique code and shareable URL, and a metadata request returns the original URL, creation time, and expiry value (null if none was supplied).",
+        "Given a valid custom alias that is available, when a client creates a link with that alias, the returned short URL uses that alias.",
+        "Given a custom alias that is already taken, when a client submits it, the service returns 409 and does not create a second link for that alias.",
+        "Given an invalid URL or a scheme other than HTTP or HTTPS, when a client submits it, the service rejects the request with 400 and creates no link.",
+        "Given an expiry that is not in the future, when a client submits it, the service rejects the request with 400 and creates no link.",
+        "Given an active short code, when a visitor requests GET /{code}, the service returns 302 with a Location header containing the original URL.",
+        "Given a link whose expiry time has arrived, when a visitor requests its short code, the service does not redirect and returns 404; a metadata request still returns its metadata while the link exists.",
+        "Given an unknown short code, when a visitor requests it, the service returns 404.",
+        "Given an existing link, when a client deletes it, the service returns 204 and subsequent redirect and metadata requests return 404.",
+        "Given a request to GET /health while the process is serving requests, the service returns 200 and a healthy status.",
+        "Given a create request that exceeds the rate limit once that policy is decided, the service rejects it with 429 and does not create a link.",
+        "Given the agreed workload and measurement conditions once defined, the in-process redirect-path p99 latency is below 50 ms.",
+        "Given the service's documented local command, when it is run without external infrastructure, the service starts and its automated tests exercise the functional requirements and identified important failure paths."
+      ],
+      "ambiguities": [
+        {
+          "question": "What HTTP routes, request and response formats, and ordinary validation-error responses should the service use?",
+          "rationale": "These are conventional REST-style routes and HTTP responses, easy for clients to use and change if product requirements later specify a different contract.",
+          "resolution": "Assume a JSON API: POST /links with {\"url\":\"...\",\"alias\":\"...\",\"expiresAt\":\"...\"} creates a link and returns 201 with its code, short URL, and metadata; GET /{code} redirects; GET /links/{code} returns metadata; DELETE /links/{code} deletes; and GET /health reports health. Use 400 for invalid input, 404 for missing links, and 204 for successful deletion.",
+          "source": "assumption"
+        },
+        {
+          "question": "What length and alphabet should generated short codes use, and how should generated-code collisions be handled?",
+          "rationale": "A compact alphanumeric code is URL-friendly, and retrying on collision is a standard low-risk uniqueness strategy.",
+          "resolution": "Assume uniformly generated, cryptographically random 7-character codes using ASCII letters and digits (base62); retry generation if a code already exists.",
+          "source": "assumption"
+        },
+        {
+          "question": "What characters, length limits, and case-sensitivity rules apply to custom aliases?",
+          "rationale": "Alias rules affect which user-chosen links are accepted and whether distinct spellings identify the same link; the requirement supplies no product policy.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "Which redirect status code should active links use?",
+          "rationale": "A temporary redirect avoids clients and intermediaries permanently caching a destination, which is safer for a service where links can expire or be deleted.",
+          "resolution": "Assume 302 Found.",
+          "source": "assumption"
+        },
+        {
+          "question": "What should happen when a requested custom alias is already taken?",
+          "rationale": "409 conventionally represents a conflict with the current resource state and clearly distinguishes this case from malformed input.",
+          "resolution": "Return 409 Conflict and do not create a link.",
+          "source": "assumption"
+        },
+        {
+          "question": "What rate limit applies to link creation, over what interval, and how are clients identified (for example, by IP address)?",
+          "rationale": "The requirement explicitly leaves thresholds open. Limits and client identity affect both abuse resistance and legitimate use, and there is no universally safe default.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "What expiry timestamp format and time-zone convention apply, and how should expiry at the boundary or an expiry in the past be handled?",
+          "rationale": "RFC 3339 with explicit offsets is a common interoperable API format; UTC comparisons and rejecting already-expired links avoid ambiguous or ineffective links.",
+          "resolution": "Assume RFC 3339 timestamps with an explicit offset, normalize comparisons to UTC, consider a link expired when current time is greater than or equal to its expiry, and reject creation requests whose expiry is not in the future.",
+          "source": "assumption"
+        },
+        {
+          "question": "What response should be given for expired links, and what are the exact deletion semantics?",
+          "rationale": "404 is conventional for unavailable resources and avoids disclosing whether a code exists. Hard deletion and a 204 response are simple, conventional deletion semantics.",
+          "resolution": "Assume expired and unknown codes both return 404 on redirect and metadata requests; retain metadata for an expired link while it exists. Assume deletion removes the link, returns 204 on success, and subsequent requests (including repeated deletion) return 404.",
+          "source": "assumption"
+        },
+        {
+          "question": "Who is allowed to fetch metadata or delete a link, and is authentication or authorization required?",
+          "rationale": "Access to original URLs and the ability to delete links are security and privacy policy decisions. Assuming either public access or ownership-based access could expose data or prevent intended use.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "Must links survive service restarts, and where should local link data be stored?",
+          "rationale": "Running without external infrastructure does not specify whether storage may be ephemeral or must be durable. Restart data loss could materially affect users.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "Precisely which destinations count as malicious or internal, and should validation cover DNS-resolved addresses, IPv4, IPv6, and address changes over time?",
+          "rationale": "The requirement does not define a destination policy. A wrong allow/block rule can create security exposure or reject legitimate URLs, so the policy and its validation point require a product/security decision.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "How should the service determine the canonical public base URL used to construct the shareable URL it returns?",
+          "rationale": "A configured base URL is a conventional way to produce correct shareable links across local and deployed environments without trusting arbitrary request host headers.",
+          "resolution": "Assume the deployment provides a configurable canonical public base URL; use the local service URL in local runs.",
+          "source": "assumption"
+        },
+        {
+          "question": "What traffic volume, concurrency, measurement window, and runtime conditions define the p99 latency target?",
+          "rationale": "A p99 target cannot be reproduced or meaningfully verified without a workload and measurement conditions; these determine whether the target is met.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "What should the health endpoint check and return?",
+          "rationale": "A dependency-free liveness check is a conventional, low-risk operational default for a locally runnable service.",
+          "resolution": "Assume GET /health is a liveness check: return 200 when the process can serve requests, with a simple JSON healthy status; do not require external dependencies.",
+          "source": "assumption"
+        },
+        {
+          "question": "Does meaningful automated test coverage require a numerical coverage threshold?",
+          "rationale": "The requirement gives no target percentage. Requirement-based behavioral coverage is directly verifiable without inventing an arbitrary metric.",
+          "resolution": "Assume no numerical percentage is required; tests should exercise every functional requirement and the important invalid-input, expiry, collision, deletion, and rate-limit paths.",
+          "source": "assumption"
+        }
+      ],
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "Accept a long URL and optionally a custom alias; create a short link and return its short code and shareable URL."
+        },
+        {
+          "id": "FR2",
+          "text": "Optionally associate an expiry with a short link; do not redirect visitors to the original URL once the link has expired."
+        },
+        {
+          "id": "FR3",
+          "text": "When a visitor requests an active short link, redirect them to its original URL."
+        },
+        {
+          "id": "FR4",
+          "text": "Return a short link's original URL, creation time, and expiry when requested."
+        },
+        {
+          "id": "FR5",
+          "text": "Delete a short link."
+        },
+        {
+          "id": "FR6",
+          "text": "Provide a health endpoint for operations."
+        }
+      ],
+      "goal": "Provide a locally runnable HTTP service that creates shareable short links for HTTP(S) URLs, optionally with custom aliases and expirations. The service must redirect visitors to active links, expose link metadata, support deletion, and provide a health endpoint.",
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "The redirect path has a target in-process p99 latency below 50 ms."
+        },
+        {
+          "id": "NFR2",
+          "text": "Accept only HTTP and HTTPS URLs, and reject URLs targeting obviously malicious or internal-network destinations."
+        },
+        {
+          "id": "NFR3",
+          "text": "Protect the create endpoint from abuse."
+        },
+        {
+          "id": "NFR4",
+          "text": "Run locally with a single command and without external infrastructure."
+        },
+        {
+          "id": "NFR5",
+          "text": "Provide automated tests with meaningful coverage."
+        }
+      ],
+      "summary": "11 requirements (6 functional, 5 non-functional); 15 ambiguities identified (9 provisionally resolved by assumptions, 6 unresolved)."
+    },
+    "duration_ms": 50039,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_81bf1d0fc5414974b8836472bd2e9980",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 858,
+      "output_tokens": 6749
+    }
+  }
+}

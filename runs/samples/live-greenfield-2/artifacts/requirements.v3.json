@@ -1,0 +1,314 @@
+{
+  "name": "requirements",
+  "version": 3,
+  "sha": "6658ec012c9e51001e51f3dba23f3d7abbe4a6d7dac742d574532ed94ed96416",
+  "produced_by": "requirements/analyst#3",
+  "inputs": [],
+  "result": {
+    "summary": "11 requirements (6 functional, 5 non-functional); 20 ambiguities resolved as assumptions, 0 unresolved.",
+    "outputs": {
+      "goal": "Provide a locally runnable HTTP service that creates shareable short links for validated HTTP/HTTPS URLs and redirects visitors to their destinations. Provide public link metadata, token-authorized deletion, expiry handling, and an operations health endpoint.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "Create a link with POST /api/links using a JSON body with required `url` and optional `alias` and `expiresAt` fields. Return HTTP 201 with the code, relative `shortPath`, and a management token that is returned only in the creation response. Generated codes are 8 characters from `[A-Za-z0-9_-]`, case-sensitive. Custom aliases are 3–32 characters from `[A-Za-z0-9_-]`, case-sensitive; reject reserved service paths and invalid aliases with HTTP 400. Reject a custom alias already assigned to an active or tombstoned link with HTTP 409."
+        },
+        {
+          "id": "FR2",
+          "text": "Accept an optional future expiry timestamp in UTC. At or after that instant, do not redirect the link; return HTTP 410 Gone. Expiry does not delete the link or prevent public metadata retrieval."
+        },
+        {
+          "id": "FR3",
+          "text": "GET /{code} redirects an active, unexpired link to its original URL using HTTP 302 Found and a Location header. Do not cache redirect responses. Return HTTP 410 Gone for expired links and HTTP 404 Not Found for unknown or deleted codes."
+        },
+        {
+          "id": "FR4",
+          "text": "GET /api/links/{code} returns public metadata for a non-deleted link: original URL, creation timestamp, and expiry timestamp (null when no expiry is set). Return HTTP 404 Not Found for unknown or deleted codes. Expired links remain available through this endpoint."
+        },
+        {
+          "id": "FR5",
+          "text": "DELETE /api/links/{code} requires the link's management token in the X-Management-Token header. Return HTTP 204 No Content on successful deletion; return HTTP 401 for a missing token, HTTP 403 for an invalid token, and HTTP 404 for an unknown or already-deleted code. Deletion retains a tombstone reserving the code and erases the destination URL; neither generated codes nor custom aliases are reused. Store only a hash of the management token, never the plaintext token."
+        },
+        {
+          "id": "FR6",
+          "text": "GET /health provides an operations health check, returning HTTP 200 when the service and its persistence store are available and HTTP 503 otherwise."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "An automated indicative performance check must measure 1,000 redirect requests after a warm-up, from a single client on the local machine, and assert p99 latency below 50 ms in-process. This check is not a production SLO."
+        },
+        {
+          "id": "NFR2",
+          "text": "Accept only syntactically valid HTTP or HTTPS URLs up to 2,048 characters. At creation, reject localhost and any host that is itself or resolves to a loopback, private, link-local, unique-local, or multicast IPv4 or IPv6 address. Check DNS-resolved addresses once at creation; DNS changes after creation are an accepted limitation. The service must not fetch destination URLs."
+        },
+        {
+          "id": "NFR3",
+          "text": "Protect link creation with an in-memory Bucket4j rate limit of 20 create requests per minute per client IP. Return HTTP 429 Too Many Requests with a Retry-After header when limited. A service restart resets the limit state."
+        },
+        {
+          "id": "NFR4",
+          "text": "Run locally with one command and no external infrastructure. Persist links and tombstones across restarts using file-based H2 under ./data, with Flyway-managed schema migrations."
+        },
+        {
+          "id": "NFR5",
+          "text": "Provide automated tests covering each functional flow and important failure paths, including URL and alias validation, expiry, deletion authorization, rate limiting, persistence across restart, and redirect latency."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "What characters, length limits, and case-sensitivity rules apply to custom aliases?",
+          "resolution": "Custom aliases are 3-32 characters from [A-Za-z0-9_-], case-sensitive (consistent with generated codes). Reserved words are rejected: api, health, links (and any path the service itself uses).",
+          "source": "assumption",
+          "rationale": "Decided by a human: Apply the provided alias constraints and reserve every service route so aliases cannot shadow endpoints."
+        },
+        {
+          "question": "What rate limit applies to link creation, over what interval, and how are clients identified (for example, by IP address)?",
+          "resolution": "20 link creations per minute per client IP address. Exceeding it returns 429 Too Many Requests with a Retry-After header. Limits are held in memory (Bucket4j); a restart resets them. Interpret this as a bucket with capacity 20 refilled at 20 per minute; count requests to the create endpoint, including rejected attempts.",
+          "source": "assumption",
+          "rationale": "Decided by a human: The threshold, interval, response, storage, and library are binding; a 20-token bucket and counting all create requests are conventional abuse-resistant interpretations."
+        },
+        {
+          "question": "Who is allowed to fetch metadata or delete a link, and is authentication or authorization required?",
+          "resolution": "Metadata (GET) is public. Creating a link returns a one-time management token; DELETE requires that token (e.g. an X-Management-Token header), so only the creator can delete. No user accounts in v1. Store only a hash of the token, never the token itself.",
+          "source": "assumption",
+          "rationale": "Decided by a human: Implement public metadata and token-based deletion without user accounts, and persist no plaintext management token."
+        },
+        {
+          "question": "Must links survive service restarts, and where should local link data be stored?",
+          "resolution": "Yes, links must survive restarts. Use file-based H2 under ./data with Flyway-managed schema migrations.",
+          "source": "assumption",
+          "rationale": "Decided by a human: Use the specified local H2 file store and Flyway migrations as the persistence design."
+        },
+        {
+          "question": "Precisely which destinations count as malicious or internal, and should validation cover DNS-resolved addresses, IPv4, IPv6, and address changes over time?",
+          "resolution": "Accept only http/https URLs up to 2048 characters. Reject localhost and any host that is, or resolves to, a loopback, private, link-local, unique-local or multicast address (IPv4 and IPv6), checked once at creation. Re-pointing DNS after creation is an accepted, documented limitation: the service never fetches the URL.",
+          "source": "assumption",
+          "rationale": "Decided by a human: Enforce the specified schemes, length, address classes, one-time DNS check, and no-fetch limitation."
+        },
+        {
+          "question": "What traffic volume, concurrency, measurement window, and runtime conditions define the p99 latency target?",
+          "resolution": "Measured in-process by an automated test: 1,000 redirect requests after a warm-up, single client, local machine, asserting p99 < 50 ms. Documented as an indicative check, not a production SLO.",
+          "source": "assumption",
+          "rationale": "Decided by a human: Use the specified test scope and treat the result as indicative rather than a production guarantee."
+        },
+        {
+          "question": "After deletion, may a short code or custom alias be reused for a new link?",
+          "resolution": "No. Codes and custom aliases are never reused. Deleting a link keeps a tombstone record that reserves the code and erases the destination URL; a deleted code returns 404 like an unknown one, and creating a link with a deleted alias returns 409 Conflict.",
+          "source": "assumption",
+          "rationale": "Decided by a human: Retain tombstones, erase the destination, and permanently reserve deleted codes and aliases."
+        },
+        {
+          "question": "What short-code length and alphabet should generated codes use?",
+          "resolution": "Use 8-character generated codes from [A-Za-z0-9_-], case-sensitive. Regenerate a code if it collides with an active code, tombstone, or service route.",
+          "source": "assumption",
+          "rationale": "The requirement leaves generated-code format open; an 8-character URL-safe code provides a practical namespace, and retrying collisions is a standard low-risk implementation."
+        },
+        {
+          "question": "What redirect status code should the service return (301 vs 302)?",
+          "resolution": "Return 302 Found and include Cache-Control: no-store.",
+          "source": "assumption",
+          "rationale": "A temporary redirect is safer because links can expire or be deleted; preventing caching helps those changes take effect for subsequent visits."
+        },
+        {
+          "question": "What should happen when a custom alias is already taken?",
+          "resolution": "Return HTTP 409 Conflict for an alias assigned to either an active link or a tombstone.",
+          "source": "assumption",
+          "rationale": "A conflict response is the conventional way to report a unique-resource naming collision and is consistent with the human decision that deleted aliases remain reserved."
+        },
+        {
+          "question": "What HTTP paths, payload fields, and successful response bodies should the v1 API use?",
+          "resolution": "Use POST /api/links with JSON fields `url`, optional `alias`, and optional `expiresAt`; return 201 with `code`, `shortPath`, and `managementToken`. Use GET /{code} for redirects, GET /api/links/{code} for metadata, DELETE /api/links/{code} for deletion, and GET /health for health. Metadata fields are `originalUrl`, `createdAt`, and `expiresAt`.",
+          "source": "assumption",
+          "rationale": "The requirement names the operations but not their contract; these conventional REST routes and explicit fields make the v1 API testable without adding capabilities."
+        },
+        {
+          "question": "What format should expiry use, and how should an expiry at or before creation time be handled?",
+          "resolution": "Use an ISO-8601 UTC instant in the `expiresAt` field, normalize returned timestamps to UTC, and reject an expiry at or before creation time with HTTP 400.",
+          "source": "assumption",
+          "rationale": "An explicit UTC instant is an unambiguous conventional timestamp format; rejecting a non-future expiry avoids creating a link that is already expired."
+        },
+        {
+          "question": "What response behavior should apply to unknown, deleted, expired, malformed, and unauthorized requests?",
+          "resolution": "Return HTTP 400 for malformed or invalid create input, 409 for a taken alias, 429 with Retry-After when rate-limited, 302 for an active redirect, 410 for an expired redirect, and 404 for an unknown or deleted code. Metadata for an expired non-deleted link returns 200; metadata for an unknown or deleted code returns 404. On deletion, return 401 for a missing token, 403 for an invalid token, 204 on success, and 404 for an unknown or deleted code.",
+          "source": "assumption",
+          "rationale": "The requirement does not define error statuses; these standard distinctions make failures observable, while 410 distinguishes expiry from an unknown or deleted link."
+        },
+        {
+          "question": "Should the create response contain an absolute short URL, and how is its public origin determined?",
+          "resolution": "Return the relative `shortPath` and code, not an absolute URL; clients combine the path with the service origin they already use.",
+          "source": "assumption",
+          "rationale": "The requirement does not define a canonical public origin; returning a relative path avoids trusting request Host or proxy headers and needs no deployment configuration."
+        },
+        {
+          "question": "How should the management token be generated, exposed, and validated?",
+          "resolution": "Generate a cryptographically random 256-bit token, encode it as unpadded base64url, return it only in the creation response, and store a SHA-256 hash. Accept it in X-Management-Token and keep it valid until successful deletion; do not persist or log the plaintext token.",
+          "source": "assumption",
+          "rationale": "High-entropy random bearer tokens and one-time display with hash-only storage are conventional safeguards for a token that authorizes deletion."
+        },
+        {
+          "question": "What should happen if DNS resolution fails or returns both allowed and prohibited addresses during URL validation?",
+          "resolution": "Fail closed: reject the URL if resolution fails, times out, yields no usable address, or any returned address is prohibited.",
+          "source": "assumption",
+          "rationale": "Failing closed is the low-risk interpretation of the requirement to reject hosts that resolve to prohibited destinations."
+        },
+        {
+          "question": "How should the service identify a client IP when requests may include forwarding headers?",
+          "resolution": "Use the network peer address by default and do not trust forwarding headers unless a trusted-proxy configuration is explicitly provided.",
+          "source": "assumption",
+          "rationale": "The service has no specified proxy deployment; using the peer address avoids spoofable client-supplied headers and is a safe local default."
+        },
+        {
+          "question": "What does the health endpoint check?",
+          "resolution": "Return HTTP 200 with an UP status when the service and H2 store are available; return HTTP 503 otherwise.",
+          "source": "assumption",
+          "rationale": "Checking both the application and the persistence store is a conventional operational health check for a service whose link operations depend on that store."
+        },
+        {
+          "question": "What qualifies as meaningful automated test coverage?",
+          "resolution": "Tests must exercise every functional requirement and the important validation, authorization, expiry, rate-limit, persistence, and redirect failure paths; no numeric coverage percentage is required.",
+          "source": "assumption",
+          "rationale": "Behavior-focused coverage directly verifies the requested capabilities without inventing an arbitrary percentage threshold."
+        },
+        {
+          "question": "How many requests should the latency test use for warm-up, and should measured requests be concurrent?",
+          "resolution": "Use 1,000 sequential warm-up requests followed by the 1,000 measured requests from a single client.",
+          "source": "assumption",
+          "rationale": "The human decision specifies a warm-up and a single client but not its size or concurrency; a fixed sequential warm-up makes the test repeatable and allows runtime initialization."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given a valid HTTP or HTTPS URL and no optional fields, when a client POSTs it to /api/links, then the service returns 201 with an 8-character code, a relative shortPath, and a management token shown only in that response.",
+        "Given a valid custom alias and future expiry, when a client creates the link, then the service returns 201 and the metadata contains the alias, original URL, creation timestamp, and normalized UTC expiry timestamp.",
+        "Given a custom alias shorter than 3 characters, longer than 32 characters, containing disallowed characters, or reserved for a service path, when a client creates a link, then the service returns 400.",
+        "Given an alias already assigned to an active link or tombstone, when a client creates a link with that alias, then the service returns 409 Conflict.",
+        "Given an invalid URL, a URL over 2,048 characters, a non-HTTP(S) scheme, localhost, or a host that is or resolves to a prohibited IPv4 or IPv6 address, when a client creates a link, then the service rejects it with HTTP 400 and does not create a link.",
+        "Given a hostname that fails DNS resolution or resolves to any prohibited address among its results, when a client creates a link, then the service rejects it; after a link is created, the service does not fetch its destination.",
+        "Given an active, unexpired link, when a client GETs /{code}, then the service returns 302 with the original URL in Location and Cache-Control: no-store.",
+        "Given an expired link, when a client GETs /{code}, then the service returns 410 and does not redirect; when a client GETs /api/links/{code}, then the service still returns its public metadata.",
+        "Given an unknown or deleted code, when a client GETs /{code} or GETs /api/links/{code}, then the service returns 404.",
+        "Given an active link, when a client GETs /api/links/{code} without credentials, then the service returns HTTP 200 with the original URL, created timestamp, and expiry value.",
+        "Given an active link, when a client DELETEs /api/links/{code} with its management token, then the service returns 204, erases the destination, and retains a tombstone reserving the code.",
+        "Given a missing or invalid management token for an active link deletion, when a client sends DELETE, then the service returns 401 or 403 respectively and does not delete the link.",
+        "Given a deleted code, when a client visits it, then the service returns 404; when a client attempts to create a link using that alias, then the service returns 409.",
+        "Given 20 create requests from one client IP within the configured minute, when that IP sends a further create request while limited, then the service returns 429 with Retry-After; a service restart resets the in-memory limit.",
+        "Given a created link or tombstone, when the service restarts using the same ./data store, then the link or reserved tombstone remains available and Flyway migrations have been applied.",
+        "Given the service and H2 store are available, when an operations client GETs /health, then it receives HTTP 200; when persistence is unavailable, then it receives HTTP 503.",
+        "Given the automated redirect latency test, when it performs 1,000 sequential warm-up requests followed by 1,000 measured requests from a single client on the local machine, then the measured in-process p99 is below 50 ms.",
+        "Given the automated test suite, when it runs, then it exercises every functional requirement and the specified important success and failure paths."
+      ],
+      "clarifications": [
+        {
+          "question": "What characters, length limits, and case-sensitivity rules apply to custom aliases?",
+          "answer": "Custom aliases are 3-32 characters from [A-Za-z0-9_-], case-sensitive (consistent with generated codes). Reserved words are rejected: api, health, links (and any path the service itself uses)."
+        },
+        {
+          "question": "What rate limit applies to link creation, over what interval, and how are clients identified (for example, by IP address)?",
+          "answer": "20 link creations per minute per client IP address. Exceeding it returns 429 Too Many Requests with a Retry-After header. Limits are held in memory (Bucket4j); a restart resets them."
+        },
+        {
+          "question": "Who is allowed to fetch metadata or delete a link, and is authentication or authorization required?",
+          "answer": "Metadata (GET) is public. Creating a link returns a one-time management token; DELETE requires that token (e.g. an X-Management-Token header), so only the creator can delete. No user accounts in v1. Store only a hash of the token, never the token itself."
+        },
+        {
+          "question": "Must links survive service restarts, and where should local link data be stored?",
+          "answer": "Yes, links must survive restarts. Use file-based H2 under ./data with Flyway-managed schema migrations."
+        },
+        {
+          "question": "Precisely which destinations count as malicious or internal, and should validation cover DNS-resolved addresses, IPv4, IPv6, and address changes over time?",
+          "answer": "Accept only http/https URLs up to 2048 characters. Reject localhost and any host that is, or resolves to, a loopback, private, link-local, unique-local or multicast address (IPv4 and IPv6), checked once at creation. Re-pointing DNS after creation is an accepted, documented limitation: the service never fetches the URL."
+        },
+        {
+          "question": "What traffic volume, concurrency, measurement window, and runtime conditions define the p99 latency target?",
+          "answer": "Measured in-process by an automated test: 1,000 redirect requests after a warm-up, single client, local machine, asserting p99 < 50 ms. Documented as an indicative check, not a production SLO."
+        },
+        {
+          "question": "After deletion, may a short code or custom alias be reused for a new link?",
+          "answer": "No. Codes and custom aliases are never reused. Deleting a link keeps a tombstone record that reserves the code and erases the destination URL; a deleted code returns 404 like an unknown one, and creating a link with a deleted alias returns 409 Conflict."
+        }
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "What short-code length and alphabet should generated codes use?",
+        "choice": "Use 8-character generated codes from [A-Za-z0-9_-], case-sensitive. Regenerate a code if it collides with an active code, tombstone, or service route.",
+        "rationale": "The requirement leaves generated-code format open; an 8-character URL-safe code provides a practical namespace, and retrying collisions is a standard low-risk implementation.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What redirect status code should the service return (301 vs 302)?",
+        "choice": "Return 302 Found and include Cache-Control: no-store.",
+        "rationale": "A temporary redirect is safer because links can expire or be deleted; preventing caching helps those changes take effect for subsequent visits.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What should happen when a custom alias is already taken?",
+        "choice": "Return HTTP 409 Conflict for an alias assigned to either an active link or a tombstone.",
+        "rationale": "A conflict response is the conventional way to report a unique-resource naming collision and is consistent with the human decision that deleted aliases remain reserved.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What HTTP paths, payload fields, and successful response bodies should the v1 API use?",
+        "choice": "Use POST /api/links with JSON fields `url`, optional `alias`, and optional `expiresAt`; return 201 with `code`, `shortPath`, and `managementToken`. Use GET /{code} for redirects, GET /api/links/{code} for metadata, DELETE /api/links/{code} for deletion, and GET /health for health. Metadata fields are `originalUrl`, `createdAt`, and `expiresAt`.",
+        "rationale": "The requirement names the operations but not their contract; these conventional REST routes and explicit fields make the v1 API testable without adding capabilities.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What format should expiry use, and how should an expiry at or before creation time be handled?",
+        "choice": "Use an ISO-8601 UTC instant in the `expiresAt` field, normalize returned timestamps to UTC, and reject an expiry at or before creation time with HTTP 400.",
+        "rationale": "An explicit UTC instant is an unambiguous conventional timestamp format; rejecting a non-future expiry avoids creating a link that is already expired.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What response behavior should apply to unknown, deleted, expired, malformed, and unauthorized requests?",
+        "choice": "Return HTTP 400 for malformed or invalid create input, 409 for a taken alias, 429 with Retry-After when rate-limited, 302 for an active redirect, 410 for an expired redirect, and 404 for an unknown or deleted code. Metadata for an expired non-deleted link returns 200; metadata for an unknown or deleted code returns 404. On deletion, return 401 for a missing token, 403 for an invalid token, 204 on success, and 404 for an unknown or deleted code.",
+        "rationale": "The requirement does not define error statuses; these standard distinctions make failures observable, while 410 distinguishes expiry from an unknown or deleted link.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Should the create response contain an absolute short URL, and how is its public origin determined?",
+        "choice": "Return the relative `shortPath` and code, not an absolute URL; clients combine the path with the service origin they already use.",
+        "rationale": "The requirement does not define a canonical public origin; returning a relative path avoids trusting request Host or proxy headers and needs no deployment configuration.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How should the management token be generated, exposed, and validated?",
+        "choice": "Generate a cryptographically random 256-bit token, encode it as unpadded base64url, return it only in the creation response, and store a SHA-256 hash. Accept it in X-Management-Token and keep it valid until successful deletion; do not persist or log the plaintext token.",
+        "rationale": "High-entropy random bearer tokens and one-time display with hash-only storage are conventional safeguards for a token that authorizes deletion.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What should happen if DNS resolution fails or returns both allowed and prohibited addresses during URL validation?",
+        "choice": "Fail closed: reject the URL if resolution fails, times out, yields no usable address, or any returned address is prohibited.",
+        "rationale": "Failing closed is the low-risk interpretation of the requirement to reject hosts that resolve to prohibited destinations.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How should the service identify a client IP when requests may include forwarding headers?",
+        "choice": "Use the network peer address by default and do not trust forwarding headers unless a trusted-proxy configuration is explicitly provided.",
+        "rationale": "The service has no specified proxy deployment; using the peer address avoids spoofable client-supplied headers and is a safe local default.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What does the health endpoint check?",
+        "choice": "Return HTTP 200 with an UP status when the service and H2 store are available; return HTTP 503 otherwise.",
+        "rationale": "Checking both the application and the persistence store is a conventional operational health check for a service whose link operations depend on that store.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What qualifies as meaningful automated test coverage?",
+        "choice": "Tests must exercise every functional requirement and the important validation, authorization, expiry, rate-limit, persistence, and redirect failure paths; no numeric coverage percentage is required.",
+        "rationale": "Behavior-focused coverage directly verifies the requested capabilities without inventing an arbitrary percentage threshold.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How many requests should the latency test use for warm-up, and should measured requests be concurrent?",
+        "choice": "Use 1,000 sequential warm-up requests followed by the 1,000 measured requests from a single client.",
+        "rationale": "The human decision specifies a warm-up and a single client but not its size or concurrency; a fixed sequential warm-up makes the test repeatable and allows runtime initialization.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

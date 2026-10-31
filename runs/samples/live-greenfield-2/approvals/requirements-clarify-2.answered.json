@@ -1,0 +1,10 @@
+{
+  "answers": [
+    {
+      "question": "After deletion, may a short code or custom alias be reused for a new link?",
+      "answer": "No. Codes and custom aliases are never reused. Deleting a link keeps a tombstone record that reserves the code and erases the destination URL; a deleted code returns 404 like an unknown one, and creating a link with a deleted alias returns 409 Conflict."
+    }
+  ],
+  "answered_by": "roopeshkotte",
+  "source": "human"
+}
