@@ -35,7 +35,10 @@ TRANSITIONS: dict[NodeState, frozenset[NodeState]] = {
         {NodeState.SUCCEEDED, NodeState.RETRYING, NodeState.AWAITING_APPROVAL, NodeState.FAILED}
     ),
     NodeState.RETRYING: frozenset({NodeState.RUNNING, NodeState.FAILED}),
-    NodeState.AWAITING_APPROVAL: frozenset({NodeState.VALIDATING, NodeState.SUCCEEDED, NodeState.FAILED}),
+    # AWAITING_APPROVAL -> RETRYING: a human answered open questions; the agent re-runs with the answers
+    NodeState.AWAITING_APPROVAL: frozenset(
+        {NodeState.VALIDATING, NodeState.SUCCEEDED, NodeState.RETRYING, NodeState.FAILED}
+    ),
     NodeState.SUCCEEDED: frozenset({NodeState.STALE}),
     NodeState.FAILED: frozenset({NodeState.ROLLED_BACK}),
     NodeState.ROLLED_BACK: frozenset({NodeState.READY}),

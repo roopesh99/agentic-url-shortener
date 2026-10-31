@@ -53,7 +53,11 @@ class StubAnalyst(Agent):
         functional = _ids(_section(ctx.requirement, "Functional requirements"))
         non_functional = _ids(_section(ctx.requirement, "Non-functional requirements"))
         ambiguities, decisions = [], []
+        human = {c["question"]: c["answer"] for c in ctx.clarifications}
         for question in _section(ctx.requirement, "Known open points"):
+            if question in human:
+                ambiguities.append({"question": question, "resolution": human[question], "source": "assumption"})
+                continue
             resolution = next(
                 ((choice, why) for pattern, choice, why in DEFAULT_ASSUMPTIONS if re.search(pattern, question, re.I)),
                 None,

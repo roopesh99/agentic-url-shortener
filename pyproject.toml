@@ -10,11 +10,13 @@ requires-python = ">=3.11"
 dependencies = [
     "pyyaml>=6.0",
     "pydantic>=2.6",
-    "anthropic>=0.40",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+# LLM providers are optional: install the ones your backends use.
+anthropic = ["anthropic>=2.0"]
+openai = ["openai>=2.0"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "anthropic>=2.0", "openai>=2.0"]
 
 [project.scripts]
 orch = "orchestrator.cli:main"
@@ -23,7 +25,7 @@ orch = "orchestrator.cli:main"
 include = ["orchestrator*"]
 
 [tool.setuptools.package-data]
-orchestrator = ["agents/templates/**/*"]
+orchestrator = ["agents/templates/**/*", "agents/prompts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["orchestrator/tests"]

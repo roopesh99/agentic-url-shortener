@@ -1,4 +1,8 @@
 .venv/
+# credentials: never committed (see .env.example)
+.env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 *.egg-info/

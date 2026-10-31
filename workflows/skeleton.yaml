@@ -16,6 +16,7 @@ stages:
       - name: outputs_present
         args: { keys: [goal, functional, non_functional] }
       - ambiguities_resolved
+    clarification: { max_rounds: 2 }  # open product questions pause for a human, then re-run
     approval: required          # human confirms the interpreted spec + assumptions
 
   - id: implement

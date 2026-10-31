@@ -26,6 +26,13 @@ class RetryPolicy(BaseModel):
     backoff_seconds: float = Field(default=0.0, ge=0)
 
 
+class ClarificationPolicy(BaseModel):
+    """How many times a stage may pause for human answers to open questions a gate raised.
+    Each round adds one agent attempt that does not consume the retry budget."""
+
+    max_rounds: int = Field(default=0, ge=0, le=5)
+
+
 class GateRef(BaseModel):
     """A gate invocation in the workflow: registry name plus arguments."""
 
@@ -49,6 +56,7 @@ class StageSpec(BaseModel):
     exit_gates: list[GateRef] = Field(default_factory=list)
     approval: ApprovalMode = ApprovalMode.NONE
     retry: RetryPolicy = Field(default_factory=RetryPolicy)
+    clarification: ClarificationPolicy = Field(default_factory=ClarificationPolicy)
     fallback: str | None = None  # alternate agent name, used after retries are exhausted
     write_scope: list[str] = Field(default_factory=list)  # glob patterns, relative to workspace
     read_scope: list[str] = Field(default_factory=list)   # files the agent is shown as context
@@ -115,3 +123,6 @@ class GateResult(BaseModel):
     passed: bool
     evidence: str = ""  # human-readable proof; fed back to the agent on retry
     duration_ms: int = 0
+    # Open questions only a human can answer. A failure carrying questions can be
+    # resolved by clarification instead of a blind retry.
+    questions: list[dict[str, str]] = Field(default_factory=list)

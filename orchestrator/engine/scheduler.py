@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..agents.base import AgentContext, AgentRegistry, FatalAgentError, ScopeViolation
-from ..approvals.service import ApprovalRequest, Approver
+from ..approvals.service import ApprovalRequest, Approver, ClarificationRequest, ClarificationResponse
 from ..gates.base import GateContext, GateRegistry
 from ..policy.engine import PolicyEngine
 from ..policy.models import Action, PolicyDecision
@@ -64,6 +64,7 @@ class Engine:
         workspace: Path,
         requirement: str,
         max_parallel: int = 4,
+        max_cost_usd: float | None = None,
     ) -> None:
         self.workflow = workflow
         self.agents = agents
@@ -75,6 +76,9 @@ class Engine:
         self.workspace = workspace
         self.requirement = requirement
         self.max_parallel = max_parallel
+        self.max_cost_usd = max_cost_usd
+        self.cost_usd = 0.0
+        self._halt_reason: str | None = None  # set => safe-stop: start nothing new
         self.events = EventStore(run_dir / "events.jsonl", run_id)
         self.artifacts_dir = run_dir / "artifacts"
         self.states: dict[str, NodeState] = {s.id: NodeState.PENDING for s in workflow.stages}
@@ -95,13 +99,17 @@ class Engine:
             requirement_sha=_sha(self.requirement),
             policy_sha=self.policy.policy_sha,
             workspace=str(self.workspace),
+            max_cost_usd=self.max_cost_usd,
         )
 
         running: dict[asyncio.Task[None], str] = {}
         while True:
-            self._promote_pending()
+            if self._halt_reason:
+                self._skip_unstarted(running)
+            else:
+                self._promote_pending()
             for stage_id in self._order:
-                if len(running) >= self.max_parallel:
+                if len(running) >= self.max_parallel or self._halt_reason:
                     break
                 if self.states[stage_id] is NodeState.READY and stage_id not in running.values():
                     task = asyncio.create_task(self._execute(self.workflow.stage(stage_id)))
@@ -121,8 +129,10 @@ class Engine:
         duration_ms = int((time.monotonic() - started) * 1000)
         self.events.append(
             EventType.RUN_COMPLETED,
-            status="SUCCEEDED" if succeeded else "FAILED",
+            status="SUCCEEDED" if succeeded else ("HALTED" if self._halt_reason else "FAILED"),
             duration_ms=duration_ms,
+            cost_usd=round(self.cost_usd, 6),
+            halt_reason=self._halt_reason,
             states={k: v.value for k, v in self.states.items()},
         )
         return RunResult(self.run_id, succeeded, dict(self.states), duration_ms, self.run_dir)
@@ -169,13 +179,20 @@ class Engine:
 
         self._transition(stage.id, NodeState.RUNNING, "attempt 1")
         feedback: list[str] = []
-        max_attempts = stage.retry.max_attempts
+        clarifications: list[dict[str, str]] = []  # binding human answers, kept across attempts
+        allowed = stage.retry.max_attempts         # +1 per clarification round: answers are not failures
+        rounds = retries = attempt = 0
+        clarified = False
 
-        for attempt in range(1, max_attempts + 1):
+        while attempt < allowed:
+            attempt += 1
             if attempt > 1:
-                await asyncio.sleep(stage.retry.backoff_seconds * 2 ** (attempt - 2))
+                if not clarified:
+                    retries += 1
+                    await asyncio.sleep(stage.retry.backoff_seconds * 2 ** (retries - 1))
                 self._transition(stage.id, NodeState.RUNNING, f"attempt {attempt}")
-            last = attempt == max_attempts
+            clarified = False
+            last = attempt == allowed
 
             ctx = AgentContext(
                 run_id=self.run_id,
@@ -185,8 +202,12 @@ class Engine:
                 inputs=inputs,
                 attempt=attempt,
                 feedback=list(feedback),
+                clarifications=list(clarifications),
             )
             result = await self._invoke_agent(stage, ctx)
+            if self._charge(ctx.telemetry):
+                self._transition(stage.id, NodeState.FAILED, f"safe-stop: {self._halt_reason}")
+                return
             if isinstance(result, ScopeViolation):
                 # Breaching the autonomy boundary is a policy failure, not a flaky error: no retry.
                 self._transition(stage.id, NodeState.FAILED, f"policy: {result}")
@@ -201,7 +222,7 @@ class Engine:
                     return
                 continue
 
-            artifact = self._record_artifact(stage, attempt, result, ctx.changes, inputs)
+            artifact = self._record_artifact(stage, attempt, result, ctx.changes, inputs, clarifications)
 
             policy = self._evaluate_policy(stage, attempt, ctx.changes)
             if policy.action is Action.BLOCK:
@@ -229,6 +250,20 @@ class Engine:
                 await self._run_gate(ref, stage, artifact, inputs, phase="exit") for ref in stage.exit_gates
             ]
             failed = [r for r in gate_results if not r.passed]
+            if failed and all(r.questions for r in failed) and rounds < stage.clarification.max_rounds:
+                # Only a human can resolve these: ask, then re-run the agent with the answers.
+                rounds += 1
+                response = await self._clarify(stage, artifact, [q for r in failed for q in r.questions], rounds)
+                if response is None:
+                    return
+                clarifications += response.answers
+                feedback = [f"{len(response.answers)} open question(s) were answered by a human "
+                            "(see <clarifications>); treat each answer as a binding decision."]
+                allowed += 1
+                clarified = True
+                self._transition(stage.id, NodeState.RETRYING,
+                                 f"clarified by {response.answered_by} (round {rounds}); re-running with answers")
+                continue
             if failed:
                 feedback = [f"gate '{r.gate}' failed: {r.evidence}" for r in failed]
                 self._retry_or_fail(stage, last, f"exit gate(s) failed: {[r.gate for r in failed]}")
@@ -277,6 +312,19 @@ class Engine:
         )
         return result
 
+    def _charge(self, telemetry: list[dict]) -> bool:
+        """Add an attempt's LLM spend; returns True when the run must safe-stop."""
+        self.cost_usd += sum(call.get("cost_usd", 0.0) for call in telemetry)
+        if self.max_cost_usd is not None and self.cost_usd >= self.max_cost_usd and not self._halt_reason:
+            self._halt_reason = f"cost budget reached (${self.cost_usd:.2f} of ${self.max_cost_usd:.2f})"
+            self.events.append(EventType.RUN_HALTED, reason=self._halt_reason, cost_usd=round(self.cost_usd, 6))
+        return self._halt_reason is not None
+
+    def _skip_unstarted(self, running: dict) -> None:
+        for stage_id in self._order:
+            if self.states[stage_id] in (NodeState.PENDING, NodeState.READY) and stage_id not in running.values():
+                self._transition(stage_id, NodeState.SKIPPED, f"run halted: {self._halt_reason}")
+
     def _retry_or_fail(self, stage: StageSpec, last: bool, reason: str) -> None:
         if last:
             self._transition(
@@ -316,6 +364,28 @@ class Engine:
         if not decision.approved:
             self._transition(stage.id, NodeState.FAILED, f"rejected by {decision.approver}")
         return decision.approved
+
+    async def _clarify(self, stage: StageSpec, artifact: Artifact, questions: list[dict[str, str]],
+                       round_: int) -> ClarificationResponse | None:
+        self._transition(stage.id, NodeState.AWAITING_APPROVAL,
+                         f"awaiting human answers to {len(questions)} question(s) (round {round_})")
+        request = ClarificationRequest(run_id=self.run_id, stage=stage.id, round=round_, questions=questions)
+        self.events.append(EventType.CLARIFICATION_REQUESTED, stage.id, round=round_, questions=questions,
+                           artifact=artifact.ref().model_dump())
+        response = await self.approver.clarify(request)
+        if response is None:
+            self._transition(stage.id, NodeState.FAILED, "open questions need a human, and none was available")
+            return None
+        missing = response.missing(request)
+        if missing:
+            self._transition(stage.id, NodeState.FAILED, f"clarification incomplete: {len(missing)} unanswered")
+            return None
+        self.events.append(EventType.CLARIFICATION_ANSWERED, stage.id, round=round_, answers=response.answers,
+                           answered_by=response.answered_by, source=response.source)
+        for a in response.answers:
+            self.events.append(EventType.DECISION_RECORDED, stage.id, topic=a["question"], choice=a["answer"],
+                               rationale=f"answered by {response.answered_by}", source=response.source)
+        return response
 
     def _evaluate_policy(self, stage: StageSpec, attempt: int, changes: ChangeSet) -> PolicyDecision:
         decision = self.policy.evaluate(changes, stage)
@@ -362,10 +432,15 @@ class Engine:
         return res
 
     def _record_artifact(
-        self, stage: StageSpec, attempt: int, result: AgentResult, changes: ChangeSet, inputs: dict[str, Artifact]
+        self, stage: StageSpec, attempt: int, result: AgentResult, changes: ChangeSet, inputs: dict[str, Artifact],
+        clarifications: list[dict[str, str]] = (),
     ) -> Artifact:
         # The proposed change set is authoritative, not the agent's claim about what it wrote.
         result = result.model_copy(update={"files_written": changes.paths})
+        if clarifications:
+            # Human answers travel with the artifact verbatim, so downstream stages see them
+            # even if the agent paraphrased or dropped one.
+            result = result.model_copy(update={"outputs": {**result.outputs, "clarifications": list(clarifications)}})
         version = self._versions.get(stage.id, 0) + 1
         self._versions[stage.id] = version
         file_hashes = changes.file_hashes()

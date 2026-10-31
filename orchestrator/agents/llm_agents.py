@@ -11,12 +11,12 @@ from __future__ import annotations
 import json
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from pydantic import BaseModel, ValidationError
 
 from ..engine.models import AgentResult, Decision
-from ..llm.client import DEFAULT_MODEL, LLMClient, LLMRequest
+from ..llm.client import LLMClient, LLMRequest
 from ..llm.schema import strict_schema
 from .base import Agent, AgentContext, AgentRegistry, FatalAgentError
 from .outputs import AnalystOutput, CodeOutput, TestPlanOutput
@@ -45,7 +45,7 @@ class LLMAgent(Agent):
     effort: str = "high"
     max_tokens: int = 64000
 
-    def __init__(self, llm: LLMClient, model: str = DEFAULT_MODEL) -> None:
+    def __init__(self, llm: LLMClient, model: str) -> None:
         self.llm = llm
         self.model = model
 
@@ -112,6 +112,15 @@ def _decisions(items) -> list[Decision]:
     return [Decision(topic=d.topic, choice=d.choice, rationale=d.rationale, source="agent") for d in items]
 
 
+CLARIFICATION_NOTE = (
+    "A human answered your earlier open questions. These answers are binding decisions. For each, "
+    "keep the original question wording, set `resolution` to the answer, set `source` to \"assumption\" "
+    "and start `rationale` with \"Decided by a human:\". Make the requirements and acceptance criteria "
+    "consistent with every answer. Raise a new open question only if an answer itself leaves something "
+    "genuinely undecided."
+)
+
+
 class AnalystAgent(LLMAgent):
     name = "analyst"
     prompts = ("analyst",)
@@ -120,13 +129,19 @@ class AnalystAgent(LLMAgent):
     max_tokens = 32000
 
     def task(self, ctx):
-        return [_tag("requirement", ctx.requirement)]
+        sections = [_tag("requirement", ctx.requirement)]
+        if ctx.clarifications:
+            # Instructions live here, not in the system prompt: the first request stays
+            # byte-identical (cacheable, replayable) and only re-runs carry the answers.
+            sections.append(_tag("clarifications", CLARIFICATION_NOTE + "\n\n" + _canonical(ctx.clarifications)))
+        return sections
 
     def to_result(self, ctx, out: AnalystOutput):
+        human = {c["question"] for c in ctx.clarifications}
         decisions = [
             Decision(topic=a.question, choice=a.resolution, rationale=a.rationale, source="assumption")
-            for a in out.ambiguities if a.resolution
-        ]
+            for a in out.ambiguities if a.resolution and a.question not in human
+        ]  # human answers are recorded by the engine, verbatim, from the clarification itself
         outputs = out.model_dump(exclude={"summary"})
         return AgentResult(summary=out.summary, outputs=outputs, decisions=decisions)
 
@@ -192,8 +207,14 @@ class TesterAgent(LLMAgent):
         )
 
 
-def llm_agents(llm: LLMClient, model: str = DEFAULT_MODEL) -> AgentRegistry:
+AGENT_TYPES = (AnalystAgent, TestPlannerAgent, CoderAgent, TesterAgent)
+LLM_AGENT_NAMES = [a.name for a in AGENT_TYPES]
+
+
+def llm_agents(llm: LLMClient, model: str | Callable[[str], str]) -> AgentRegistry:
+    """`model`: one model for every agent, or a resolver from agent name to model."""
+    resolve = model if callable(model) else (lambda _agent: model)
     registry = AgentRegistry()
-    for agent in (AnalystAgent, TestPlannerAgent, CoderAgent, TesterAgent):
-        registry.register(agent.name, lambda a=agent: a(llm, model))
+    for agent in AGENT_TYPES:
+        registry.register(agent.name, lambda a=agent: a(llm, resolve(a.name)))
     return registry

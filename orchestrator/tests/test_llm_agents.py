@@ -55,7 +55,7 @@ class ScriptedLLM:
         if isinstance(nxt, Exception):
             raise nxt
         return LLMResponse(data=nxt, model=request.model, stop_reason="end_turn",
-                           usage=Usage(input_tokens=1000, output_tokens=200))
+                           usage=Usage(input_tokens=1000, output_tokens=200), cost_usd=0.008, provider="scripted")
 
     def prompts(self, agent):
         return [r.user for r in self.requests if r.agent == agent]
@@ -63,7 +63,7 @@ class ScriptedLLM:
 
 def engine(tmp_path, llm, workflow=None):
     workflow = workflow or load_workflow(ROOT / "workflows" / "skeleton.yaml")
-    return Engine(workflow, llm_agents(llm), builtin_gates(), AutoApprover(), policy=POLICY,
+    return Engine(workflow, llm_agents(llm, "claude-opus-5-5"), builtin_gates(), AutoApprover(), policy=POLICY,
                   run_id="llm", run_dir=tmp_path / "run", workspace=tmp_path / "ws", requirement=REQUIREMENT)
 
 

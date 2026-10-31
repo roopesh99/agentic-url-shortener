@@ -1,0 +1,16 @@
+# Analyst + test planner on OpenAI; coder + tester served by an assistant
+# session (Claude Code) through files. ${VARS} are read from the environment.
+#
+#   export OPENAI_API_KEY=...    # read by the OpenAI SDK, never stored here
+#   export OPENAI_MODEL=...      # the model your key has access to
+default:
+  provider: openai
+  model: "${OPENAI_MODEL}"
+  options:
+    reasoning: true        # send per-agent effort; set false for non-reasoning models
+  # pricing (USD per 1M tokens) is required only when running with --max-cost-usd:
+  # pricing: {input: 0.0, output: 0.0, cached_input: 0.0}
+
+agents:
+  coder:  {provider: session}
+  tester: {provider: session}

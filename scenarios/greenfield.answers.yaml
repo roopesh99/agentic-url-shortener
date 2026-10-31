@@ -1,0 +1,33 @@
+# Answers to the analyst's open questions for scenarios/greenfield.md.
+# Drafted by Claude Code; accepted by the product owner (roopeshkotte) on 2026-10-30 (round 2: 2026-10-31).
+# Question text matches the recorded analyst output exactly, so replays answer deterministically:
+#   orch run ... --answers scenarios/greenfield.answers.yaml      (recorded as answers-file:<sha>)
+# In a live run, submit them yourself instead:
+#   orch answer <run-id> requirements-clarify-1 --from scenarios/greenfield.answers.yaml
+
+- question: What characters, length limits, and case-sensitivity rules apply to custom aliases?
+  answer: 'Custom aliases are 3-32 characters from [A-Za-z0-9_-], case-sensitive (consistent with generated codes).
+    Reserved words are rejected: api, health, links (and any path the service itself uses).'
+- question: What rate limit applies to link creation, over what interval, and how are clients identified (for example,
+    by IP address)?
+  answer: 20 link creations per minute per client IP address. Exceeding it returns 429 Too Many Requests with a
+    Retry-After header. Limits are held in memory (Bucket4j); a restart resets them.
+- question: Who is allowed to fetch metadata or delete a link, and is authentication or authorization required?
+  answer: Metadata (GET) is public. Creating a link returns a one-time management token; DELETE requires that token
+    (e.g. an X-Management-Token header), so only the creator can delete. No user accounts in v1. Store only a hash
+    of the token, never the token itself.
+- question: Must links survive service restarts, and where should local link data be stored?
+  answer: Yes, links must survive restarts. Use file-based H2 under ./data with Flyway-managed schema migrations.
+- question: Precisely which destinations count as malicious or internal, and should validation cover DNS-resolved
+    addresses, IPv4, IPv6, and address changes over time?
+  answer: 'Accept only http/https URLs up to 2048 characters. Reject localhost and any host that is, or resolves
+    to, a loopback, private, link-local, unique-local or multicast address (IPv4 and IPv6), checked once at creation.
+    Re-pointing DNS after creation is an accepted, documented limitation: the service never fetches the URL.'
+- question: What traffic volume, concurrency, measurement window, and runtime conditions define the p99 latency
+    target?
+  answer: 'Measured in-process by an automated test: 1,000 redirect requests after a warm-up, single client, local
+    machine, asserting p99 < 50 ms. Documented as an indicative check, not a production SLO.'
+- question: After deletion, may a short code or custom alias be reused for a new link?
+  answer: No. Codes and custom aliases are never reused. Deleting a link keeps a tombstone record that reserves
+    the code and erases the destination URL; a deleted code returns 404 like an unknown one, and creating a link
+    with a deleted alias returns 409 Conflict.

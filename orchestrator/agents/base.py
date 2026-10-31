@@ -35,6 +35,7 @@ class AgentContext:
     attempt: int = 1
     feedback: list[str] = field(default_factory=list)  # gate/policy evidence from failed attempts
     changes: ChangeSet = field(default_factory=ChangeSet)
+    clarifications: list[dict[str, str]] = field(default_factory=list)  # binding human answers so far
     telemetry: list[dict[str, Any]] = field(default_factory=list)  # one entry per LLM call
 
     def in_scope(self, rel_path: str) -> bool:
@@ -91,3 +92,6 @@ class AgentRegistry:
 
     def __contains__(self, name: str) -> bool:
         return name in self._factories
+
+    def names(self) -> list[str]:
+        return sorted(self._factories)

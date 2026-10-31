@@ -9,13 +9,15 @@ import pytest
 
 from orchestrator.agents.base import FatalAgentError
 from orchestrator.agents.outputs import AnalystOutput, CodeOutput
-from orchestrator.llm.client import AnthropicLLM, LLMRequest, LLMResponse, LLMTruncated, Usage
+from orchestrator.llm.client import LLMRequest, LLMResponse, LLMTruncated, Pricing, Usage
+from orchestrator.llm.providers.anthropic import PRICING, AnthropicLLM
 from orchestrator.llm.replay import CassetteLLM, Mode
 from orchestrator.llm.schema import strict_schema
 
 
 def _request(**overrides) -> LLMRequest:
-    fields = {"agent": "coder", "system": "sys", "user": "task", "schema": {"type": "object"}, **overrides}
+    fields = {"agent": "coder", "model": "claude-opus-5-5", "system": "sys", "user": "task",
+              "schema": {"type": "object"}, **overrides}
     return LLMRequest(**fields)
 
 
@@ -74,6 +76,8 @@ async def test_request_shape_structured_output_effort_caching_and_fallback():
     assert "thinking" not in kw and "temperature" not in kw
     assert resp.data == {"ok": True} and resp.request_id == "req_123"
     assert resp.usage.cache_creation_input_tokens == 0  # None normalized
+    assert resp.provider == "anthropic"
+    assert resp.cost_usd == pytest.approx((1000 * 4 + 500 * 20 + 200 * 0.20) / 1e6)
 
 
 async def test_fallback_can_be_disabled():
@@ -103,7 +107,14 @@ async def test_auth_error_is_fatal():
 
 def test_cost_accounting():
     usage = Usage(input_tokens=1_000_000, output_tokens=100_000, cache_read_input_tokens=1_000_000)
-    assert usage.cost_usd("claude-opus-5-5") == pytest.approx(4.00 + 2.00 + 0.20)
+    assert PRICING["claude-opus-5-5"].cost(usage) == pytest.approx(4.00 + 2.00 + 0.20)
+
+
+def test_replayed_cost_does_not_count_as_spend():
+    req = _request()
+    resp = LLMResponse(data={}, model="m", stop_reason="end_turn", usage=Usage(), cost_usd=1.5, source="cassette")
+    t = resp.telemetry(req)
+    assert t["cost_usd"] == 0.0 and t["recorded_cost_usd"] == 1.5
 
 
 # --- cassettes ---------------------------------------------------------------------------
@@ -114,7 +125,8 @@ class CountingLLM:
 
     async def complete(self, request):
         self.calls += 1
-        return LLMResponse(data={"n": self.calls}, model=request.model, stop_reason="end_turn", usage=Usage())
+        return LLMResponse(data={"n": self.calls}, model=request.model, stop_reason="end_turn", usage=Usage(),
+                           cost_usd=0.01)
 
 
 async def test_record_then_replay_offline(tmp_path):

@@ -60,7 +60,7 @@ def test_retry_attempts_are_bounded():
     [
         (NodeState.PENDING, NodeState.RUNNING),          # must pass through READY
         (NodeState.RUNNING, NodeState.SUCCEEDED),        # must pass through gates
-        (NodeState.AWAITING_APPROVAL, NodeState.RETRYING),
+        (NodeState.AWAITING_APPROVAL, NodeState.RUNNING),   # must pass through RETRYING
         (NodeState.SUCCEEDED, NodeState.FAILED),
     ],
 )

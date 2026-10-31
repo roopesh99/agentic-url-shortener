@@ -17,9 +17,10 @@ from .client import LLMClient, LLMRequest, LLMResponse
 
 
 class Mode(str, Enum):
-    LIVE = "live"      # call the API, keep nothing
-    RECORD = "record"  # call the API, save the exchange
-    REPLAY = "replay"  # serve saved exchanges only
+    LIVE = "live"          # call the API, keep nothing
+    RECORD = "record"      # serve saved exchanges; call the API and save only what is missing
+    RERECORD = "rerecord"  # call the API for everything, overwriting saved exchanges
+    REPLAY = "replay"      # serve saved exchanges only
 
 
 class CassetteLLM(LLMClient):
@@ -30,22 +31,28 @@ class CassetteLLM(LLMClient):
         self.mode = mode
         self.inner = inner
 
+    @staticmethod
+    def _load(path: Path) -> LLMResponse:
+        recorded = json.loads(path.read_text(encoding="utf-8"))
+        return LLMResponse.model_validate({**recorded["response"], "source": "cassette"})
+
     def _path(self, request: LLMRequest) -> Path:
         return self.directory / f"{request.agent}-{request.key()[:16]}.json"
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         path = self._path(request)
+        if self.mode is Mode.RECORD and path.exists():
+            return self._load(path)
         if self.mode is Mode.REPLAY:
             if not path.exists():
                 raise FatalAgentError(
                     f"no cassette for {request.agent} request {request.key()[:16]} in {self.directory} "
                     "(inputs changed since recording; re-record with --llm record)"
                 )
-            recorded = json.loads(path.read_text(encoding="utf-8"))
-            return LLMResponse.model_validate({**recorded["response"], "source": "cassette"})
+            return self._load(path)
 
         response = await self.inner.complete(request)
-        if self.mode is Mode.RECORD:
+        if self.mode in (Mode.RECORD, Mode.RERECORD):
             self.directory.mkdir(parents=True, exist_ok=True)
             path.write_text(
                 json.dumps(

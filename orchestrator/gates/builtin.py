@@ -45,11 +45,15 @@ class AmbiguitiesResolvedGate(Gate):
 
     async def check(self, ctx: GateContext) -> GateResult:
         assert ctx.artifact is not None, "ambiguities_resolved is an exit gate"
-        items: list[dict[str, Any]] = ctx.artifact.result.outputs.get("ambiguities", [])
-        open_items = [a["question"] for a in items if not a.get("resolution")]
+        outputs = ctx.artifact.result.outputs
+        items: list[dict[str, Any]] = outputs.get("ambiguities", [])
+        answered = {c["question"] for c in outputs.get("clarifications", [])}  # human answers are binding
+        open_items = [a for a in items if not a.get("resolution") and a["question"] not in answered]
         if open_items:
-            return self.result(False, f"{len(open_items)} unresolved: {open_items}")
-        return self.result(True, f"{len(items)} ambiguity(ies), all resolved")
+            result = self.result(False, f"{len(open_items)} unresolved: {[a['question'] for a in open_items]}")
+            result.questions = [{"question": a["question"], "why": a.get("rationale", "")} for a in open_items]
+            return result
+        return self.result(True, f"{len(items)} ambiguity(ies), all resolved ({len(answered)} by a human)")
 
 
 class MavenTestGate(Gate):
