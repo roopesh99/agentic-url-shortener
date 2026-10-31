@@ -332,3 +332,25 @@ def test_run_settings_are_saved_without_secrets_and_stop_needs_a_run(tmp_path, m
     from orchestrator.cli import RUN_SETTINGS, main as orch
     assert not any("key" in s or "token" in s or "secret" in s for s in RUN_SETTINGS)
     assert orch(["--env-file", str(tmp_path / "none"), "--runs-dir", str(tmp_path), "stop", "nope"]) == 2
+
+
+async def test_workflow_hash_is_recorded_and_a_change_on_resume_is_flagged(build_engine, recorder):
+    def fail_b(ctx):
+        if ctx.stage.id == "b":
+            raise RuntimeError("down")
+
+    workflow = wf(stage("a"), stage("b", needs=["a"]))
+    first = build_engine(workflow, {"x": make_agent(recorder, behaviour=fail_b)})
+    await first.run()
+    started = events(first, EventType.RUN_STARTED)[0].payload
+    assert len(started["workflow_sha"]) == 64
+
+    same = build_engine(workflow, {"x": make_agent(recorder, behaviour=fail_b)})
+    await same.run(resume=True)
+    assert events(same, EventType.RUN_RESUMED)[-1].payload["workflow_changed"] is False
+
+    changed = wf(stage("a"), stage("b", needs=["a"], retry={"max_attempts": 2}))
+    resumed = build_engine(changed, {"x": make_agent(recorder)})
+    assert (await resumed.run(resume=True)).succeeded
+    last = events(resumed, EventType.RUN_RESUMED)[-1].payload
+    assert last["workflow_changed"] is True and last["workflow_sha"] != started["workflow_sha"]

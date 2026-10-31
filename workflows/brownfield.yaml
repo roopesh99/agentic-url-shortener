@@ -18,7 +18,8 @@ stages:
       - name: outputs_present
         args: { keys: [goal, functional, non_functional] }
       - ambiguities_resolved
-    clarification: { max_rounds: 2 }
+    # Vague change requests can need a third round (the ambiguous scenario did); still bounded.
+    clarification: { max_rounds: 3 }
     approval: required
 
   - id: impact

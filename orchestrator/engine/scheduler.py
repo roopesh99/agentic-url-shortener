@@ -131,6 +131,7 @@ class Engine:
                 EventType.RUN_STARTED,
                 workflow=self.workflow.name,
                 workflow_version=self.workflow.version,
+                workflow_sha=self._workflow_sha(),
                 stages=self._order,
                 requirement_sha=_sha(self.requirement),
                 policy_sha=self.policy.policy_sha,
@@ -612,11 +613,18 @@ class Engine:
             EventType.RUN_RESUMED, kept=kept, reset=reset, discarded_uncommitted=discarded,
             stop_cleared=stop_cleared, cost_usd_so_far=round(self.cost_usd, 6),
             policy_sha=self.policy.policy_sha, policy_changed=self.policy.policy_sha != started.payload["policy_sha"],
+            workflow_sha=self._workflow_sha(),
+            workflow_changed=self._workflow_sha() != started.payload.get("workflow_sha"),
         )
         for stage_id, was in reset.items():
             if was != NodeState.PENDING.value:  # a sanctioned reset, recorded like any other transition
                 self.events.append(EventType.STAGE_STATE, stage_id, **{"from": was, "to": NodeState.PENDING.value},
                                    reason=f"resume: was {was}")
+
+    def _workflow_sha(self) -> str:
+        """Hash of the parsed workflow (not the file, so comments and formatting don't count):
+        which stages, gates, scopes and limits governed the run is part of its audit trail."""
+        return _sha(self.workflow.model_dump_json())
 
     def _load_accepted(self, stage_id: str, ref: dict | None, file_shas: dict) -> Artifact:
         if ref is None:
