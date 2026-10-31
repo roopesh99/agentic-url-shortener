@@ -29,6 +29,7 @@ class ApprovalRequest(BaseModel):
     gate_evidence: list[str] = Field(default_factory=list)
     files_changed: list[str] = Field(default_factory=list)
     decisions: list[str] = Field(default_factory=list)
+    artifact_sha: str = ""           # the exact content being approved
 
 
 class ApprovalDecision(BaseModel):
@@ -42,6 +43,13 @@ class ClarificationRequest(BaseModel):
     stage: str
     round: int
     questions: list[dict[str, str]]  # {"question", "why"}
+
+
+def _clarify_id(request: "ClarificationRequest") -> str:
+    """Bound to the exact questions: a resumed run asking the same questions finds the answers
+    already given; different questions get a new checkpoint."""
+    digest = hashlib.sha256("\n".join(sorted(q["question"] for q in request.questions)).encode()).hexdigest()
+    return f"{request.stage}-clarify-{request.round}-{digest[:6]}"
 
 
 class ClarificationResponse(BaseModel):
@@ -75,8 +83,10 @@ class AutoApprover(Approver):
 class FileApprover(Approver):
     """Persisted checkpoints for unattended runs.
 
-    Approvals: `<stage>-<n>.request.json`, decided with `orch approve`.
-    Clarifications: `<stage>-clarify-<n>.questions.json` plus a readable
+    Approvals: `<stage>-<artifact sha>.request.json`, decided with `orch approve`. The id is the
+    approved content's hash, so a decision can only ever apply to that exact content (a resumed
+    run that produces something different needs a new decision).
+    Clarifications: `<stage>-clarify-<round>-<questions hash>.questions.json` plus a readable
     `<id>.answers.yaml` to fill in, submitted with `orch answer`.
     Either way the recorded identity is the OS user who ran the command."""
 
@@ -86,7 +96,7 @@ class FileApprover(Approver):
         self._counts: dict[str, int] = {}
 
     async def clarify(self, request: ClarificationRequest) -> ClarificationResponse:
-        clarify_id = f"{request.stage}-clarify-{request.round}"
+        clarify_id = _clarify_id(request)
         questions_path = self.directory / f"{clarify_id}.questions.json"
         answered_path = self.directory / f"{clarify_id}.answered.json"
         if not questions_path.exists():
@@ -100,8 +110,11 @@ class FileApprover(Approver):
         return ClarificationResponse.model_validate_json(answered_path.read_text(encoding="utf-8"))
 
     async def decide(self, request: ApprovalRequest) -> ApprovalDecision:
-        n = self._counts[request.stage] = self._counts.get(request.stage, 0) + 1
-        approval_id = f"{request.stage}-{n}"
+        if request.artifact_sha:
+            approval_id = f"{request.stage}-{request.artifact_sha[:12]}"
+        else:
+            n = self._counts[request.stage] = self._counts.get(request.stage, 0) + 1
+            approval_id = f"{request.stage}-{n}"
         req_path = self.directory / f"{approval_id}.request.json"
         decision_path = self.directory / f"{approval_id}.decision.json"
         if not req_path.exists():

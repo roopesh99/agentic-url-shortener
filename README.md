@@ -3,10 +3,10 @@
 A governed agentic SDLC orchestrator (Python) that turns a requirement into a
 reviewed, tested URL shortener service (Java 17 / Spring Boot).
 
-> Status: **Step 2 — LLM-backed agents, pluggable providers.** Engine, gates,
-> approvals, policy guardrails, audit log and LLM agents are real. Providers
-> (Anthropic, OpenAI, assistant session) are configuration; deterministic stubs
-> remain available for fast, key-free runs.
+> Status: **Step 3 — resilience.** Engine, gates, approvals, clarifications,
+> policy guardrails, audit log, LLM agents (Anthropic, OpenAI, assistant
+> session), rollback, fallback, safe-stop and resume are real. The greenfield
+> scenario's output lives in `url-shortener/`, its evidence in `runs/samples/`.
 
 ## Setup
 
@@ -51,12 +51,27 @@ export OPENAI_API_KEY=...  OPENAI_MODEL=...
 .venv/bin/orch approve <run-id> <approval-id> [--reject] [--comment "..."]
 .venv/bin/orch respond <request.json> --files-from <dir> --summary "..."   # session answers
 
+.venv/bin/orch stop <run-id>           # safe-stop: nothing new starts; resumable
+.venv/bin/orch resume <run-id>         # continue a stopped, halted or failed run
 .venv/bin/orch status <run-id>         # state rebuilt from the event log alone
 .venv/bin/orch verify-audit <run-id>   # verify the hash chain (detects edits/deletions)
 ```
 
-Each run writes `runs/<run-id>/events.jsonl` (hash-chained audit log) and
-`runs/<run-id>/artifacts/<stage>.v<n>.json` (versioned stage outputs with lineage).
+Each run writes `runs/<run-id>/events.jsonl` (hash-chained audit log),
+`runs/<run-id>/artifacts/<stage>.v<n>.json` (versioned stage outputs with lineage),
+`runs/<run-id>/run.json` (its settings, for resume; no secrets) and, by default,
+works in `runs/<run-id>/workspace` (its own git repository).
+
+## Resilience
+
+| Mechanism | Behaviour |
+|---|---|
+| Bounded retries | per stage `retry.max_attempts` (capped at 10), with the gate/policy evidence fed back |
+| Rollback | a failed attempt's applied files are restored (or removed) file by file before the next attempt; a file someone else changed meanwhile is never clobbered; a stage that fails for good ends `ROLLED_BACK` |
+| Fallback | `fallback: <agent>` gets one attempt after retries are exhausted or a refusal, with all feedback so far; policy blocks and rejections are final |
+| Git checkpoints | one commit per accepted stage containing only its files (`--no-git` to disable). An existing repository is used only if clean, and only on a new `orch/<run-id>` branch |
+| Safe-stop | `orch stop`, `--max-minutes`, `--max-cost-usd`: no new work starts, the run ends `HALTED`, resumable |
+| Resume | rebuilds state from the verified log; keeps accepted stages (artifact files checked against their recorded hashes), resets the rest, discards an interrupted stage's uncommitted files. Persisted approvals are bound to the exact content approved, so a resumed run that produces something different needs a new decision |
 
 ## Agents
 

@@ -43,10 +43,12 @@ def events(e, type_):
     return [x for x in EventStore.load(e.events.path) if x.type == type_]
 
 
-async def _wait_for(path: Path, timeout=5.0):
+async def _wait_for(path: Path, timeout=5.0) -> Path:
+    """Waits for a file; `path` may contain a glob in its name (checkpoint ids include content hashes)."""
     for _ in range(int(timeout / 0.02)):
-        if path.exists():
-            return
+        matches = sorted(path.parent.glob(path.name)) if path.parent.exists() else []
+        if matches:
+            return matches[0]
         await asyncio.sleep(0.02)
     raise AssertionError(f"{path} never appeared")
 
@@ -56,11 +58,11 @@ async def test_open_question_pauses_writes_readable_file_and_resumes_with_answer
     e = engine(tmp_path, FileApprover(approvals, poll_seconds=0.02))
     run = asyncio.create_task(e.run())
 
-    answers_file = approvals / "requirements-clarify-1.answers.yaml"
-    await _wait_for(answers_file)
+    answers_file = await _wait_for(approvals / "requirements-clarify-1-*.answers.yaml")
+    clarify_name = answers_file.name.removesuffix(".answers.yaml")
     assert not run.done(), "the run waits for a human"
     text = answers_file.read_text()
-    assert "orch answer c requirements-clarify-1" in text, "the file says how to submit"
+    assert f"orch answer c {clarify_name}" in text, "the file says how to submit"
     items = yaml.safe_load(text)
     assert items == [{"question": QUESTION, "why": "", "answer": ""}]
     [(clarify_id, _)] = pending_clarifications(approvals)
@@ -69,8 +71,9 @@ async def test_open_question_pauses_writes_readable_file_and_resumes_with_answer
     answers_file.write_text(yaml.safe_dump(items))
     record_answers(approvals, clarify_id)
     # re-run passes the gates, then the workflow's own approval checkpoint still applies
-    await _wait_for(approvals / "requirements-1.request.json")
-    record_decision(approvals, "requirements-1", approved=True)
+    request = await _wait_for(approvals / "requirements-*.request.json")
+    approval_id = request.name.removesuffix(".request.json")
+    record_decision(approvals, approval_id, approved=True)
     result = await asyncio.wait_for(run, 5)
 
     assert result.states["requirements"] is NodeState.SUCCEEDED
@@ -89,9 +92,9 @@ async def test_incomplete_answers_are_refused(tmp_path):
     approvals = tmp_path / "run" / "approvals"
     e = engine(tmp_path, FileApprover(approvals, poll_seconds=0.02))
     run = asyncio.create_task(e.run())
-    await _wait_for(approvals / "requirements-clarify-1.answers.yaml")
+    answers_file = await _wait_for(approvals / "requirements-clarify-1-*.answers.yaml")
     with pytest.raises(ValueError, match="still need an answer"):
-        record_answers(approvals, "requirements-clarify-1")
+        record_answers(approvals, answers_file.name.removesuffix(".answers.yaml"))
     assert not run.done()
     run.cancel()
 
@@ -139,8 +142,8 @@ async def test_clarification_rounds_are_bounded(tmp_path):
                run_id="c", run_dir=tmp_path / "run", workspace=tmp_path / "ws", requirement=REQUIREMENT)
 
     # also drop the engine's verbatim copy of the answers, so the gate cannot see them
-    e._record_artifact = lambda stage, attempt, result, changes, inputs, clarifications=(): \
-        Engine._record_artifact(e, stage, attempt, result, changes, inputs, ())
+    e._record_artifact = lambda stage, attempt, result, changes, inputs, clarifications=(), agent=None: \
+        Engine._record_artifact(e, stage, attempt, result, changes, inputs, (), agent)
     result = await e.run()
     assert CountingApprover.rounds == wf.stage("requirements").clarification.max_rounds == 2
     assert result.states["requirements"] is NodeState.FAILED

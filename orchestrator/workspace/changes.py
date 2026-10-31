@@ -87,3 +87,33 @@ def apply_changes(workspace: Path, changes: ChangeSet) -> list[str]:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(change.content, encoding="utf-8")
     return changes.paths
+
+
+def revert_changes(workspace: Path, changes: ChangeSet) -> tuple[list[str], list[str]]:
+    """Undo an applied change set, file by file: restore each file's previous content, or
+    remove it if the change created it.
+
+    Only files whose current content is still exactly what the change wrote are touched, so a
+    concurrent stage's (or a person's) later edit is never clobbered. Returns (reverted, conflicts).
+    File-level rather than whole-workspace, because parallel stages share the workspace.
+    """
+    reverted, conflicts = [], []
+    for change in changes:
+        target = resolve_in_workspace(workspace, change.path)
+        current = target.read_text(encoding="utf-8") if target.is_file() else None
+        if current != change.content:
+            conflicts.append(change.path)
+            continue
+        if change.previous is None:
+            target.unlink()
+            _prune_empty_dirs(target.parent, workspace.resolve())
+        else:
+            target.write_text(change.previous, encoding="utf-8")
+        reverted.append(change.path)
+    return reverted, conflicts
+
+
+def _prune_empty_dirs(directory: Path, root: Path) -> None:
+    while directory != root and directory.is_relative_to(root) and not any(directory.iterdir()):
+        directory.rmdir()
+        directory = directory.parent

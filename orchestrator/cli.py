@@ -1,9 +1,11 @@
-"""Command-line entry point: `orch run | status | verify-audit | pending | approve | answer | respond`."""
+"""Command-line entry point:
+`orch run | resume | stop | status | verify-audit | pending | approve | answer | respond`."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import getpass
 import json
 import sys
 from datetime import datetime, timezone
@@ -15,7 +17,7 @@ from .approvals.service import (AutoApprover, CLIApprover, FileApprover, PresetA
                                 pending_clarifications, record_answers, record_decision)
 from .engine.dag import load_workflow
 from .engine.events import EventStore, EventType, replay_states
-from .engine.scheduler import Engine
+from .engine.scheduler import STOP_FILE, Engine, ResumeError
 from .fileio import is_private, load_env_file, write_atomic
 from .gates.builtin import builtin_gates
 from .policy.engine import PolicyEngine
@@ -66,6 +68,13 @@ def _approver(args: argparse.Namespace, run_dir: Path):
     return PresetAnswers(Path(args.answers), approver) if args.answers else approver
 
 
+# Settings a run is started with, saved to runs/<id>/run.json so `orch resume` rebuilds the same run.
+# Paths and choices only: credentials come from the environment, never from here.
+RUN_SETTINGS = ("workflow", "requirement", "workspace", "policy", "max_parallel", "agents", "llm", "cassettes",
+                "llm_config", "provider", "model", "session_agents", "approvals", "auto_approve", "answers",
+                "max_cost_usd", "max_minutes", "git")
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     workflow = load_workflow(Path(args.workflow))
     run_id = args.run_id or _new_run_id(workflow.name)
@@ -73,7 +82,49 @@ def cmd_run(args: argparse.Namespace) -> int:
     if (run_dir / "events.jsonl").exists():
         print(f"run '{run_id}' already exists at {run_dir}", file=sys.stderr)
         return 2
-    workspace = Path(args.workspace).resolve()
+    # Default: an isolated workspace inside the run. Pointing at a real repository is explicit.
+    args.workspace = str(Path(args.workspace).resolve() if args.workspace else (run_dir / "workspace").resolve())
+    for name in ("workflow", "requirement", "policy", "cassettes", "llm_config", "answers"):
+        if getattr(args, name):
+            setattr(args, name, str(Path(getattr(args, name)).resolve()))
+    run_dir.mkdir(parents=True, exist_ok=True)
+    write_atomic(run_dir / "run.json", json.dumps({k: getattr(args, k) for k in RUN_SETTINGS}, indent=2))
+    return _execute(args, workflow, run_id, run_dir, resume=False)
+
+
+def cmd_resume(args: argparse.Namespace) -> int:
+    run_dir = Path(args.runs_dir) / args.run_id
+    settings_path = run_dir / "run.json"
+    if not settings_path.exists():
+        print(f"error: {settings_path} not found (runs started before resume support cannot be resumed)",
+              file=sys.stderr)
+        return 2
+    saved = json.loads(settings_path.read_text(encoding="utf-8"))
+    if args.approvals:
+        saved["approvals"], saved["auto_approve"] = args.approvals, False
+    resumed = argparse.Namespace(**saved, runs_dir=args.runs_dir, run_id=args.run_id)
+    try:
+        return _execute(resumed, load_workflow(Path(resumed.workflow)), args.run_id, run_dir, resume=True)
+    except ResumeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+
+def cmd_stop(args: argparse.Namespace) -> int:
+    run_dir = Path(args.runs_dir) / args.run_id
+    if not (run_dir / "events.jsonl").exists():
+        print(f"error: no run '{args.run_id}' in {args.runs_dir}", file=sys.stderr)
+        return 2
+    write_atomic(run_dir / STOP_FILE, f"stop requested by {getpass.getuser()}\n")
+    print(f"{args.run_id}: stop requested. No new work starts; in-flight steps finish. Continue with: "
+          f"orch resume {args.run_id}")
+    return 0
+
+
+def _execute(args: argparse.Namespace, workflow, run_id: str, run_dir: Path, *, resume: bool) -> int:
+    from .workspace.git import GitWorkspace
+
+    workspace = Path(args.workspace)
     workspace.mkdir(parents=True, exist_ok=True)
     engine = Engine(
         workflow,
@@ -87,12 +138,16 @@ def cmd_run(args: argparse.Namespace) -> int:
         requirement=Path(args.requirement).read_text(encoding="utf-8"),
         max_parallel=args.max_parallel,
         max_cost_usd=args.max_cost_usd,
+        max_minutes=args.max_minutes,
+        git=GitWorkspace(workspace, run_id) if args.git else None,
     )
-    print(f"run {run_id}: workflow={workflow.name} workspace={workspace}", flush=True)
-    result = asyncio.run(engine.run())
+    print(f"{'resuming' if resume else 'run'} {run_id}: workflow={workflow.name} workspace={workspace}", flush=True)
+    result = asyncio.run(engine.run(resume=resume))
     _print_states(result.states)
-    print(f"\n{'SUCCEEDED' if result.succeeded else 'FAILED'} in {result.duration_ms / 1000:.1f}s, "
-          f"LLM cost ${engine.cost_usd:.2f}")
+    status = "SUCCEEDED" if result.succeeded else ("HALTED" if engine._halt_reason else "FAILED")
+    print(f"\n{status} in {result.duration_ms / 1000:.1f}s, LLM cost ${engine.cost_usd:.2f}")
+    if engine._halt_reason:
+        print(f"halted: {engine._halt_reason}. Continue with: orch resume {run_id}")
     print(f"audit log: {run_dir / 'events.jsonl'}")
     return 0 if result.succeeded else 1
 
@@ -195,7 +250,8 @@ def main(argv: list[str] | None = None) -> int:
     run = sub.add_parser("run", help="execute a workflow")
     run.add_argument("workflow", help="workflow YAML")
     run.add_argument("--requirement", required=True, help="requirement markdown file")
-    run.add_argument("--workspace", default=".", help="directory agents write into")
+    run.add_argument("--workspace", help="directory agents write into (default: runs/<run-id>/workspace). "
+                                          "An existing git repository is used only on a new orch/<run-id> branch")
     run.add_argument("--run-id")
     run.add_argument("--policy", default=str(DEFAULT_POLICY), help="governance policy YAML")
     run.add_argument("--max-parallel", type=int, default=4)
@@ -218,7 +274,19 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--answers", help="reviewed answers file for open questions (deterministic replays); "
                                        "questions it does not cover go to the approver")
     run.add_argument("--max-cost-usd", type=float, help="safe-stop the run once LLM spend reaches this")
+    run.add_argument("--max-minutes", type=float, help="safe-stop the run after this much wall-clock time")
+    run.add_argument("--no-git", dest="git", action="store_false",
+                     help="skip git checkpoints (one commit per accepted stage) in the workspace")
     run.set_defaults(func=cmd_run)
+
+    resume = sub.add_parser("resume", help="continue a stopped, halted or failed run from its event log")
+    resume.add_argument("run_id")
+    resume.add_argument("--approvals", choices=["cli", "file", "auto"], help="override the saved approval mode")
+    resume.set_defaults(func=cmd_resume)
+
+    stop = sub.add_parser("stop", help="safe-stop a running run (it can be resumed)")
+    stop.add_argument("run_id")
+    stop.set_defaults(func=cmd_stop)
 
     pending = sub.add_parser("pending", help="list approvals awaiting a decision")
     pending.add_argument("run_id")
