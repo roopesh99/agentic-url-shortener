@@ -106,7 +106,7 @@ def build_engine(tmp_path: Path, gates: GateRegistry):
             run_id="test-run",
             run_dir=tmp_path / "run",
             workspace=tmp_path / "ws",
-            requirement="test requirement",
+            requirement=kwargs.pop("requirement", "test requirement"),
             **kwargs,
         )
 

@@ -1,5 +1,5 @@
 """Command-line entry point:
-`orch run | resume | stop | status | verify-audit | pending | approve | answer | respond`."""
+`orch run | resume | replan | stop | status | verify-audit | pending | approve | answer | respond`."""
 
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     return _execute(args, workflow, run_id, run_dir, resume=False)
 
 
-def cmd_resume(args: argparse.Namespace) -> int:
+def cmd_resume(args: argparse.Namespace, replan_from: list[str] | None = None, replan_reason: str = "") -> int:
     run_dir = Path(args.runs_dir) / args.run_id
     settings_path = run_dir / "run.json"
     if not settings_path.exists():
@@ -100,14 +100,28 @@ def cmd_resume(args: argparse.Namespace) -> int:
               file=sys.stderr)
         return 2
     saved = json.loads(settings_path.read_text(encoding="utf-8"))
-    if args.approvals:
+    if getattr(args, "approvals", None):
         saved["approvals"], saved["auto_approve"] = args.approvals, False
+    if getattr(args, "requirement", None):
+        # The new requirement becomes the run's requirement from now on; the engine sees its hash change.
+        saved["requirement"] = str(Path(args.requirement).resolve())
+        write_atomic(settings_path, json.dumps(saved, indent=2))
     resumed = argparse.Namespace(**saved, runs_dir=args.runs_dir, run_id=args.run_id)
     try:
-        return _execute(resumed, load_workflow(Path(resumed.workflow)), args.run_id, run_dir, resume=True)
+        return _execute(resumed, load_workflow(Path(resumed.workflow)), args.run_id, run_dir, resume=True,
+                        replan_from=replan_from, replan_reason=replan_reason)
     except ResumeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+
+def cmd_replan(args: argparse.Namespace) -> int:
+    """Invalidate stages (and everything downstream) of a finished or stopped run and continue it.
+    Downstream stages whose inputs turn out unchanged are reused, not re-run."""
+    if not args.from_stage and not args.requirement:
+        print("error: give --from <stage> and/or --requirement <file>", file=sys.stderr)
+        return 2
+    return cmd_resume(args, replan_from=args.from_stage, replan_reason=args.reason)
 
 
 def cmd_stop(args: argparse.Namespace) -> int:
@@ -121,7 +135,8 @@ def cmd_stop(args: argparse.Namespace) -> int:
     return 0
 
 
-def _execute(args: argparse.Namespace, workflow, run_id: str, run_dir: Path, *, resume: bool) -> int:
+def _execute(args: argparse.Namespace, workflow, run_id: str, run_dir: Path, *, resume: bool,
+             replan_from: list[str] | None = None, replan_reason: str = "") -> int:
     from .workspace.git import GitWorkspace
 
     workspace = Path(args.workspace)
@@ -142,7 +157,7 @@ def _execute(args: argparse.Namespace, workflow, run_id: str, run_dir: Path, *, 
         git=GitWorkspace(workspace, run_id) if args.git else None,
     )
     print(f"{'resuming' if resume else 'run'} {run_id}: workflow={workflow.name} workspace={workspace}", flush=True)
-    result = asyncio.run(engine.run(resume=resume))
+    result = asyncio.run(engine.run(resume=resume, replan_from=replan_from, replan_reason=replan_reason))
     _print_states(result.states)
     status = "SUCCEEDED" if result.succeeded else ("HALTED" if engine._halt_reason else "FAILED")
     print(f"\n{status} in {result.duration_ms / 1000:.1f}s, LLM cost ${engine.cost_usd:.2f}")
@@ -284,6 +299,16 @@ def main(argv: list[str] | None = None) -> int:
     resume.add_argument("--approvals", choices=["cli", "file", "auto"], help="override the saved approval mode")
     resume.set_defaults(func=cmd_resume)
 
+    replan = sub.add_parser("replan", help="re-plan a run after an upstream change: invalidate stages and "
+                                           "continue, reusing downstream outputs whose inputs are unchanged")
+    replan.add_argument("run_id")
+    replan.add_argument("--from", dest="from_stage", action="append", default=[],
+                        help="stage to re-run, with everything downstream of it (repeatable)")
+    replan.add_argument("--requirement", help="a revised requirement file; the run continues from it")
+    replan.add_argument("--reason", default="", help="why, for the audit log")
+    replan.add_argument("--approvals", choices=["cli", "file", "auto"], help="override the saved approval mode")
+    replan.set_defaults(func=cmd_replan)
+
     stop = sub.add_parser("stop", help="safe-stop a running run (it can be resumed)")
     stop.add_argument("run_id")
     stop.set_defaults(func=cmd_stop)
@@ -340,7 +365,8 @@ def main(argv: list[str] | None = None) -> int:
     from .policy.engine import PolicyConfigError
     try:
         return args.func(args)
-    except (ConfigError, WorkflowError, PolicyConfigError, FileNotFoundError, FileExistsError, ValueError) as exc:
+    except (ConfigError, WorkflowError, PolicyConfigError, FileNotFoundError, FileExistsError, ValueError,
+            ResumeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

@@ -44,7 +44,8 @@ TRANSITIONS: dict[NodeState, frozenset[NodeState]] = {
     NodeState.ROLLED_BACK: frozenset({NodeState.READY}),
     NodeState.BLOCKED: frozenset({NodeState.READY}),
     NodeState.SKIPPED: frozenset({NodeState.PENDING}),
-    NodeState.STALE: frozenset({NodeState.READY, NodeState.PENDING}),
+    # STALE -> SUCCEEDED: re-planning found the stage's inputs unchanged, so its accepted artifact is reused
+    NodeState.STALE: frozenset({NodeState.READY, NodeState.PENDING, NodeState.SUCCEEDED}),
 }
 
 TERMINAL: frozenset[NodeState] = frozenset(

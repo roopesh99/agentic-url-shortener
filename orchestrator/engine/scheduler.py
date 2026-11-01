@@ -36,7 +36,7 @@ from ..policy.engine import PolicyEngine
 from ..policy.models import Action, PolicyDecision
 from ..workspace.changes import ChangeSet, apply_changes, revert_changes
 from ..workspace.git import GitWorkspace
-from .dag import topological_order, upstream, validate
+from .dag import downstream, topological_order, upstream, validate
 from .events import EventStore, EventType, replay_states
 from .models import AgentResult, ApprovalMode, Artifact, GateRef, GateResult, StageSpec, WorkflowSpec
 from .state import UNSUCCESSFUL, NodeState, check_transition
@@ -122,15 +122,23 @@ class Engine:
         self.artifacts: dict[str, Artifact] = {}  # accepted artifacts only, keyed by stage id
         self._versions: dict[str, int] = {}
         self._order = topological_order(workflow)
+        # Re-planning: STALE stages keep their previously accepted artifact here until re-run or reused;
+        # stages in _forced re-run even if their inputs are unchanged (the person asked for it).
+        self._previous: dict[str, Artifact] = {}
+        self._forced: set[str] = set()
 
     # ------------------------------------------------------------------ run loop
 
-    async def run(self, resume: bool = False) -> RunResult:
-        """Execute the workflow, or with `resume=True` continue a stopped run from its event log."""
+    async def run(self, resume: bool = False, replan_from: list[str] | None = None,
+                  replan_reason: str = "") -> RunResult:
+        """Execute the workflow, or with `resume=True` continue a stopped run from its event log.
+        `replan_from` (resume only) invalidates those stages and everything downstream of them."""
         self._preflight()
         started = self._started = time.monotonic()
+        if replan_from and not resume:
+            raise ValueError("re-planning applies to an existing run (resume=True)")
         if resume:
-            self._restore()
+            self._restore(replan_from or [], replan_reason)
         else:
             workspace_info = self.git.prepare() if self.git else None
             self.events.append(
@@ -199,6 +207,8 @@ class Engine:
 
     def _promote_pending(self) -> None:
         for stage_id in self._order:
+            if self.states[stage_id] is NodeState.STALE:
+                self._promote_stale(stage_id)
             if self.states[stage_id] is not NodeState.PENDING:
                 continue
             needs = self.workflow.stage(stage_id).needs
@@ -208,6 +218,32 @@ class Engine:
                 self._transition(stage_id, NodeState.SKIPPED, f"upstream '{d}' {self.states[d].value}")
             elif all(self.states[d] is NodeState.SUCCEEDED for d in needs):
                 self._transition(stage_id, NodeState.READY, "all dependencies succeeded")
+
+    def _promote_stale(self, stage_id: str) -> None:
+        """Re-planning decision for one STALE stage, once its dependencies have settled: reuse its
+        previous artifact if it was built from exactly the artifacts now accepted upstream, else re-run."""
+        needs = self.workflow.stage(stage_id).needs
+        if any(self.states[d] in UNSUCCESSFUL for d in needs):
+            self._transition(stage_id, NodeState.PENDING, "re-plan: an upstream stage did not succeed")
+            return
+        if not all(self.states[d] is NodeState.SUCCEEDED for d in needs):
+            return
+        previous = self._previous[stage_id]
+        if stage_id in self._forced:
+            self._transition(stage_id, NodeState.READY, "re-plan: re-run requested")
+            return
+        ancestors = upstream(self.workflow, stage_id)
+        current = {d: self.artifacts[d].sha for d in ancestors if d in self.artifacts}
+        used = {ref.name: ref.sha for ref in previous.inputs}
+        if current == used:
+            self.artifacts[stage_id] = previous
+            self.events.append(EventType.ARTIFACT_ACCEPTED, stage_id, artifact=previous.ref().model_dump(),
+                               reused=True)
+            self._transition(stage_id, NodeState.SUCCEEDED,
+                             f"re-plan: inputs unchanged, reused {previous.name}@v{previous.version}")
+        else:
+            changed = sorted(d for d in set(current) | set(used) if current.get(d) != used.get(d))
+            self._transition(stage_id, NodeState.READY, f"re-plan: inputs changed ({', '.join(changed)})")
 
     # ------------------------------------------------------------- stage execution
 
@@ -593,8 +629,9 @@ class Engine:
             )
         return artifact
 
-    def _restore(self) -> None:
-        """Rebuild run state from the (verified) event log, keep accepted stages, and reset the rest."""
+    def _restore(self, replan_from: list[str], replan_reason: str) -> None:
+        """Rebuild run state from the (verified) event log, keep accepted stages, and reset the rest.
+        Stages being re-planned keep their accepted artifact as STALE, to be reused or re-run."""
         ok, message = EventStore.verify(self.events.path)
         if not ok:
             raise ResumeError(f"refusing to resume: audit log failed verification ({message})")
@@ -608,7 +645,10 @@ class Engine:
         previous = replay_states(events)
         file_shas: dict[tuple[str, int], str] = {}
         accepted: dict[str, dict] = {}
+        requirement_sha = started.payload["requirement_sha"]
         for e in events:
+            if e.type in (EventType.RUN_RESUMED, EventType.RUN_REPLANNED) and "requirement_sha" in e.payload:
+                requirement_sha = e.payload["requirement_sha"]
             if e.type == EventType.ARTIFACT_RECORDED:
                 ref = e.payload["artifact"]
                 self._versions[e.stage] = max(self._versions.get(e.stage, 0), ref["version"])
@@ -618,14 +658,30 @@ class Engine:
             elif e.type in (EventType.AGENT_COMPLETED, EventType.AGENT_ERROR):
                 self.cost_usd += sum(c.get("cost_usd", 0.0) for c in e.payload.get("llm_calls", []))
 
-        kept, reset = [], {}
+        unknown = [s for s in replan_from if s not in self._order]
+        if unknown:
+            raise ResumeError(f"cannot re-plan unknown stage(s): {unknown}")
+        triggers = list(replan_from)
+        requirement_changed = _sha(self.requirement) != requirement_sha
+        if requirement_changed:
+            # Every root consumes the requirement; lineage decides how far the change actually reaches.
+            triggers += [s.id for s in self.workflow.stages if not s.needs]
+        stale_scope = {s for t in triggers for s in {t} | downstream(self.workflow, t)}
+
+        kept, reset, stale = [], {}, []
         for stage_id in self._order:
             if previous.get(stage_id) is NodeState.SUCCEEDED:
-                self.artifacts[stage_id] = self._load_accepted(stage_id, accepted.get(stage_id), file_shas)
-                self.states[stage_id] = NodeState.SUCCEEDED
-                kept.append(stage_id)
+                artifact = self._load_accepted(stage_id, accepted.get(stage_id), file_shas)
+                if stage_id in stale_scope:
+                    self._previous[stage_id] = artifact
+                    stale.append(stage_id)
+                else:
+                    self.artifacts[stage_id] = artifact
+                    self.states[stage_id] = NodeState.SUCCEEDED
+                    kept.append(stage_id)
             else:
                 reset[stage_id] = previous.get(stage_id, NodeState.PENDING).value
+        self._forced = set(triggers) & set(stale)
 
         discarded = []
         if self.git is not None and reset:
@@ -639,7 +695,18 @@ class Engine:
             policy_sha=self.policy.policy_sha, policy_changed=self.policy.policy_sha != started.payload["policy_sha"],
             workflow_sha=self._workflow_sha(),
             workflow_changed=self._workflow_sha() != started.payload.get("workflow_sha"),
+            requirement_sha=_sha(self.requirement),
         )
+        if stale:
+            self.events.append(
+                EventType.RUN_REPLANNED, reason=replan_reason or ("requirement changed" if requirement_changed else ""),
+                requested_from=sorted(replan_from), requirement_changed=requirement_changed,
+                stale=stale, forced=sorted(self._forced), requirement_sha=_sha(self.requirement),
+            )
+            for stage_id in stale:
+                self.states[stage_id] = NodeState.SUCCEEDED
+                self._transition(stage_id, NodeState.STALE, "re-plan: " + (
+                    "re-run requested" if stage_id in self._forced else "an upstream stage is being re-planned"))
         for stage_id, was in reset.items():
             if was != NodeState.PENDING.value:  # a sanctioned reset, recorded like any other transition
                 self.events.append(EventType.STAGE_STATE, stage_id, **{"from": was, "to": NodeState.PENDING.value},

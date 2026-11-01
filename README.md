@@ -3,10 +3,11 @@
 A governed agentic SDLC orchestrator (Python) that turns a requirement into a
 reviewed, tested URL shortener service (Java 17 / Spring Boot).
 
-> Status: **Step 3 — resilience.** Engine, gates, approvals, clarifications,
-> policy guardrails, audit log, LLM agents (Anthropic, OpenAI, assistant
-> session), rollback, fallback, safe-stop and resume are real. The greenfield
-> scenario's output lives in `url-shortener/`, its evidence in `runs/samples/`.
+> Status: **Step 5 — re-planning.** Engine, gates, approvals, clarifications,
+> change requests, policy guardrails, audit log, LLM agents (Anthropic, OpenAI,
+> assistant session), rollback, fallback, safe-stop, resume and lineage-based
+> re-planning are real. All three scenarios (greenfield, brownfield, ambiguous)
+> have run; their output is `url-shortener/` and their evidence `runs/samples/`.
 
 ## Setup
 
@@ -53,6 +54,8 @@ export OPENAI_API_KEY=...  OPENAI_MODEL=...
 
 .venv/bin/orch stop <run-id>           # safe-stop: nothing new starts; resumable
 .venv/bin/orch resume <run-id>         # continue a stopped, halted or failed run
+.venv/bin/orch replan <run-id> --from impact --reason "..."   # upstream changed: re-plan from a stage
+.venv/bin/orch replan <run-id> --requirement revised.md       # or from a revised requirement
 .venv/bin/orch status <run-id>         # state rebuilt from the event log alone
 .venv/bin/orch verify-audit <run-id>   # verify the hash chain (detects edits/deletions)
 ```
@@ -71,6 +74,8 @@ works in `runs/<run-id>/workspace` (its own git repository).
 | Fallback | `fallback: <agent>` gets one attempt after retries are exhausted or a refusal, with all feedback so far; policy blocks and rejections are final |
 | Git checkpoints | one commit per accepted stage containing only its files (`--no-git` to disable). An existing repository is used only if clean, and only on a new `orch/<run-id>` branch |
 | Safe-stop | `orch stop`, `--max-minutes`, `--max-cost-usd`: no new work starts, the run ends `HALTED`, resumable |
+| Re-planning | `orch replan` (or a changed requirement detected on resume) marks the stage and everything downstream `STALE`. The named stage re-runs; each stale stage downstream is then **reused** if the artifacts it was built from (its recorded lineage) are unchanged, and **re-run** otherwise. Reused artifacts keep their approvals; re-run content needs fresh ones |
+| Change requests | rejecting a workflow approval *with a comment* sends the comment back to the agent as a binding instruction (bounded by `max_revisions`); each revision allows one more clarification round |
 | Resume | rebuilds state from the verified log; keeps accepted stages (artifact files checked against their recorded hashes), resets the rest, discards an interrupted stage's uncommitted files. Persisted approvals are bound to the exact content approved, so a resumed run that produces something different needs a new decision |
 
 ## Agents
