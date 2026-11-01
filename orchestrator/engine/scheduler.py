@@ -324,7 +324,10 @@ class Engine:
                 # Undo this attempt before anything else happens, so the next attempt (or the next
                 # stage) never builds on rejected output.
                 self._revert(stage, ctx.changes, progress, f"exit gate(s) failed: {[r.gate for r in failed]}")
-            if failed and all(r.questions for r in failed) and progress.rounds < stage.clarification.max_rounds:
+            # Each reviewer change request may legitimately raise new questions: one extra round per revision,
+            # so the total stays bounded at max_rounds + max_revisions.
+            round_budget = stage.clarification.max_rounds + progress.revisions
+            if failed and all(r.questions for r in failed) and progress.rounds < round_budget:
                 # Only a human can resolve these: ask, then re-run the agent with the answers.
                 progress.rounds += 1
                 response, why = await self._clarify(stage, artifact, [q for r in failed for q in r.questions],

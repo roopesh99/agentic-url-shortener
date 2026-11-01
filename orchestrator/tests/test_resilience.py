@@ -413,3 +413,38 @@ async def test_rejection_without_a_comment_is_final_and_revisions_are_bounded(bu
                            approver=ScriptedApprover((False, "change 1"), (False, "change 2")))
     assert (await bounded.run()).states["b"] is S.FAILED
     assert len(recorder.attempts("b")) == 2
+
+
+async def test_a_revision_earns_one_more_clarification_round(build_engine, recorder, gates):
+    """Rounds exhausted, then a change request raises a new question: it gets answered, not failed."""
+    from orchestrator.approvals.service import ClarificationResponse
+
+    class AsksAfterRevision(Gate):
+        name = "asks_after_revision"
+
+        async def check(self, ctx):
+            attempt = int(ctx.artifact.produced_by.rsplit("#", 1)[1])
+            answered = {c["question"] for c in ctx.artifact.result.outputs.get("clarifications", [])}
+            q = {1: "first question?", 3: "question raised by the revision?"}.get(attempt)
+            if q and q not in answered:
+                result = self.result(False, "open question")
+                result.questions = [{"question": q, "why": ""}]
+                return result
+            return self.result(True, "resolved")
+
+    class Reviewer(ScriptedApprover):
+        async def clarify(self, request):
+            return ClarificationResponse(answers=[{"question": q["question"], "answer": "yes"}
+                                                  for q in request.questions], answered_by="reviewer")
+
+    gates.register(AsksAfterRevision.name, AsksAfterRevision)
+    engine = build_engine(
+        wf(stage(approval="required", max_revisions=1, clarification={"max_rounds": 1},
+                 exit_gates=["asks_after_revision"])),
+        {"x": make_agent(recorder)},
+        approver=Reviewer((False, "please change X"), (True, "")))
+    # attempt 1: question (round 1 of 1) -> attempt 2: passes, rejected with a comment (revision 1)
+    # -> attempt 3: new question; without the extra round this would fail -> attempt 4: approved
+    assert (await engine.run()).succeeded
+    assert [e.payload["round"] for e in events(engine, EventType.CLARIFICATION_ANSWERED)] == [1, 2]
+    assert len(recorder.attempts("impl")) == 4
