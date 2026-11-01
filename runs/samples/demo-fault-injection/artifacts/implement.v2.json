@@ -1,0 +1,31 @@
+{
+  "name": "implement",
+  "version": 2,
+  "sha": "ed62538d06da0e4dafbddf090be304c3a2db6bb40b4f62f1ab3a9c087b6c0b55",
+  "produced_by": "implement/flaky_coder#2",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 1,
+      "sha": "03ec2826810dd06de636d12283722328f3862dbada5df4dae83b8719899c590e"
+    }
+  ],
+  "result": {
+    "summary": "flaky_coder: wrote 4 file(s)",
+    "outputs": {
+      "files": [
+        "url-shortener/pom.xml",
+        "url-shortener/src/main/java/com/example/shortener/ShortUrlController.java",
+        "url-shortener/src/main/java/com/example/shortener/ShortUrlService.java",
+        "url-shortener/src/main/java/com/example/shortener/ShortenerApplication.java"
+      ]
+    },
+    "files_written": [
+      "url-shortener/pom.xml",
+      "url-shortener/src/main/java/com/example/shortener/ShortUrlController.java",
+      "url-shortener/src/main/java/com/example/shortener/ShortUrlService.java",
+      "url-shortener/src/main/java/com/example/shortener/ShortenerApplication.java"
+    ],
+    "decisions": []
+  }
+}

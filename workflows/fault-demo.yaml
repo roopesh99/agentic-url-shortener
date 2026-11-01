@@ -1,0 +1,44 @@
+# Fault-injection demo (stub agents only): the skeleton lifecycle with two injected faults, so a
+# real run exercises and records failure retries, rollback, fallback and recovery (MTTR).
+#   implement: flaky_coder ships non-compiling code once -> gate fails -> rollback -> retry succeeds
+#   test:      refusing_tester declines (non-retryable) -> fallback agent `tester` succeeds
+name: fault-demo
+version: "1"
+description: Skeleton lifecycle with injected faults to demonstrate recovery and its metrics
+
+stages:
+  - id: requirements
+    agent: analyst
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [goal, functional, non_functional] }
+      - ambiguities_resolved
+
+  - id: implement
+    agent: flaky_coder
+    needs: [requirements]
+    write_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
+    exit_gates:
+      - name: maven_test
+        args: { project: url-shortener, goal: compile, timeout_seconds: 600 }
+    retry: { max_attempts: 3, backoff_seconds: 1 }
+
+  - id: test_plan
+    agent: test_planner
+    needs: [requirements]
+    write_scope: ["docs/test-plan.md"]
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [test_cases] }
+
+  - id: test
+    agent: refusing_tester
+    fallback: tester
+    needs: [implement, test_plan]
+    write_scope: ["url-shortener/src/test/**"]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**", "url-shortener/src/test/**"]
+    exit_gates:
+      - name: maven_test
+        args: { project: url-shortener, timeout_seconds: 600 }
+    retry: { max_attempts: 2, backoff_seconds: 1 }

@@ -1,0 +1,225 @@
+{
+  "name": "requirements",
+  "version": 1,
+  "sha": "4c62a055f53aca3d75fec5916dd0e0c721a97c5bc75acf085c6c70ba7cb3cf57",
+  "produced_by": "requirements/analyst#1",
+  "inputs": [],
+  "result": {
+    "summary": "11 requirements (6 functional, 5 non-functional); 15 ambiguities identified (9 provisionally resolved by assumptions, 6 unresolved).",
+    "outputs": {
+      "goal": "Provide a locally runnable HTTP service that creates shareable short links for HTTP(S) URLs, optionally with custom aliases and expirations. The service must redirect visitors to active links, expose link metadata, support deletion, and provide a health endpoint.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "Accept a long URL and optionally a custom alias; create a short link and return its short code and shareable URL."
+        },
+        {
+          "id": "FR2",
+          "text": "Optionally associate an expiry with a short link; do not redirect visitors to the original URL once the link has expired."
+        },
+        {
+          "id": "FR3",
+          "text": "When a visitor requests an active short link, redirect them to its original URL."
+        },
+        {
+          "id": "FR4",
+          "text": "Return a short link's original URL, creation time, and expiry when requested."
+        },
+        {
+          "id": "FR5",
+          "text": "Delete a short link."
+        },
+        {
+          "id": "FR6",
+          "text": "Provide a health endpoint for operations."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "The redirect path has a target in-process p99 latency below 50 ms."
+        },
+        {
+          "id": "NFR2",
+          "text": "Accept only HTTP and HTTPS URLs, and reject URLs targeting obviously malicious or internal-network destinations."
+        },
+        {
+          "id": "NFR3",
+          "text": "Protect the create endpoint from abuse."
+        },
+        {
+          "id": "NFR4",
+          "text": "Run locally with a single command and without external infrastructure."
+        },
+        {
+          "id": "NFR5",
+          "text": "Provide automated tests with meaningful coverage."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "What HTTP routes, request and response formats, and ordinary validation-error responses should the service use?",
+          "resolution": "Assume a JSON API: POST /links with {\"url\":\"...\",\"alias\":\"...\",\"expiresAt\":\"...\"} creates a link and returns 201 with its code, short URL, and metadata; GET /{code} redirects; GET /links/{code} returns metadata; DELETE /links/{code} deletes; and GET /health reports health. Use 400 for invalid input, 404 for missing links, and 204 for successful deletion.",
+          "source": "assumption",
+          "rationale": "These are conventional REST-style routes and HTTP responses, easy for clients to use and change if product requirements later specify a different contract."
+        },
+        {
+          "question": "What length and alphabet should generated short codes use, and how should generated-code collisions be handled?",
+          "resolution": "Assume uniformly generated, cryptographically random 7-character codes using ASCII letters and digits (base62); retry generation if a code already exists.",
+          "source": "assumption",
+          "rationale": "A compact alphanumeric code is URL-friendly, and retrying on collision is a standard low-risk uniqueness strategy."
+        },
+        {
+          "question": "What characters, length limits, and case-sensitivity rules apply to custom aliases?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "Alias rules affect which user-chosen links are accepted and whether distinct spellings identify the same link; the requirement supplies no product policy."
+        },
+        {
+          "question": "Which redirect status code should active links use?",
+          "resolution": "Assume 302 Found.",
+          "source": "assumption",
+          "rationale": "A temporary redirect avoids clients and intermediaries permanently caching a destination, which is safer for a service where links can expire or be deleted."
+        },
+        {
+          "question": "What should happen when a requested custom alias is already taken?",
+          "resolution": "Return 409 Conflict and do not create a link.",
+          "source": "assumption",
+          "rationale": "409 conventionally represents a conflict with the current resource state and clearly distinguishes this case from malformed input."
+        },
+        {
+          "question": "What rate limit applies to link creation, over what interval, and how are clients identified (for example, by IP address)?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "The requirement explicitly leaves thresholds open. Limits and client identity affect both abuse resistance and legitimate use, and there is no universally safe default."
+        },
+        {
+          "question": "What expiry timestamp format and time-zone convention apply, and how should expiry at the boundary or an expiry in the past be handled?",
+          "resolution": "Assume RFC 3339 timestamps with an explicit offset, normalize comparisons to UTC, consider a link expired when current time is greater than or equal to its expiry, and reject creation requests whose expiry is not in the future.",
+          "source": "assumption",
+          "rationale": "RFC 3339 with explicit offsets is a common interoperable API format; UTC comparisons and rejecting already-expired links avoid ambiguous or ineffective links."
+        },
+        {
+          "question": "What response should be given for expired links, and what are the exact deletion semantics?",
+          "resolution": "Assume expired and unknown codes both return 404 on redirect and metadata requests; retain metadata for an expired link while it exists. Assume deletion removes the link, returns 204 on success, and subsequent requests (including repeated deletion) return 404.",
+          "source": "assumption",
+          "rationale": "404 is conventional for unavailable resources and avoids disclosing whether a code exists. Hard deletion and a 204 response are simple, conventional deletion semantics."
+        },
+        {
+          "question": "Who is allowed to fetch metadata or delete a link, and is authentication or authorization required?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "Access to original URLs and the ability to delete links are security and privacy policy decisions. Assuming either public access or ownership-based access could expose data or prevent intended use."
+        },
+        {
+          "question": "Must links survive service restarts, and where should local link data be stored?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "Running without external infrastructure does not specify whether storage may be ephemeral or must be durable. Restart data loss could materially affect users."
+        },
+        {
+          "question": "Precisely which destinations count as malicious or internal, and should validation cover DNS-resolved addresses, IPv4, IPv6, and address changes over time?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "The requirement does not define a destination policy. A wrong allow/block rule can create security exposure or reject legitimate URLs, so the policy and its validation point require a product/security decision."
+        },
+        {
+          "question": "How should the service determine the canonical public base URL used to construct the shareable URL it returns?",
+          "resolution": "Assume the deployment provides a configurable canonical public base URL; use the local service URL in local runs.",
+          "source": "assumption",
+          "rationale": "A configured base URL is a conventional way to produce correct shareable links across local and deployed environments without trusting arbitrary request host headers."
+        },
+        {
+          "question": "What traffic volume, concurrency, measurement window, and runtime conditions define the p99 latency target?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "A p99 target cannot be reproduced or meaningfully verified without a workload and measurement conditions; these determine whether the target is met."
+        },
+        {
+          "question": "What should the health endpoint check and return?",
+          "resolution": "Assume GET /health is a liveness check: return 200 when the process can serve requests, with a simple JSON healthy status; do not require external dependencies.",
+          "source": "assumption",
+          "rationale": "A dependency-free liveness check is a conventional, low-risk operational default for a locally runnable service."
+        },
+        {
+          "question": "Does meaningful automated test coverage require a numerical coverage threshold?",
+          "resolution": "Assume no numerical percentage is required; tests should exercise every functional requirement and the important invalid-input, expiry, collision, deletion, and rate-limit paths.",
+          "source": "assumption",
+          "rationale": "The requirement gives no target percentage. Requirement-based behavioral coverage is directly verifiable without inventing an arbitrary metric."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given a valid HTTP(S) URL, when a client submits it to POST /links, the service returns 201 with a unique code and shareable URL, and a metadata request returns the original URL, creation time, and expiry value (null if none was supplied).",
+        "Given a valid custom alias that is available, when a client creates a link with that alias, the returned short URL uses that alias.",
+        "Given a custom alias that is already taken, when a client submits it, the service returns 409 and does not create a second link for that alias.",
+        "Given an invalid URL or a scheme other than HTTP or HTTPS, when a client submits it, the service rejects the request with 400 and creates no link.",
+        "Given an expiry that is not in the future, when a client submits it, the service rejects the request with 400 and creates no link.",
+        "Given an active short code, when a visitor requests GET /{code}, the service returns 302 with a Location header containing the original URL.",
+        "Given a link whose expiry time has arrived, when a visitor requests its short code, the service does not redirect and returns 404; a metadata request still returns its metadata while the link exists.",
+        "Given an unknown short code, when a visitor requests it, the service returns 404.",
+        "Given an existing link, when a client deletes it, the service returns 204 and subsequent redirect and metadata requests return 404.",
+        "Given a request to GET /health while the process is serving requests, the service returns 200 and a healthy status.",
+        "Given a create request that exceeds the rate limit once that policy is decided, the service rejects it with 429 and does not create a link.",
+        "Given the agreed workload and measurement conditions once defined, the in-process redirect-path p99 latency is below 50 ms.",
+        "Given the service's documented local command, when it is run without external infrastructure, the service starts and its automated tests exercise the functional requirements and identified important failure paths."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "What HTTP routes, request and response formats, and ordinary validation-error responses should the service use?",
+        "choice": "Assume a JSON API: POST /links with {\"url\":\"...\",\"alias\":\"...\",\"expiresAt\":\"...\"} creates a link and returns 201 with its code, short URL, and metadata; GET /{code} redirects; GET /links/{code} returns metadata; DELETE /links/{code} deletes; and GET /health reports health. Use 400 for invalid input, 404 for missing links, and 204 for successful deletion.",
+        "rationale": "These are conventional REST-style routes and HTTP responses, easy for clients to use and change if product requirements later specify a different contract.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What length and alphabet should generated short codes use, and how should generated-code collisions be handled?",
+        "choice": "Assume uniformly generated, cryptographically random 7-character codes using ASCII letters and digits (base62); retry generation if a code already exists.",
+        "rationale": "A compact alphanumeric code is URL-friendly, and retrying on collision is a standard low-risk uniqueness strategy.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Which redirect status code should active links use?",
+        "choice": "Assume 302 Found.",
+        "rationale": "A temporary redirect avoids clients and intermediaries permanently caching a destination, which is safer for a service where links can expire or be deleted.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What should happen when a requested custom alias is already taken?",
+        "choice": "Return 409 Conflict and do not create a link.",
+        "rationale": "409 conventionally represents a conflict with the current resource state and clearly distinguishes this case from malformed input.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What expiry timestamp format and time-zone convention apply, and how should expiry at the boundary or an expiry in the past be handled?",
+        "choice": "Assume RFC 3339 timestamps with an explicit offset, normalize comparisons to UTC, consider a link expired when current time is greater than or equal to its expiry, and reject creation requests whose expiry is not in the future.",
+        "rationale": "RFC 3339 with explicit offsets is a common interoperable API format; UTC comparisons and rejecting already-expired links avoid ambiguous or ineffective links.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What response should be given for expired links, and what are the exact deletion semantics?",
+        "choice": "Assume expired and unknown codes both return 404 on redirect and metadata requests; retain metadata for an expired link while it exists. Assume deletion removes the link, returns 204 on success, and subsequent requests (including repeated deletion) return 404.",
+        "rationale": "404 is conventional for unavailable resources and avoids disclosing whether a code exists. Hard deletion and a 204 response are simple, conventional deletion semantics.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How should the service determine the canonical public base URL used to construct the shareable URL it returns?",
+        "choice": "Assume the deployment provides a configurable canonical public base URL; use the local service URL in local runs.",
+        "rationale": "A configured base URL is a conventional way to produce correct shareable links across local and deployed environments without trusting arbitrary request host headers.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What should the health endpoint check and return?",
+        "choice": "Assume GET /health is a liveness check: return 200 when the process can serve requests, with a simple JSON healthy status; do not require external dependencies.",
+        "rationale": "A dependency-free liveness check is a conventional, low-risk operational default for a locally runnable service.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Does meaningful automated test coverage require a numerical coverage threshold?",
+        "choice": "Assume no numerical percentage is required; tests should exercise every functional requirement and the important invalid-input, expiry, collision, deletion, and rate-limit paths.",
+        "rationale": "The requirement gives no target percentage. Requirement-based behavioral coverage is directly verifiable without inventing an arbitrary metric.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

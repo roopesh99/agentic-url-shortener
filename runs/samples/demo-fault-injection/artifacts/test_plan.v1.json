@@ -1,0 +1,46 @@
+{
+  "name": "test_plan",
+  "version": 1,
+  "sha": "9d864f001b4c783e36c1170893923b28b285dec18771f1d45ab21fd8dbc2d23e",
+  "produced_by": "test_plan/test_planner#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 1,
+      "sha": "03ec2826810dd06de636d12283722328f3862dbada5df4dae83b8719899c590e"
+    }
+  ],
+  "result": {
+    "summary": "3 test cases for skeleton scope ['FR1', 'FR3', 'NFR2']",
+    "outputs": {
+      "test_cases": [
+        {
+          "id": "TC-FR1-01",
+          "covers": "FR1",
+          "check": "Create a short link for a long URL. Optionally accept a custom alias."
+        },
+        {
+          "id": "TC-FR3-01",
+          "covers": "FR3",
+          "check": "Visiting a short link redirects to the original URL."
+        },
+        {
+          "id": "TC-NFR2-01",
+          "covers": "NFR2",
+          "check": "Only `http`/`https` URLs are accepted; reject obviously malicious or"
+        }
+      ]
+    },
+    "files_written": [
+      "docs/test-plan.md"
+    ],
+    "decisions": [
+      {
+        "topic": "skeleton scope",
+        "choice": "FR1, FR3, NFR2",
+        "rationale": "walking skeleton proves the pipeline; full scope comes with LLM agents",
+        "source": "agent"
+      }
+    ]
+  }
+}

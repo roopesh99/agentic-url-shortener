@@ -3,7 +3,7 @@
 A governed agentic SDLC orchestrator (Python) that turns a requirement into a
 reviewed, tested URL shortener service (Java 17 / Spring Boot).
 
-> Status: **Step 5 — re-planning.** Engine, gates, approvals, clarifications,
+> Status: **Step 6 — metrics and reports.** Engine, gates, approvals, clarifications,
 > change requests, policy guardrails, audit log, LLM agents (Anthropic, OpenAI,
 > assistant session), rollback, fallback, safe-stop, resume and lineage-based
 > re-planning are real. All three scenarios (greenfield, brownfield, ambiguous)
@@ -57,6 +57,8 @@ export OPENAI_API_KEY=...  OPENAI_MODEL=...
 .venv/bin/orch replan <run-id> --from impact --reason "..."   # upstream changed: re-plan from a stage
 .venv/bin/orch replan <run-id> --requirement revised.md       # or from a revised requirement
 .venv/bin/orch status <run-id>         # state rebuilt from the event log alone
+.venv/bin/orch report <run-id>         # reliability, latency, human decisions, timeline (markdown; --json)
+.venv/bin/orch report --all            # metrics across every run in --runs-dir
 .venv/bin/orch verify-audit <run-id>   # verify the hash chain (detects edits/deletions)
 ```
 
@@ -77,6 +79,24 @@ works in `runs/<run-id>/workspace` (its own git repository).
 | Re-planning | `orch replan` (or a changed requirement detected on resume) marks the stage and everything downstream `STALE`. The named stage re-runs; each stale stage downstream is then **reused** if the artifacts it was built from (its recorded lineage) are unchanged, and **re-run** otherwise. Reused artifacts keep their approvals; re-run content needs fresh ones |
 | Change requests | rejecting a workflow approval *with a comment* sends the comment back to the agent as a binding instruction (bounded by `max_revisions`); each revision allows one more clarification round |
 | Resume | rebuilds state from the verified log; keeps accepted stages (artifact files checked against their recorded hashes), resets the rest, discards an interrupted stage's uncommitted files. Persisted approvals are bound to the exact content approved, so a resumed run that produces something different needs a new decision |
+
+## Metrics and reports
+
+`orch report` derives everything from the hash-chained event log (it refuses a log that fails
+verification), so every number can be recomputed from the audit trail:
+
+| Metric | Definition |
+|---|---|
+| Run / stage success rate | final status per run; executed stages that succeeded (skipped stages never ran) |
+| Retries | split by cause: failure (agent error, gate, policy) vs clarification, change request, fallback |
+| Rollbacks | reverted change sets, and stages ending `ROLLED_BACK` |
+| Incidents, MTTR | opens at a stage's first failure (incl. a fallback), closes at its next success; mean time open, including time stopped before a person fixed it |
+| Latency | end to end, split into active, waiting for humans (parallel waits counted once), stopped between processes; per-stage agent and gate time |
+| Human decisions | approvals, rejections, change requests, clarification answers; decisions replayed by a resume counted once |
+
+Reports for every recorded run are in `runs/samples/<run>/report.md`, and the cross-run summary in
+[`runs/samples/REPORT.md`](runs/samples/REPORT.md). `workflows/fault-demo.yaml` injects two faults
+(stub agents only) so a real run records a failure retry, a rollback, a fallback and their recovery.
 
 ## Agents
 

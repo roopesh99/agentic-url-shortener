@@ -1,5 +1,5 @@
 """Command-line entry point:
-`orch run | resume | replan | stop | status | verify-audit | pending | approve | answer | respond`."""
+`orch run | resume | replan | stop | status | report | verify-audit | pending | approve | answer | respond`."""
 
 from __future__ import annotations
 
@@ -186,6 +186,37 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    from .observability.metrics import Portfolio, compute
+    from .observability.report import render_portfolio, render_run
+
+    runs_dir = Path(args.runs_dir)
+    if args.all:
+        logs = sorted(runs_dir.glob("*/events.jsonl"))
+        if not logs:
+            print(f"error: no runs in {runs_dir}", file=sys.stderr)
+            return 2
+        portfolio = Portfolio([compute(EventStore.load(path)) for path in logs])
+        text = json.dumps(portfolio.as_dict(), indent=2, default=str) if args.json else render_portfolio(portfolio)
+    else:
+        if not args.run_id:
+            print("error: give a run id or --all", file=sys.stderr)
+            return 2
+        path = runs_dir / args.run_id / "events.jsonl"
+        ok, message = EventStore.verify(path)
+        if not ok:
+            print(f"error: refusing to report on an unverifiable log ({message})", file=sys.stderr)
+            return 2
+        metrics = compute(EventStore.load(path))
+        text = json.dumps(metrics.as_dict(), indent=2, default=str) if args.json else render_run(metrics)
+    if args.out:
+        write_atomic(Path(args.out), text)
+        print(f"wrote {args.out}")
+    else:
+        print(text)
+    return 0
+
+
 def cmd_verify_audit(args: argparse.Namespace) -> int:
     ok, message = EventStore.verify(Path(args.runs_dir) / args.run_id / "events.jsonl")
     print(("OK: " if ok else "TAMPERED: ") + message)
@@ -343,6 +374,13 @@ def main(argv: list[str] | None = None) -> int:
     status = sub.add_parser("status", help="rebuild run state from its event log")
     status.add_argument("run_id")
     status.set_defaults(func=cmd_status)
+
+    report = sub.add_parser("report", help="reliability metrics, latency, human decisions and timeline for a run")
+    report.add_argument("run_id", nargs="?")
+    report.add_argument("--all", action="store_true", help="aggregate every run in --runs-dir")
+    report.add_argument("--json", action="store_true", help="machine-readable metrics instead of markdown")
+    report.add_argument("--out", help="write to this file instead of stdout")
+    report.set_defaults(func=cmd_report)
 
     verify = sub.add_parser("verify-audit", help="verify the event log hash chain")
     verify.add_argument("run_id")

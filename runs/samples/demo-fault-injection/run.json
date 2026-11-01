@@ -1,0 +1,20 @@
+{
+  "workflow": "/Users/roopeshkotte/IdeaProjects/agentic-url-shortener/workflows/fault-demo.yaml",
+  "requirement": "/Users/roopeshkotte/IdeaProjects/agentic-url-shortener/scenarios/greenfield.md",
+  "workspace": "/Users/roopeshkotte/IdeaProjects/agentic-url-shortener/runs/demo-fault-injection/workspace",
+  "policy": "/Users/roopeshkotte/IdeaProjects/agentic-url-shortener/policies/default.yaml",
+  "max_parallel": 4,
+  "agents": "stub",
+  "llm": "replay",
+  "cassettes": null,
+  "llm_config": null,
+  "provider": "anthropic",
+  "model": null,
+  "session_agents": null,
+  "approvals": "cli",
+  "auto_approve": true,
+  "answers": null,
+  "max_cost_usd": null,
+  "max_minutes": null,
+  "git": true
+}

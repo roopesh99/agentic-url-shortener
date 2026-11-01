@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from ..engine.models import AgentResult, Decision
-from .base import Agent, AgentContext, AgentRegistry
+from .base import Agent, AgentContext, AgentRegistry, FatalAgentError
 
 TEMPLATES = Path(__file__).parent / "templates" / "skeleton"
 
@@ -148,8 +148,34 @@ class StubTester(_TemplateAgent):
         return rel.startswith("url-shortener/src/test/")
 
 
+class FlakyCoder(StubCoder):
+    """Fault injection for workflows/fault-demo.yaml: the first attempt ships code that does not
+    compile, so the compile gate fails, the change is rolled back, and the retry (which sees the
+    compiler output as feedback) ships the correct code."""
+
+    name = "flaky_coder"
+
+    async def run(self, ctx: AgentContext) -> AgentResult:
+        result = await super().run(ctx)
+        if ctx.attempt == 1:
+            path = "url-shortener/src/main/java/com/example/shortener/ShortUrlService.java"
+            broken = (ctx.read_file(path) or "").replace("return code;", "return code  // missing semicolon")
+            ctx.write_file(path, broken)
+        return result
+
+
+class RefusingTester(StubTester):
+    """Fault injection: behaves like a model that declines the request, a non-retryable failure the
+    stage's fallback agent then handles."""
+
+    name = "refusing_tester"
+
+    async def run(self, ctx: AgentContext) -> AgentResult:
+        raise FatalAgentError("model declined the request (category: demo fault injection)")
+
+
 def stub_agents() -> AgentRegistry:
     registry = AgentRegistry()
-    for agent in (StubAnalyst, StubImpactAnalyst, StubTestPlanner, StubCoder, StubTester):
+    for agent in (StubAnalyst, StubImpactAnalyst, StubTestPlanner, StubCoder, StubTester, FlakyCoder, RefusingTester):
         registry.register(agent.name, agent)
     return registry

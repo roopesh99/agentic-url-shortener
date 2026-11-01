@@ -1,0 +1,110 @@
+{
+  "name": "requirements",
+  "version": 1,
+  "sha": "03ec2826810dd06de636d12283722328f3862dbada5df4dae83b8719899c590e",
+  "produced_by": "requirements/analyst#1",
+  "inputs": [],
+  "result": {
+    "summary": "6 functional, 5 non-functional requirements; 4 ambiguities (4 resolved)",
+    "outputs": {
+      "goal": "Provide an HTTP service that turns long URLs into short, shareable links and redirects visitors from the short link to the original URL.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "Create a short link for a long URL. Optionally accept a custom alias."
+        },
+        {
+          "id": "FR2",
+          "text": "Optionally accept an expiry; expired links must stop redirecting."
+        },
+        {
+          "id": "FR3",
+          "text": "Visiting a short link redirects to the original URL."
+        },
+        {
+          "id": "FR4",
+          "text": "Fetch metadata for a short link (original URL, created, expiry)."
+        },
+        {
+          "id": "FR5",
+          "text": "Delete a short link."
+        },
+        {
+          "id": "FR6",
+          "text": "Health endpoint for operations."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Redirect path is latency-sensitive (target p99 < 50 ms in-process)."
+        },
+        {
+          "id": "NFR2",
+          "text": "Only `http`/`https` URLs are accepted; reject obviously malicious or"
+        },
+        {
+          "id": "NFR3",
+          "text": "Protect the create endpoint from abuse."
+        },
+        {
+          "id": "NFR4",
+          "text": "Runs locally with a single command; no external infrastructure."
+        },
+        {
+          "id": "NFR5",
+          "text": "Automated tests with meaningful coverage."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "Short-code length / alphabet not specified.",
+          "resolution": "Base62 alphabet, 7 characters (~3.5e12 codes)",
+          "source": "assumption"
+        },
+        {
+          "question": "Redirect status code (301 vs 302) not specified.",
+          "resolution": "302 Found",
+          "source": "assumption"
+        },
+        {
+          "question": "Behaviour when a custom alias is already taken.",
+          "resolution": "409 Conflict",
+          "source": "assumption"
+        },
+        {
+          "question": "Rate-limit thresholds not specified.",
+          "resolution": "20 creates/min per client IP",
+          "source": "assumption"
+        }
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Short-code length / alphabet not specified.",
+        "choice": "Base62 alphabet, 7 characters (~3.5e12 codes)",
+        "rationale": "short, URL-safe, low collision odds",
+        "source": "assumption"
+      },
+      {
+        "topic": "Redirect status code (301 vs 302) not specified.",
+        "choice": "302 Found",
+        "rationale": "keeps links expirable/deletable; 301 is cached by browsers",
+        "source": "assumption"
+      },
+      {
+        "topic": "Behaviour when a custom alias is already taken.",
+        "choice": "409 Conflict",
+        "rationale": "never silently reassign or overwrite a user's alias",
+        "source": "assumption"
+      },
+      {
+        "topic": "Rate-limit thresholds not specified.",
+        "choice": "20 creates/min per client IP",
+        "rationale": "conservative default; configurable",
+        "source": "assumption"
+      }
+    ]
+  }
+}

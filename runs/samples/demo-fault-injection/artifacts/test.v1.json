@@ -1,0 +1,35 @@
+{
+  "name": "test",
+  "version": 1,
+  "sha": "59f23d2d8eed35d6747c38617854a50d6f2879bf4010dcf638ea6c5182031d5c",
+  "produced_by": "test/tester#2",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 1,
+      "sha": "03ec2826810dd06de636d12283722328f3862dbada5df4dae83b8719899c590e"
+    },
+    {
+      "name": "implement",
+      "version": 2,
+      "sha": "ed62538d06da0e4dafbddf090be304c3a2db6bb40b4f62f1ab3a9c087b6c0b55"
+    },
+    {
+      "name": "test_plan",
+      "version": 1,
+      "sha": "9d864f001b4c783e36c1170893923b28b285dec18771f1d45ab21fd8dbc2d23e"
+    }
+  ],
+  "result": {
+    "summary": "tester: wrote 1 file(s)",
+    "outputs": {
+      "files": [
+        "url-shortener/src/test/java/com/example/shortener/ShortUrlControllerTest.java"
+      ]
+    },
+    "files_written": [
+      "url-shortener/src/test/java/com/example/shortener/ShortUrlControllerTest.java"
+    ],
+    "decisions": []
+  }
+}
