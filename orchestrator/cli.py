@@ -72,7 +72,7 @@ def _approver(args: argparse.Namespace, run_dir: Path):
 # Paths and choices only: credentials come from the environment, never from here.
 RUN_SETTINGS = ("workflow", "requirement", "workspace", "policy", "max_parallel", "agents", "llm", "cassettes",
                 "llm_config", "provider", "model", "session_agents", "approvals", "auto_approve", "answers",
-                "max_cost_usd", "max_minutes", "git")
+                "recorded_decisions", "max_cost_usd", "max_minutes", "git")
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -88,8 +88,25 @@ def cmd_run(args: argparse.Namespace) -> int:
         if getattr(args, name):
             setattr(args, name, str(Path(getattr(args, name)).resolve()))
     run_dir.mkdir(parents=True, exist_ok=True)
+    if args.recorded_decisions:
+        _seed_decisions(Path(args.recorded_decisions), run_dir / "approvals")
+        args.recorded_decisions = str(Path(args.recorded_decisions).resolve())
+        args.approvals, args.auto_approve = "file", False
     write_atomic(run_dir / "run.json", json.dumps({k: getattr(args, k) for k in RUN_SETTINGS}, indent=2))
     return _execute(args, workflow, run_id, run_dir, resume=False)
+
+
+def _seed_decisions(source: Path, approvals: Path) -> None:
+    """Replay recorded human decisions. Their ids are content hashes (artifact or question set), so a
+    decision only ever applies to the exact content it was made on; anything else waits for a person."""
+    if not source.is_dir():
+        raise FileNotFoundError(f"no recorded decisions directory {source}")
+    approvals.mkdir(parents=True, exist_ok=True)
+    seeded = 0
+    for path in sorted(source.glob("*.decision.json")) + sorted(source.glob("*.answered.json")):
+        write_atomic(approvals / path.name, path.read_text(encoding="utf-8"))
+        seeded += 1
+    print(f"seeded {seeded} recorded human decision(s) from {source}", flush=True)
 
 
 def cmd_resume(args: argparse.Namespace, replan_from: list[str] | None = None, replan_reason: str = "") -> int:
@@ -319,6 +336,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--auto-approve", action="store_true", help="same as --approvals auto")
     run.add_argument("--answers", help="reviewed answers file for open questions (deterministic replays); "
                                        "questions it does not cover go to the approver")
+    run.add_argument("--recorded-decisions", help="replay the human decisions recorded in a run's approvals/ "
+                                                  "directory (implies --approvals file; content-bound, so they "
+                                                  "only apply to identical content)")
     run.add_argument("--max-cost-usd", type=float, help="safe-stop the run once LLM spend reaches this")
     run.add_argument("--max-minutes", type=float, help="safe-stop the run after this much wall-clock time")
     run.add_argument("--no-git", dest="git", action="store_false",

@@ -1,13 +1,30 @@
 # Agentic URL Shortener
 
 A governed agentic SDLC orchestrator (Python) that turns a requirement into a
-reviewed, tested URL shortener service (Java 17 / Spring Boot).
+reviewed, tested service, and the URL shortener (Java 17 / Spring Boot) it built
+and then changed twice: greenfield, brownfield, and from a deliberately vague request.
 
-> Status: **Step 6 — metrics and reports.** Engine, gates, approvals, clarifications,
-> change requests, policy guardrails, audit log, LLM agents (Anthropic, OpenAI,
-> assistant session), rollback, fallback, safe-stop, resume and lineage-based
-> re-planning are real. All three scenarios (greenfield, brownfield, ambiguous)
-> have run; their output is `url-shortener/` and their evidence `runs/samples/`.
+**Agents propose, the orchestrator verifies, humans decide.** Explicit stage DAGs with
+gates, parallel paths and joins; a policy engine; approvals, clarifications and change
+requests; bounded retries, rollback, fallback, safe-stop, resume and lineage-based
+re-planning; a hash-chained audit log; reliability metrics computed from it.
+
+| Start here | |
+|---|---|
+| [docs/FINAL_SUMMARY.md](docs/FINAL_SUMMARY.md) | what was built, how the requirements are met, results, assumptions, limitations |
+| [docs/SCENARIOS.md](docs/SCENARIOS.md) | the three scenarios: decomposition, orchestration, validation |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | components, orchestration model, control flow, data model |
+| [docs/DECISIONS.md](docs/DECISIONS.md) · [docs/RISKS.md](docs/RISKS.md) | design decisions; risks, trade-offs, limitations |
+| [docs/SETUP.md](docs/SETUP.md) · [docs/TESTING.md](docs/TESTING.md) | running everything; testing approach |
+| [runs/samples/REPORT.md](runs/samples/REPORT.md) | metrics across the recorded runs |
+
+Reproduce all three scenarios offline (no API key, $0), checking the generated code
+against the committed result:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+scripts/replay-scenarios.sh
+```
 
 ## Setup
 

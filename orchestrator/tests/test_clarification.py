@@ -192,3 +192,20 @@ async def test_record_mode_reuses_saved_exchanges_and_rerecord_does_not(tmp_path
     assert Counting.calls == 1 and again.source == "cassette"
     await CassetteLLM(tmp_path, Mode.RERECORD, Counting()).complete(req)
     assert Counting.calls == 2
+
+
+def test_recorded_decisions_seed_only_decisions_and_answers(tmp_path):
+    from orchestrator.cli import _seed_decisions
+
+    recorded = tmp_path / "recorded"
+    recorded.mkdir()
+    (recorded / "requirements-abc123.request.json").write_text("{}")         # requests are not copied
+    (recorded / "requirements-abc123.decision.json").write_text('{"approved": true}')
+    (recorded / "requirements-clarify-1-def456.answered.json").write_text("{}")
+    (recorded / "requirements-clarify-1-def456.answers.yaml").write_text("[]")
+    target = tmp_path / "run" / "approvals"
+    _seed_decisions(recorded, target)
+    assert sorted(p.name for p in target.iterdir()) == [
+        "requirements-abc123.decision.json", "requirements-clarify-1-def456.answered.json"]
+    with pytest.raises(FileNotFoundError):
+        _seed_decisions(tmp_path / "missing", target)
