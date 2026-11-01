@@ -109,10 +109,14 @@ class StubImpactAnalyst(Agent):
 
     async def run(self, ctx: AgentContext) -> AgentResult:
         files = sorted(ctx.context_files())
+        impacted = ([{"path": p, "kind": "modify", "reason": "in scope"} for p in files]
+                    or [{"path": "url-shortener/", "kind": "create", "reason": "new codebase"}])
         return AgentResult(
             summary=f"{len(files)} existing file(s) in scope",
-            outputs={"impacted": [{"path": p, "kind": "modify", "reason": "in scope"} for p in files],
-                     "api_changes": [], "data_changes": [], "data_flows": [], "risks": [], "test_strategy": []},
+            outputs={"impacted": impacted, "api_changes": [], "data_changes": [], "data_flows": [],
+                     "risks": [{"risk": "behaviour regressions", "mitigation": "full test suite",
+                                "detection": "maven_test gate"}],
+                     "test_strategy": ["cover every functional requirement"]},
         )
 
 
@@ -148,6 +152,74 @@ class StubTester(_TemplateAgent):
         return rel.startswith("url-shortener/src/test/")
 
 
+SKELETON_OPENAPI = """openapi: 3.0.3
+info:
+  title: URL shortener (skeleton)
+  version: 0.1.0
+paths:
+  /api/v1/urls:
+    post:
+      summary: Create a short link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: {type: string}
+      responses:
+        "201": {description: Created}
+        "400": {description: Invalid URL}
+  /{code}:
+    get:
+      summary: Redirect to the original URL
+      parameters:
+        - {name: code, in: path, required: true, schema: {type: string}}
+      responses:
+        "302": {description: Redirect}
+        "404": {description: Unknown code}
+"""
+
+
+class StubArchitect(Agent):
+    """Writes the skeleton service's API definition and a short design note."""
+
+    name = "architect"
+
+    async def run(self, ctx: AgentContext) -> AgentResult:
+        notes = "# Design\n\nIn-memory skeleton: create (POST /api/v1/urls) and redirect (GET /{code}).\n"
+        ctx.write_file("url-shortener/openapi.yaml", SKELETON_OPENAPI)
+        ctx.write_file("url-shortener/docs/design.md", notes)
+        return AgentResult(summary="skeleton API definition", outputs={"openapi_yaml": SKELETON_OPENAPI,
+                                                                         "design_notes_markdown": notes})
+
+
+class StubWriter(Agent):
+    name = "writer"
+
+    async def run(self, ctx: AgentContext) -> AgentResult:
+        ctx.write_file("url-shortener/README.md",
+                       "# URL shortener (skeleton)\n\nBuild and test: `mvn test`. API: [docs/api.md](docs/api.md).\n")
+        ctx.write_file("url-shortener/docs/api.md",
+                       "# API\n\n- `POST /api/v1/urls`: create a short link.\n- `GET /{code}`: redirect.\n")
+        return AgentResult(summary="README and API reference",
+                           outputs={"files": ["url-shortener/README.md", "url-shortener/docs/api.md"]})
+
+
+class StubRelease(Agent):
+    name = "release"
+
+    async def run(self, ctx: AgentContext) -> AgentResult:
+        checklist = [{"item": stage, "status": "pass", "evidence": f"{a.name}@v{a.version} accepted"}
+                     for stage, a in ctx.inputs.items()]
+        ctx.write_file("url-shortener/CHANGELOG.md", "# Changelog\n\n## 0.1.0\n\n- Added: create and redirect.\n")
+        return AgentResult(summary="release 0.1.0 ready",
+                           outputs={"version": "0.1.0", "checklist": checklist, "risks": [],
+                                    "rollback_plan": "redeploy the previous build"})
+
+
 class FlakyCoder(StubCoder):
     """Fault injection for workflows/fault-demo.yaml: the first attempt ships code that does not
     compile, so the compile gate fails, the change is rolled back, and the retry (which sees the
@@ -176,6 +248,7 @@ class RefusingTester(StubTester):
 
 def stub_agents() -> AgentRegistry:
     registry = AgentRegistry()
-    for agent in (StubAnalyst, StubImpactAnalyst, StubTestPlanner, StubCoder, StubTester, FlakyCoder, RefusingTester):
+    for agent in (StubAnalyst, StubImpactAnalyst, StubArchitect, StubTestPlanner, StubCoder, StubTester, StubWriter,
+                  StubRelease, FlakyCoder, RefusingTester):
         registry.register(agent.name, agent)
     return registry

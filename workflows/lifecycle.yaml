@@ -1,0 +1,103 @@
+# The full lifecycle: requirements, impact analysis, design, implementation and test planning in
+# parallel, testing, documentation, and release readiness, each gated, the key ones human-approved.
+#
+#   requirements ─► impact ─► design ─┬─► implement ─┬─► test ──┐
+#     (approve)    (approve)  (approve)│ [entry gate] │          ├─► release   [entry gate] (approve)
+#                                      └─► test_plan ─┘ └─► docs ┘
+#
+# Entry gates are preconditions checked before a stage starts; exit gates verify its output.
+name: lifecycle
+version: "1"
+description: Requirement -> spec -> impact -> API design -> code + test plan -> tests + docs -> release readiness
+
+stages:
+  - id: requirements
+    agent: analyst
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [goal, functional, non_functional] }
+      - ambiguities_resolved
+    clarification: { max_rounds: 3 }
+    approval: required
+    max_revisions: 2
+
+  - id: impact
+    agent: impact_analyst
+    needs: [requirements]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/**", "url-shortener/openapi.yaml"]
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [impacted, risks, test_strategy] }
+    approval: required
+    max_revisions: 2
+
+  - id: design
+    agent: architect
+    needs: [impact]
+    description: The complete API definition (OpenAPI) and a design note, approved before implementation
+    read_scope: ["url-shortener/src/main/**", "url-shortener/openapi.yaml", "url-shortener/docs/design.md"]
+    write_scope: ["url-shortener/openapi.yaml", "url-shortener/docs/design.md"]
+    exit_gates:
+      - name: openapi_valid
+        args: { path: url-shortener/openapi.yaml }
+    approval: required
+    max_revisions: 2
+    retry: { max_attempts: 2 }
+
+  - id: implement
+    agent: coder
+    needs: [design]
+    write_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
+    entry_gates:                     # only build against an approved, still-valid API definition
+      - name: openapi_valid
+        args: { path: url-shortener/openapi.yaml }
+    exit_gates:
+      - name: maven_test
+        args: { project: url-shortener, goal: compile, timeout_seconds: 600 }
+      - name: openapi_conformance    # documented == implemented, both ways
+        args: { spec: url-shortener/openapi.yaml, source: url-shortener/src/main/java }
+    retry: { max_attempts: 3, backoff_seconds: 1 }
+
+  - id: test_plan
+    agent: test_planner
+    needs: [design]
+    write_scope: ["docs/test-plan.md"]
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [test_cases] }
+
+  - id: test
+    agent: tester
+    needs: [implement, test_plan]
+    write_scope: ["url-shortener/src/test/**"]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**", "url-shortener/src/test/**"]
+    exit_gates:
+      - name: maven_test
+        # the suite had 120 tests before this workflow was introduced: it may only grow
+        args: { project: url-shortener, timeout_seconds: 900, min_tests: 121 }
+    retry: { max_attempts: 3, backoff_seconds: 1 }
+
+  - id: docs
+    agent: writer
+    needs: [implement]
+    read_scope: ["url-shortener/src/main/**", "url-shortener/openapi.yaml", "url-shortener/README.md", "url-shortener/docs/api.md"]
+    write_scope: ["url-shortener/README.md", "url-shortener/docs/api.md"]
+    exit_gates:
+      - name: docs_cover_api
+        args: { spec: url-shortener/openapi.yaml, docs: [url-shortener/README.md, url-shortener/docs/api.md] }
+    retry: { max_attempts: 2 }
+
+  - id: release
+    agent: release
+    needs: [test, docs]
+    read_scope: ["url-shortener/CHANGELOG.md"]
+    write_scope: ["url-shortener/CHANGELOG.md", "url-shortener/docs/releases/**"]
+    entry_gates:                     # release only from a build that is green right now
+      - name: maven_test
+        args: { project: url-shortener, timeout_seconds: 900, min_tests: 121 }
+    exit_gates:
+      - name: release_checklist_passed
+      - name: files_exist
+        args: { paths: [url-shortener/CHANGELOG.md] }
+    approval: required               # the human release sign-off

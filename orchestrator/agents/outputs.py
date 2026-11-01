@@ -85,3 +85,31 @@ class TestPlanOutput(BaseModel):
     summary: str
     test_cases: list[TestCase]
     decisions: list[DecisionOut]
+
+
+class DesignOutput(BaseModel):
+    summary: str
+    openapi_yaml: str            # the complete OpenAPI 3 definition of the service, existing and new
+    design_notes_markdown: str   # components, data, flows and the reasoning behind them
+    decisions: list[DecisionOut]
+
+
+class ChecklistItem(BaseModel):
+    item: str
+    status: Literal["pass", "fail", "n/a"]
+    evidence: str
+
+
+class ReleaseRisk(BaseModel):
+    risk: str
+    mitigation: str
+
+
+class ReleaseOutput(BaseModel):
+    summary: str
+    version: str
+    changelog_markdown: str      # the complete CHANGELOG.md, newest release first
+    checklist: list[ChecklistItem]
+    risks: list[ReleaseRisk]
+    rollback_plan: str
+    decisions: list[DecisionOut]

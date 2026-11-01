@@ -19,7 +19,7 @@ from ..engine.models import AgentResult, Decision
 from ..llm.client import LLMClient, LLMRequest
 from ..llm.schema import strict_schema
 from .base import Agent, AgentContext, AgentRegistry, FatalAgentError
-from .outputs import AnalystOutput, CodeOutput, ImpactOutput, TestPlanOutput
+from .outputs import AnalystOutput, CodeOutput, DesignOutput, ImpactOutput, ReleaseOutput, TestPlanOutput
 
 PROMPTS = Path(__file__).parent / "prompts"
 MAX_CONTEXT_CHARS = 400_000  # ~100k tokens; refuse rather than silently truncate
@@ -98,6 +98,16 @@ class LLMAgent(Agent):
         return [_tag("approved_impact_analysis", _canonical(impact.result.outputs))] if impact else []
 
     @staticmethod
+    def design_section(ctx: AgentContext) -> list[str]:
+        """The approved API definition and design note, when the workflow has a design stage."""
+        design = ctx.inputs.get("design")
+        if not design:
+            return []
+        o = design.result.outputs
+        return [_tag("approved_api_definition", o.get("openapi_yaml", "")),
+                _tag("approved_design_notes", o.get("design_notes_markdown", ""))]
+
+    @staticmethod
     def files_section(ctx: AgentContext, name: str = "existing_files") -> str:
         files = ctx.context_files()
         if not files:
@@ -167,6 +177,74 @@ class ImpactAgent(LLMAgent):
                            decisions=_decisions(out.decisions))
 
 
+class ArchitectAgent(LLMAgent):
+    name = "architect"
+    prompts = ("architect",)
+    output_model = DesignOutput
+    effort = "high"
+    max_tokens = 48000
+    OPENAPI = "url-shortener/openapi.yaml"
+    NOTES = "url-shortener/docs/design.md"
+
+    def task(self, ctx):
+        return [self.spec_section(ctx), *self.impact_section(ctx), self.files_section(ctx), self.scope_section(ctx)]
+
+    def to_result(self, ctx, out: DesignOutput):
+        ctx.write_file(self.OPENAPI, out.openapi_yaml.strip() + "\n")
+        ctx.write_file(self.NOTES, out.design_notes_markdown.strip() + "\n")
+        return AgentResult(summary=out.summary,
+                           outputs={"openapi_yaml": out.openapi_yaml, "design_notes_markdown": out.design_notes_markdown},
+                           decisions=_decisions(out.decisions))
+
+
+class WriterAgent(LLMAgent):
+    name = "writer"
+    prompts = ("writer",)
+    output_model = CodeOutput
+    effort = "medium"
+
+    def task(self, ctx):
+        return [self.spec_section(ctx), *self.design_section(ctx), self.files_section(ctx), self.scope_section(ctx)]
+
+    def to_result(self, ctx, out: CodeOutput):
+        self.propose(ctx, out)
+        return AgentResult(summary=out.summary, outputs={"files": [f.path for f in out.files]},
+                           decisions=_decisions(out.decisions))
+
+
+class ReleaseAgent(LLMAgent):
+    name = "release"
+    prompts = ("release",)
+    output_model = ReleaseOutput
+    effort = "high"
+    max_tokens = 32000
+    CHANGELOG = "url-shortener/CHANGELOG.md"
+    REPORT_DIR = "url-shortener/docs/releases"
+
+    def task(self, ctx):
+        stages = {name: {"artifact": f"{a.name}@v{a.version}", "produced_by": a.produced_by,
+                         "summary": a.result.summary,
+                         "decisions": [d.model_dump() for d in a.result.decisions],
+                         "files": a.result.files_written}
+                  for name, a in ctx.inputs.items()}
+        return [self.spec_section(ctx), _tag("accepted_stages", _canonical(stages)),
+                self.files_section(ctx, "existing_release_files"), self.scope_section(ctx)]
+
+    def to_result(self, ctx, out: ReleaseOutput):
+        ctx.write_file(self.CHANGELOG, out.changelog_markdown.strip() + "\n")
+        lines = [f"# Release {out.version}: readiness", "", out.summary, "", "## Checklist", "",
+                 "| Item | Status | Evidence |", "|---|---|---|"]
+        lines += [f"| {c.item} | {c.status} | {c.evidence.replace('|', '/')} |" for c in out.checklist]
+        lines += ["", "## Residual risks", ""] + [f"- **{r.risk}**: {r.mitigation}" for r in out.risks]
+        lines += ["", "## Rollback plan", "", out.rollback_plan]
+        ctx.write_file(f"{self.REPORT_DIR}/{out.version}.md", "\n".join(lines) + "\n")
+        return AgentResult(
+            summary=out.summary,
+            outputs={"version": out.version, "checklist": [c.model_dump() for c in out.checklist],
+                     "risks": [r.model_dump() for r in out.risks], "rollback_plan": out.rollback_plan},
+            decisions=_decisions(out.decisions))
+
+
 class TestPlannerAgent(LLMAgent):
     name = "test_planner"
     prompts = ("test_planner",)
@@ -175,7 +253,7 @@ class TestPlannerAgent(LLMAgent):
     max_tokens = 32000
 
     def task(self, ctx):
-        return [self.spec_section(ctx), *self.impact_section(ctx)]
+        return [self.spec_section(ctx), *self.impact_section(ctx), *self.design_section(ctx)]
 
     def to_result(self, ctx, out: TestPlanOutput):
         lines = ["# Test plan", "", f"_{out.summary}_", "", "| Id | Covers | Level | Check |", "|---|---|---|---|"]
@@ -195,7 +273,8 @@ class CoderAgent(LLMAgent):
     effort = "high"
 
     def task(self, ctx):
-        return [self.spec_section(ctx), *self.impact_section(ctx), self.files_section(ctx), self.scope_section(ctx)]
+        return [self.spec_section(ctx), *self.impact_section(ctx), *self.design_section(ctx),
+                self.files_section(ctx), self.scope_section(ctx)]
 
     def to_result(self, ctx, out: CodeOutput):
         self.propose(ctx, out)
@@ -214,6 +293,7 @@ class TesterAgent(LLMAgent):
         return [
             self.spec_section(ctx),
             *self.impact_section(ctx),
+            *self.design_section(ctx),
             _tag("test_plan", _canonical(plan)),
             self.files_section(ctx, "implementation_and_existing_tests"),
             self.scope_section(ctx),
@@ -229,7 +309,8 @@ class TesterAgent(LLMAgent):
         )
 
 
-AGENT_TYPES = (AnalystAgent, ImpactAgent, TestPlannerAgent, CoderAgent, TesterAgent)
+AGENT_TYPES = (AnalystAgent, ImpactAgent, ArchitectAgent, TestPlannerAgent, CoderAgent, TesterAgent,
+               WriterAgent, ReleaseAgent)
 LLM_AGENT_NAMES = [a.name for a in AGENT_TYPES]
 
 

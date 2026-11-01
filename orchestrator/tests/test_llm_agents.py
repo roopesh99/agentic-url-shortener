@@ -207,3 +207,43 @@ async def test_greenfield_prompts_are_unchanged_without_an_impact_stage(tmp_path
     wf.stage("implement").exit_gates = []
     await engine(tmp_path, llm, wf).run()
     assert "approved_impact_analysis" not in llm.prompts("coder")[0] + llm.prompts("test_planner")[0]
+
+
+# --- full lifecycle: design, docs, release ------------------------------------------------------
+
+DESIGN = {
+    "summary": "API for create and redirect",
+    "openapi_yaml": "openapi: 3.0.3\ninfo: {title: t, version: '1'}\npaths:\n  /api/v1/urls:\n    post:\n"
+                    "      responses: {'201': {description: created}}\n",
+    "design_notes_markdown": "# Design\n\nIn-memory store.",
+    "decisions": [{"topic": "storage", "choice": "in-memory", "rationale": "skeleton"}],
+}
+RELEASE = {
+    "summary": "ready", "version": "0.2.0", "changelog_markdown": "# Changelog\n\n## 0.2.0\n- Added: create.",
+    "checklist": [{"item": "tests passing", "status": "pass", "evidence": "entry gate"}],
+    "risks": [{"risk": "none known", "mitigation": "monitor"}], "rollback_plan": "redeploy 0.1.0",
+    "decisions": [],
+}
+
+
+async def test_the_approved_design_reaches_every_downstream_agent_and_release_sees_all_stages(tmp_path):
+    wf = load_workflow(ROOT / "workflows" / "lifecycle.yaml")
+    for s in wf.stages:  # structure and context only: the Maven and API gates are covered elsewhere
+        s.entry_gates, s.exit_gates = [], []
+    docs = code([{"path": "url-shortener/README.md", "content": "# README /api/v1/urls"},
+                 {"path": "url-shortener/docs/api.md", "content": "/api/v1/urls"}])
+    llm = ScriptedLLM({"analyst": [SPEC], "impact_analyst": [IMPACT], "architect": [DESIGN], "test_planner": [PLAN],
+                       "coder": [code([])], "tester": [code([])], "writer": [docs], "release": [RELEASE]})
+    result = await engine(tmp_path, llm, wf).run()
+
+    assert result.succeeded, result.states
+    for agent in ("coder", "tester", "test_planner", "writer"):
+        prompt = llm.prompts(agent)[0]
+        assert "approved_api_definition" in prompt and "/api/v1/urls" in prompt, agent
+    release_prompt = llm.prompts("release")[0]
+    for stage in ("requirements", "impact", "design", "implement", "test_plan", "test", "docs"):
+        assert f'"{stage}"' in release_prompt, stage
+    ws = tmp_path / "ws" / "url-shortener"
+    assert (ws / "openapi.yaml").read_text().startswith("openapi: 3.0.3")
+    assert "## 0.2.0" in (ws / "CHANGELOG.md").read_text()
+    assert "| tests passing | pass |" in (ws / "docs" / "releases" / "0.2.0.md").read_text()
