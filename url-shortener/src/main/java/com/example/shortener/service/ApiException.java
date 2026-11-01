@@ -7,11 +7,17 @@ public class ApiException extends RuntimeException {
 
     private final HttpStatus status;
     private final String error;
+    private final Long retryAfterSeconds; // sent as Retry-After when set
 
     public ApiException(HttpStatus status, String error, String message) {
+        this(status, error, message, null);
+    }
+
+    public ApiException(HttpStatus status, String error, String message, Long retryAfterSeconds) {
         super(message);
         this.status = status;
         this.error = error;
+        this.retryAfterSeconds = retryAfterSeconds;
     }
 
     public static ApiException badRequest(String error, String message) {
@@ -28,5 +34,9 @@ public class ApiException extends RuntimeException {
 
     public String getError() {
         return error;
+    }
+
+    public Long getRetryAfterSeconds() {
+        return retryAfterSeconds;
     }
 }

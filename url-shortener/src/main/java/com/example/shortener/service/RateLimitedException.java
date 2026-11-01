@@ -4,14 +4,11 @@ import org.springframework.http.HttpStatus;
 
 public class RateLimitedException extends ApiException {
 
-    private final long retryAfterSeconds;
-
     public RateLimitedException(long retryAfterSeconds) {
-        super(HttpStatus.TOO_MANY_REQUESTS, "rate_limited", "too many links created; retry later");
-        this.retryAfterSeconds = retryAfterSeconds;
+        this(retryAfterSeconds, "too many links created; retry later");
     }
 
-    public long getRetryAfterSeconds() {
-        return retryAfterSeconds;
+    public RateLimitedException(long retryAfterSeconds, String message) {
+        super(HttpStatus.TOO_MANY_REQUESTS, "rate_limited", message, retryAfterSeconds);
     }
 }

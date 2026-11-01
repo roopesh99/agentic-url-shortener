@@ -5,8 +5,12 @@ import java.net.URI;
 import com.example.shortener.service.ClickRecorder;
 import com.example.shortener.service.LinkService;
 import com.example.shortener.service.LinkService.Redirect;
+import com.example.shortener.service.ServiceUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +35,13 @@ public class RedirectController {
     // Literal routes (/health, /api/...) take precedence over this pattern in Spring MVC.
     @GetMapping("/{code:[A-Za-z0-9_-]{3,32}}")
     public ResponseEntity<Void> redirect(@PathVariable String code) {
-        Redirect redirect = links.resolve(code);
+        Redirect redirect;
+        try {
+            redirect = links.resolve(code);
+        } catch (DataAccessResourceFailureException | TransientDataAccessException | CannotCreateTransactionException e) {
+            // The link store cannot answer: say so with 503 + Retry-After instead of an opaque 500 (FR6).
+            throw new ServiceUnavailableException();
+        }
         URI destination = URI.create(redirect.destination());
         try {
             clicks.record(redirect.linkId());

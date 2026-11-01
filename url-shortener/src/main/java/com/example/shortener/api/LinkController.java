@@ -8,9 +8,12 @@ import com.example.shortener.api.LinkDtos.LinkMetadata;
 import com.example.shortener.api.LinkDtos.StatsResponse;
 import com.example.shortener.service.ApiException;
 import com.example.shortener.service.CreateRateLimiter;
+import com.example.shortener.service.ManagementTokenRateLimiter;
 import com.example.shortener.service.LinkService;
 import com.example.shortener.service.LinkService.CreatedLink;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.function.Supplier;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,10 +32,12 @@ public class LinkController {
 
     private final LinkService links;
     private final CreateRateLimiter rateLimiter;
+    private final ManagementTokenRateLimiter tokenLimiter;
 
-    public LinkController(LinkService links, CreateRateLimiter rateLimiter) {
+    public LinkController(LinkService links, CreateRateLimiter rateLimiter, ManagementTokenRateLimiter tokenLimiter) {
         this.links = links;
         this.rateLimiter = rateLimiter;
+        this.tokenLimiter = tokenLimiter;
     }
 
     @PostMapping
@@ -55,14 +60,35 @@ public class LinkController {
 
     @GetMapping("/{code}/stats")
     public StatsResponse stats(@PathVariable String code,
-                               @RequestHeader(name = TOKEN_HEADER, required = false) String token) {
-        return StatsResponse.of(links.stats(code, token));
+                               @RequestHeader(name = TOKEN_HEADER, required = false) String token,
+                               HttpServletRequest http) {
+        return StatsResponse.of(withTokenThrottle(http, () -> links.stats(code, token)));
     }
 
     @DeleteMapping("/{code}")
     public ResponseEntity<Void> delete(@PathVariable String code,
-                                       @RequestHeader(name = TOKEN_HEADER, required = false) String token) {
-        links.delete(code, token);
+                                       @RequestHeader(name = TOKEN_HEADER, required = false) String token,
+                                       HttpServletRequest http) {
+        withTokenThrottle(http, () -> {
+            links.delete(code, token);
+            return null;
+        });
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Runs a token-protected operation. A wrong token is counted against the caller's peer address and
+     * stays 403 invalid_token until the limit is exceeded, then becomes 429 (FR10). Valid and missing
+     * tokens are untouched: the existing contract decides those.
+     */
+    private <T> T withTokenThrottle(HttpServletRequest http, Supplier<T> operation) {
+        try {
+            return operation.get();
+        } catch (ApiException e) {
+            if ("invalid_token".equals(e.getError())) {
+                tokenLimiter.recordFailure(http.getRemoteAddr());
+            }
+            throw e;
+        }
     }
 }

@@ -15,8 +15,20 @@ spring:
 server:
   port: 8080
 
+management:
+  # Operators only: a separate listener bound to loopback, unreachable from the public interface (FR15).
+  server:
+    port: 8081
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+
 shortener:
   data-dir: ./data
   rate-limit:
     creates-per-minute: 20
+    failed-token-attempts-per-minute: 10
+  max-api-body-bytes: 16384
   code-length: 8
