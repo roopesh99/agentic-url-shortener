@@ -1,0 +1,304 @@
+{
+  "name": "impact",
+  "version": 1,
+  "sha": "12c6f2b9ac0c439a287e0b0552a9f21eeaf7ec2a946ffa0e263b366160fed79c",
+  "produced_by": "impact/impact_analyst#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 18,
+      "sha": "1750218b72b57329cf70cb1581ca888f41c43fb1ff5882c23afa9c5d257ba346"
+    }
+  ],
+  "result": {
+    "summary": "Add consistent errors and security controls, management-token throttling, loopback-only Actuator metrics, and low-cardinality redirect observability without changing link retention or redirect destinations.",
+    "outputs": {
+      "impacted": [
+        {
+          "path": "url-shortener/pom.xml",
+          "kind": "modify",
+          "reason": "FR14–FR15: add Spring Boot Actuator, which supplies the health and metrics endpoints and Micrometer integration."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/ApiExceptionHandler.java",
+          "kind": "modify",
+          "reason": "FR6–FR8: preserve existing error codes, add safe mappings for framework and unexpected errors, and add Retry-After for the database-unavailable response."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+          "kind": "modify",
+          "reason": "FR10: count supplied-but-incorrect tokens from the direct peer across stats and delete, without counting missing tokens or rejecting valid tokens."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+          "kind": "modify",
+          "reason": "FR6: map an unavailable database during the required link lookup to 503 service_unavailable with Retry-After: 5, without retrying."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/service/RateLimitedException.java",
+          "kind": "modify",
+          "reason": "FR10: allow the existing 429 response type to carry a management-token-specific message and its calculated Retry-After value."
+        },
+        {
+          "path": "url-shortener/src/main/resources/application.yml",
+          "kind": "modify",
+          "reason": "FR15–FR16: expose only Actuator health and metrics on a separate management port bound to 127.0.0.1, leaving the main-port /health configuration intact."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/service/ManagementTokenRateLimiter.java",
+          "kind": "create",
+          "reason": "FR10: maintain a per-direct-peer rolling 60-second window of supplied-but-incorrect management-token attempts across stats and delete."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/ApiBodyLimitFilter.java",
+          "kind": "create",
+          "reason": "FR12: enforce a 16,384-byte limit on actual received /api/** body bytes and return the standard JSON 413 error."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/config/SecurityHeadersFilter.java",
+          "kind": "create",
+          "reason": "FR13, FR15: apply all four required headers to responses on both the main and management web servers, including errors and Actuator responses."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/ApiErrorController.java",
+          "kind": "create",
+          "reason": "FR8: normalize servlet error dispatches such as unmatched routes to the standard JSON error body without exposing internal details."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/RedirectMetricsInterceptor.java",
+          "kind": "create",
+          "reason": "FR14: measure redirect duration and count 302, 404, 410, and 5xx outcomes without recording codes or splitting 404 causes."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/config/RedirectMetricsConfig.java",
+          "kind": "create",
+          "reason": "FR14: register redirect metrics only for the redirect handler so metrics do not add database work to the hot path."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/support/IntegrationTest.java",
+          "kind": "modify",
+          "reason": "FR15, NFR4: give the separate management server an ephemeral port in shared integration tests to avoid fixed-port conflicts."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/RateLimitTest.java",
+          "kind": "modify",
+          "reason": "FR15, NFR4: give the test's separate management server an ephemeral port while retaining coverage of the existing create limit."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/PersistenceRestartTest.java",
+          "kind": "modify",
+          "reason": "FR15, NFR4: start the management server on an ephemeral port in restart tests so the production listener configuration does not collide."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/ClickPersistenceAndUpgradeTest.java",
+          "kind": "modify",
+          "reason": "FR15, NFR4: use an ephemeral management port in application-start tests while continuing to verify existing migration and data preservation."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/SecurityAndErrorContractTest.java",
+          "kind": "create",
+          "reason": "FR8, FR13, NFR4: automate security-header and standard JSON error checks, including framework-generated and unexpected errors."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/ApiBodyLimitTest.java",
+          "kind": "create",
+          "reason": "FR12: verify actual received-byte enforcement at the 16,384-byte boundary, including requests without a reliable declared length."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/ManagementTokenRateLimitTest.java",
+          "kind": "create",
+          "reason": "FR10: verify the shared rolling limit, missing-token exclusion, direct-peer identity, Retry-After, and continued processing of valid tokens."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/RedirectObservabilityAndFailureTest.java",
+          "kind": "create",
+          "reason": "FR6, FR14: verify redirect database-lookup failure handling and aggregate outcome/timing metrics without code-level tags."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/ManagementEndpointExposureTest.java",
+          "kind": "create",
+          "reason": "FR15–FR16: verify loopback management binding, only health and metrics exposure, and the unchanged public /health endpoint."
+        }
+      ],
+      "api_changes": [
+        {
+          "method": "ALL",
+          "path": "Existing endpoints",
+          "change": "Existing endpoint request and success-response contracts remain unchanged unless a requirement below explicitly adds behavior. Existing 400 and 409 status codes and error codes remain unchanged. Errors use application/json with {\"error\":\"<stable code>\",\"message\":\"<human-readable text>\"}; all responses receive the specified security headers."
+        },
+        {
+          "method": "POST",
+          "path": "/api/links",
+          "change": "Request remains CreateLinkRequest JSON. Existing success remains 201 with CreateLinkResponse; existing invalid-input and conflict responses retain their current codes; the existing 20-per-minute-per-direct-peer limit remains 429 rate_limited with Retry-After. New: bodies over 16,384 actual bytes return 413 payload_too_large with the standard JSON error body."
+        },
+        {
+          "method": "GET",
+          "path": "/api/links/{code}",
+          "change": "Request remains the code path parameter. Existing 200 LinkMetadata and 404 not_found behavior remain unchanged; unexpected errors use 500 internal_error with no internal details."
+        },
+        {
+          "method": "GET",
+          "path": "/api/links/{code}/stats",
+          "change": "Request remains the code path parameter and optional X-Management-Token header. Existing 200 StatsResponse, 401 missing_token, 403 invalid_token, and 404 not_found contracts remain; the 11th and subsequent supplied incorrect attempts within the rolling limit return 429 rate_limited with Retry-After. Missing tokens do not count."
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/links/{code}",
+          "change": "Request remains the code path parameter and optional X-Management-Token header. Existing 204, 401 missing_token, 403 invalid_token, and 404 not_found contracts remain; the 11th and subsequent supplied incorrect attempts within the shared rolling limit return 429 rate_limited with Retry-After. Missing tokens do not count."
+        },
+        {
+          "method": "GET",
+          "path": "/{code}",
+          "change": "Request remains a GET to a matching short-code path. Active links retain the same 302 Location and Cache-Control: no-store behavior; unknown/deleted codes remain 404 not_found and expired codes remain 410 expired. A database failure during the required link lookup returns 503 service_unavailable, Retry-After: 5, and the standard JSON error body; unexpected errors return 500 internal_error. Redirect requests are not retried."
+        },
+        {
+          "method": "GET",
+          "path": "/health",
+          "change": "Request and existing 200/503 status JSON contract remain unchanged; the response gains the required security headers."
+        },
+        {
+          "method": "GET",
+          "path": "/actuator/health",
+          "change": "New endpoint on the separate management port bound to 127.0.0.1 only; uses the standard Actuator health response."
+        },
+        {
+          "method": "GET",
+          "path": "/actuator/metrics",
+          "change": "New endpoint on the separate management port bound to 127.0.0.1 only; uses the standard Actuator metrics response and exposes redirect outcome counts and timing measurements."
+        },
+        {
+          "method": "ANY",
+          "path": "/api/**",
+          "change": "Bodies larger than 16,384 bytes as actually received return 413 payload_too_large with application/json and the standard error fields; bodies at or below the limit are not rejected for size."
+        },
+        {
+          "method": "Unsupported methods",
+          "path": "Routed endpoints",
+          "change": "Return 405 method_not_allowed with the standard JSON error body."
+        },
+        {
+          "method": "ANY",
+          "path": "Unmatched routes",
+          "change": "Return 404 not_found with the standard JSON error body."
+        }
+      ],
+      "data_changes": [
+        "No schema or persisted-data changes are required; rate-limit state and Micrometer measurements remain in memory.",
+        "No migration file is required. Existing V1__create_links.sql and V2__create_click_events.sql remain immutable; no retention, tombstone, or click-event storage changes are planned."
+      ],
+      "data_flows": [
+        "Redirect hot path: resolve the code with the existing indexed link lookup; map lookup database availability failures to the specified 503 without retry; return the existing 302 for an active link; attempt click recording as existing best-effort work; record outcome and elapsed time with fixed, low-cardinality metric tags. Do not query for 404 causes, contact destinations, or add visitor data to logs or metrics.",
+        "Redirect outcomes: the metrics interceptor observes the completed redirect response and records one aggregate outcome of 302, 404, 410, or 5xx plus duration. Unknown and deleted codes share the 404 outcome; codes, IPs, destinations, and tokens are never metric labels.",
+        "Management authorization: stats and delete use the existing token validation; missing tokens return 401 without limiter activity; only a supplied token that fails validation records an attempt against the direct peer address. The shared rolling 60-second limiter covers both routes, returns 429 with seconds until the oldest blocking attempt expires, and does not reject a valid token solely because that peer is at the limit.",
+        "API request body: the API-only filter counts bytes actually received, including when Content-Length is absent or inaccurate; requests within 16,384 bytes are passed through to existing MVC validation, while larger bodies receive a JSON 413 before controller processing.",
+        "Response handling: the security-header filter wraps normal and error responses on the main and management servers. MVC exception handling and servlet error dispatch map failures to stable JSON error codes without returning exception messages, stack traces, or internal details.",
+        "Actuator flow: operators query health or metrics on the loopback-only management listener; the public main-port /health endpoint remains separate and unchanged."
+      ],
+      "risks": [
+        {
+          "risk": "A filter may omit headers on framework error dispatches or the separate Actuator server, leaving some responses without the required browser protections.",
+          "mitigation": "Register the header filter for both embedded web servers and set headers before dispatch so error responses inherit them.",
+          "detection": "SecurityAndErrorContractTest and ManagementEndpointExposureTest inspect all four exact header values on redirects, errors, public health, and Actuator responses."
+        },
+        {
+          "risk": "A body-size guard that trusts Content-Length or consumes the servlet stream incorrectly could allow oversized chunked bodies or break otherwise valid JSON requests.",
+          "mitigation": "Count actual bytes received, stop at limit plus one, and pass an equivalent replayable request body to MVC when within the limit.",
+          "detection": "ApiBodyLimitTest covers exactly 16,384 bytes, 16,385 bytes, absent/inaccurate length, and an accepted valid request."
+        },
+        {
+          "risk": "The rolling token limiter could count missing tokens, fail to share state across stats and delete, trust spoofed forwarding headers, or block valid tokens.",
+          "mitigation": "Record only after the existing service returns invalid_token, key by HttpServletRequest.getRemoteAddr(), share one limiter, and do not pre-reject requests before token validation.",
+          "detection": "ManagementTokenRateLimitTest exercises missing, incorrect, cross-endpoint, valid-token, retry timing, and spoofed-forwarding-header cases."
+        },
+        {
+          "risk": "Per-IP in-memory limiter state can grow with distinct peers and resets on restart.",
+          "mitigation": "Prune expired rolling-window entries on access and remove empty peer state; keep the design single-node and in-memory as scoped by FR19.",
+          "detection": "ManagementTokenRateLimitTest verifies expired attempts no longer block; add a focused cleanup assertion for inactive peer entries."
+        },
+        {
+          "risk": "Error translation could accidentally change established 400/409, missing-token, invalid-token, expired-link, or deleted-link contracts.",
+          "mitigation": "Keep existing ApiException codes authoritative and map only framework/unexpected exceptions and the specified new failure cases.",
+          "detection": "LinkCreationTest, LinkLifecycleTest, LinkStatsTest, and SecurityAndErrorContractTest assert status and error-code compatibility."
+        },
+        {
+          "risk": "A broad 500 handler or servlet error dispatch could expose implementation details or emit a non-JSON response.",
+          "mitigation": "Use fixed messages and stable codes for unexpected errors; do not serialize exception text or stack traces.",
+          "detection": "SecurityAndErrorContractTest injects an unexpected exception and checks the JSON fields while asserting that stack and internal details are absent."
+        },
+        {
+          "risk": "Metrics instrumentation could add work or high-cardinality labels to the latency-sensitive redirect path.",
+          "mitigation": "Use one interceptor, in-process Micrometer measurements, and only fixed outcome tags; do not include codes or make additional database calls.",
+          "detection": "RedirectLatencyTest retains the p99-below-50-ms gate; RedirectObservabilityAndFailureTest checks counts, timings, and absence of code-level dimensions."
+        },
+        {
+          "risk": "Mapping database failures to 503 at the wrong point could turn an existing best-effort click-write failure into a failed visitor redirect, contrary to ClickFailureIsolationTest.",
+          "mitigation": "Apply the 503 mapping to the required link lookup; preserve the existing best-effort click recording behavior and do not retry either operation.",
+          "detection": "RedirectObservabilityAndFailureTest verifies lookup failure returns 503 and ClickFailureIsolationTest continues to verify recorder failure does not prevent a redirect; confirm this interpretation against FR6 at review."
+        },
+        {
+          "risk": "The configured management listener could become publicly reachable or expose unintended Actuator endpoints.",
+          "mitigation": "Bind its separate port to 127.0.0.1 and explicitly expose only health and metrics.",
+          "detection": "ManagementEndpointExposureTest checks the management listener address and endpoint exposure, and verifies the unchanged public /health route."
+        },
+        {
+          "risk": "Changes to error mapping or filters could add visitor-specific logging or destination requests/retries.",
+          "mitigation": "Add no request-, code-, IP-, token-, or destination-specific logs; retain existing redirect and click-recorder behavior without destination checks or outbound calls.",
+          "detection": "NoOutboundFetchTest and LinkStatsTest continue to protect no-outbound-fetch and visitor-data behavior; review added logging and run the full suite."
+        }
+      ],
+      "test_strategy": [
+        "Existing LinkLifecycleTest protects active 302 destination/cache behavior, expired 410, unknown/deleted 404, retention-visible tombstones, and missing/invalid management-token contracts.",
+        "Existing LinkCreationTest protects invalid-input 400 and alias-conflict 409 behavior; LinkStatsTest protects stats, token behavior, privacy, and click semantics.",
+        "Existing RateLimitTest protects the 20-creates-per-minute limit, Retry-After, direct-peer identity, and ignoring X-Forwarded-For.",
+        "Existing ClickFailureIsolationTest and ClickDeletionRaceTest protect best-effort click recording and click/deletion consistency.",
+        "Existing RedirectLatencyTest protects the in-process redirect p99 target below 50 ms; NoOutboundFetchTest protects the absence of destination fetches.",
+        "Existing HealthTest protects the public /health response; ClickPersistenceAndUpgradeTest and PersistenceRestartTest protect existing records, tombstones, restart behavior, and immutable migration history.",
+        "Add SecurityAndErrorContractTest for required headers and JSON errors on success/error responses, including 404, 405, 500, and sanitized unexpected failures.",
+        "Add ApiBodyLimitTest for actual-byte enforcement, the 16,384-byte boundary, larger payload rejection, and acceptance of valid bodies at or below the limit.",
+        "Add ManagementTokenRateLimitTest for 10 supplied incorrect attempts per direct peer in a shared rolling window across stats/delete, 429 and Retry-After, missing-token exclusion, valid-token processing, and forwarding-header spoofing.",
+        "Add RedirectObservabilityAndFailureTest for 302/404/410/5xx counters, redirect timing, aggregate 404 behavior, lookup database outage returning 503 with Retry-After: 5, and no service-side retry.",
+        "Add ManagementEndpointExposureTest for loopback-only binding, only health and metrics exposure, required headers, and unchanged main-port /health behavior.",
+        "Run the entire existing and new suite, ensure its test count is at least 95, retain the p99 latency gate, and obtain product-owner release approval."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Persistence and migrations",
+        "choice": "Make no schema or retention changes and create no migration.",
+        "rationale": "The requirements change request handling and observability only, and explicitly preserve links, tombstones, and retention.",
+        "source": "agent"
+      },
+      {
+        "topic": "Management-token limiter",
+        "choice": "Use a shared in-memory rolling 60-second limiter keyed by the direct peer address; count only supplied incorrect tokens and calculate Retry-After from the oldest blocking attempt.",
+        "rationale": "This satisfies the cross-endpoint limit without trusting caller-controlled forwarding headers or locking out valid requests.",
+        "source": "agent"
+      },
+      {
+        "topic": "Redirect metrics",
+        "choice": "Record a redirect counter and duration with fixed outcome tags for 302, 404, 410, and 5xx, with no code or cause tags.",
+        "rationale": "It makes required outcomes and latency observable without adding redirect-path queries or request-specific metric cardinality.",
+        "source": "agent"
+      },
+      {
+        "topic": "Database outage boundary",
+        "choice": "Return 503 for database failure during the required link lookup, while retaining best-effort click-write behavior.",
+        "rationale": "This preserves the existing click-failure isolation contract while treating inability to resolve a link as the specified service-unavailable case.",
+        "source": "agent"
+      },
+      {
+        "topic": "Request body enforcement",
+        "choice": "Enforce 16 KiB on bytes actually received for /api/** and return the standard JSON 413 response before MVC processing.",
+        "rationale": "This follows the approved binary-size and actual-byte interpretation and cannot be bypassed with an absent or inaccurate Content-Length.",
+        "source": "agent"
+      },
+      {
+        "topic": "Actuator listener",
+        "choice": "Use a separate management port, configured as 8081, bound to 127.0.0.1, exposing only /actuator/health and /actuator/metrics.",
+        "rationale": "A separate loopback listener restricts operator endpoints without changing the public main-port health contract or adding authentication.",
+        "source": "agent"
+      }
+    ]
+  }
+}

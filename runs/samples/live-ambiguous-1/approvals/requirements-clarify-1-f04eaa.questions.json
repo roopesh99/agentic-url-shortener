@@ -1,0 +1,39 @@
+{
+  "run_id": "live-ambiguous-1",
+  "stage": "requirements",
+  "round": 1,
+  "questions": [
+    {
+      "question": "Which pre-existing links are in scope, and for how long must they continue to work (including expired, deleted, or otherwise inactive links)?",
+      "why": "The population and retention period affect user expectations, data retention, and implementation cost; the request does not establish them."
+    },
+    {
+      "question": "Which reliability measures and targets define “more reliable” (for example, availability, resolution success, latency, or recovery time)?",
+      "why": "Choosing metrics or thresholds determines what work is required and when it is acceptable to release."
+    },
+    {
+      "question": "What failures have users experienced, how often do they occur, and which shortener workflows or user groups are affected?",
+      "why": "Without examples or failure evidence, engineers cannot identify the problem to address or verify that it has been fixed."
+    },
+    {
+      "question": "What threats, attackers, and attack surfaces must the security work address, and what residual risk is acceptable?",
+      "why": "Threat coverage and risk acceptance are security decisions; guessing could leave material risks unaddressed or impose inappropriate controls."
+    },
+    {
+      "question": "Which security controls or data-handling requirements are expected, including requirements for access, privacy, logging, or compliance?",
+      "why": "These choices can affect who may access data and may carry legal, privacy, or compliance consequences."
+    },
+    {
+      "question": "Which service components, integrations, and deployment environments are in scope for reliability and security changes?",
+      "why": "The request does not identify the system boundary, and selecting it would materially change delivery scope."
+    },
+    {
+      "question": "What should happen for failed, malformed, unknown, or unreachable links, including response behavior, status codes, and retry behavior?",
+      "why": "The request does not specify error behavior, and inventing it could change the user-facing contract or hide failures."
+    },
+    {
+      "question": "What broader-rollout decision or release gate must the reliability and security work satisfy?",
+      "why": "The request gives rollout context but no rollout scope, approval owner, or criteria for proceeding."
+    }
+  ]
+}

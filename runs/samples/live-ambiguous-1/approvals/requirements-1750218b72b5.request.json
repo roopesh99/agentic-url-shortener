@@ -1,0 +1,21 @@
+{
+  "run_id": "live-ambiguous-1",
+  "stage": "requirements",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "23 requirements (19 functional, 4 non-functional); 22 ambiguities resolved (15 by binding human decisions, 7 recorded assumptions), 0 unresolved.",
+  "gate_evidence": [
+    "outputs_present: PASS",
+    "ambiguities_resolved: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "How should the 16 KB request-body limit be measured: as decimal or binary kilobytes, and against the declared length or the bytes actually received?: Interpret 16 KB as 16 KiB (16,384 bytes) and enforce the limit against the request-body bytes actually received; reject bodies larger than 16,384 bytes. (assumption)",
+    "What time-window algorithm defines the new per-minute failed management-token limit?: Use a rolling 60-second window for failed management-token attempts. (assumption)",
+    "How should the service identify the client IP for per-IP limits when forwarding headers are present?: Use the direct connection peer address and do not trust Forwarded or X-Forwarded-For headers unless a trusted-proxy configuration is explicitly provided. (assumption)",
+    "What Retry-After value should the new failed-management-token limit return?: Return Retry-After as delta-seconds indicating when the next incorrect-token attempt may be admitted. (assumption)",
+    "After an IP has reached the failed management-token limit, should requests with a valid token also be rejected?: Continue processing valid-token requests; return 429 for further supplied-but-incorrect token attempts while the limit remains in effect. (assumption)",
+    "What Content-Type should error responses using the JSON error schema declare?: Declare Content-Type: application/json for error responses. (assumption)",
+    "Which paths should expose Actuator health and metrics on the management port?: Use the Spring Boot Actuator defaults: /actuator/health and /actuator/metrics, with no other Actuator endpoints exposed. (assumption)"
+  ],
+  "artifact_sha": "1750218b72b57329cf70cb1581ca888f41c43fb1ff5882c23afa9c5d257ba346"
+}

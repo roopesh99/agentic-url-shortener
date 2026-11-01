@@ -1,0 +1,81 @@
+# Answers to the analyst's open questions for scenarios/ambiguous-reliability.md.
+# Proposed by Claude Code; accepted by the product owner (roopeshkotte) on 2026-10-31 (round 2: 6 more, including a fix for a 5xx/503 contradiction in round 1; round 3: Retry-After 5 s; after revision 1: only wrong tokens count).
+# Question text matches the recorded analyst output exactly, so replays answer deterministically.
+# Submit: orch answer live-ambiguous-1 requirements-clarify-1-f04eaa --from scenarios/ambiguous-reliability.answers.yaml
+
+- question: Which pre-existing links are in scope, and for how long must they continue to work (including expired,
+    deleted, or otherwise inactive links)?
+  answer: Every active link keeps resolving to the same destination with identical behaviour. Expired links keep
+    returning 410 and deleted links 404, as today. No change to how long links or tombstones are retained.
+- question: "Which reliability measures and targets define \u201Cmore reliable\u201D (for example, availability,\
+    \ resolution success, latency, or recovery time)?"
+  answer: 'Reliability is measured by redirect outcomes and latency, exposed as metrics through Spring Boot Actuator
+    and Micrometer: count redirects by outcome (302, 404, 410, 5xx) and time them. Target: an active link never
+    receives a 5xx while the service is running, and the existing in-process redirect p99 < 50 ms check keeps passing.'
+- question: What failures have users experienced, how often do they occur, and which shortener workflows or user
+    groups are affected?
+  answer: 'There is no incident data, only anecdotal reports. The goal is to make failures measurable and diagnosable
+    (per-outcome redirect metrics, consistent JSON errors), not to fix a guessed bug. Likely causes to confirm with
+    the metrics: expired links (410) and aliases typed with the wrong case.'
+- question: What threats, attackers, and attack surfaces must the security work address, and what residual risk
+    is acceptable?
+  answer: 'A public-internet attacker who probes codes and management tokens, floods link creation, sends oversized
+    or malformed requests, or tries to extract internal details from error responses, plus browser-side attacks
+    such as framing or content sniffing. Accepted residual risk for this release: no URL reputation or malware scanning
+    of destinations, no authentication system beyond management tokens.'
+- question: Which security controls or data-handling requirements are expected, including requirements for access,
+    privacy, logging, or compliance?
+  answer: 'Add standard security headers to every response (X-Content-Type-Options: nosniff, X-Frame-Options: DENY,
+    Referrer-Policy: no-referrer, Content-Security-Policy: default-src ''none''; frame-ancestors ''none''), a request
+    body size limit for the JSON API, and error responses that never include stack traces or internal details. Log
+    nothing new about visitors. Actuator exposes only the health and metrics endpoints. No compliance regime applies
+    to this release.'
+- question: Which service components, integrations, and deployment environments are in scope for reliability and
+    security changes?
+  answer: Only the url-shortener service, running as a single node. No infrastructure, deployment or third-party
+    integration changes.
+- question: What should happen for failed, malformed, unknown, or unreachable links, including response behavior,
+    status codes, and retry behavior?
+  answer: 'Keep the existing contract: 400 for invalid input, 404 for unknown or deleted codes, 410 for expired
+    links. If the database is unavailable during a redirect, return 503 with a Retry-After header and the standard
+    JSON error body instead of an unhandled 500. Any other unexpected error returns a 500 JSON error without internal
+    details. The service never checks whether a destination is reachable and never retries on the client''s behalf.'
+- question: What broader-rollout decision or release gate must the reliability and security work satisfy?
+  answer: All existing tests and the new tests pass (the suite must not drop below its current 95 tests), the security
+    headers and error behaviour are covered by automated tests, and the product owner approves the release.
+- question: What maximum request-body size should the JSON API enforce?
+  answer: 16 KB for requests to /api/**, well above the largest valid create request. A larger body is rejected
+    with 413 Payload Too Large and the standard JSON error body.
+- question: What controls and thresholds should protect against link-code or management-token probing and link-creation
+    floods, including the response to requests that exceed those limits?
+  answer: 'Link-creation floods: keep the existing limit of 20 creates per minute per client IP (429 with Retry-After).
+    Management-token probing: add a limit of 10 failed management-token attempts per minute per client IP, counted
+    across the stats and delete endpoints; further attempts get 429 with Retry-After and the standard JSON error
+    body. Link-code probing: no limit in this release, because 64^8 (about 2.8e14) possible codes makes brute force
+    impractical and limiting 404s would hurt users with typos; this is an accepted residual risk, observable through
+    the 404 redirect metric.'
+- question: Who may access the Actuator health and metrics endpoints?
+  answer: Only operators on the host. Serve the Actuator endpoints on a separate management port bound to 127.0.0.1,
+    so they are unreachable from the public interface and no new authentication system is needed. The existing public
+    /health endpoint on the main port stays as it is.
+- question: What is the standard JSON error-body schema, including its fields and message format?
+  answer: 'Keep the existing schema {"error": "<stable machine-readable code>", "message": "<human-readable text>"}
+    and use it for every error response, including framework-generated ones such as unmatched routes, 405, 413,
+    500 and 503.'
+- question: Does the target that an active link never receives a 5xx while the service is running exclude database
+    outages, or must the 503 database-unavailable response be changed?
+  answer: 'The target applies while the service and its database are available: then an active link never receives
+    a 5xx. During a database outage the 503 with Retry-After is the intended, explicit behaviour.'
+- question: Must redirect metrics distinguish 404 causes, such as unknown codes, deleted codes, or aliases entered
+    with the wrong case, or is an aggregate 404 outcome sufficient?
+  answer: 'An aggregate 404 outcome is sufficient. No per-cause breakdown: it would add queries on the redirect
+    hot path and record more about requests than needed. Diagnosing wrong-case aliases is out of scope for this
+    release.'
+- question: What Retry-After delay or date should the 503 response use when the database is unavailable?
+  answer: 'Retry-After: 5 (seconds). Short enough that users are not kept waiting, long enough that clients do not
+    hammer a database that is recovering.'
+- question: Do missing management tokens count toward the 10 failed management-token attempts per client IP, or
+    does the limit count only supplied but incorrect tokens?
+  answer: 'Only supplied-but-incorrect tokens count toward the 10 failed attempts per minute per client IP. A request
+    without a token always gets 401 missing_token and does not count: it is a client bug, not token guessing, and
+    counting it would let one misconfigured client on a shared IP lock others out.'

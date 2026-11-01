@@ -1,0 +1,10 @@
+{
+  "answers": [
+    {
+      "question": "What Retry-After delay or date should the 503 response use when the database is unavailable?",
+      "answer": "Retry-After: 5 (seconds). Short enough that users are not kept waiting, long enough that clients do not hammer a database that is recovering."
+    }
+  ],
+  "answered_by": "roopeshkotte",
+  "source": "human"
+}

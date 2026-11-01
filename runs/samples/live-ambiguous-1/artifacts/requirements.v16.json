@@ -1,0 +1,350 @@
+{
+  "name": "requirements",
+  "version": 16,
+  "sha": "f84c2da072a7846ea941b5792732f4fba685fd69c820defaea6b861b826d97d5",
+  "produced_by": "requirements/analyst#4",
+  "inputs": [],
+  "result": {
+    "summary": "17 functional and 5 non-functional requirements; 22 ambiguity decisions resolved and 0 left open.",
+    "outputs": {
+      "goal": "Improve the single-node url-shortener’s redirect observability and security controls without changing how existing links resolve or how inactive links behave. Preserve the existing API contract while adding explicit handling for database outages, rate limits, oversized requests, and errors.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "Every active pre-existing link must continue to resolve to the same destination with identical behavior."
+        },
+        {
+          "id": "FR2",
+          "text": "Expired links must continue to return 410 and deleted links must continue to return 404. Link and tombstone retention durations must not change."
+        },
+        {
+          "id": "FR3",
+          "text": "Preserve the existing response contract for link requests: invalid input returns 400, unknown or deleted codes return 404, and expired links return 410. Preserve existing link-code case behavior."
+        },
+        {
+          "id": "FR4",
+          "text": "If the database is unavailable during a redirect, return 503 with `Retry-After: 5` and the standard JSON error body."
+        },
+        {
+          "id": "FR5",
+          "text": "For any other unexpected error, return a 500 response with the standard JSON error body and no internal details."
+        },
+        {
+          "id": "FR6",
+          "text": "The service must not check whether a destination URL is reachable and must not retry destination requests on the client’s behalf."
+        },
+        {
+          "id": "FR7",
+          "text": "Expose redirect outcome counts through Spring Boot Actuator and Micrometer, with outcomes grouped as 302, 404, 410, and 5xx. The 404 outcome must be aggregate, without a cause breakdown."
+        },
+        {
+          "id": "FR8",
+          "text": "Expose redirect latency measurements through Spring Boot Actuator and Micrometer."
+        },
+        {
+          "id": "FR9",
+          "text": "Every error response, including framework-generated errors such as unmatched routes, 405, 413, 500, and 503, must use the JSON schema `{\"error\":\"<stable machine-readable code>\",\"message\":\"<human-readable text>\"}`."
+        },
+        {
+          "id": "FR10",
+          "text": "Reject request bodies larger than 16 KB on `/api/**` with 413 and the standard JSON error body."
+        },
+        {
+          "id": "FR11",
+          "text": "Keep the existing link-creation limit of 20 creates per minute per client IP, returning 429 with `Retry-After` when exceeded."
+        },
+        {
+          "id": "FR12",
+          "text": "Limit failed management-token attempts to 10 per minute per client IP across the stats and delete endpoints. Further attempts must receive 429 with `Retry-After` and the standard JSON error body."
+        },
+        {
+          "id": "FR13",
+          "text": "Do not add a rate limit for link-code probing in this release. Repeated code lookups that result in 404 must continue to be observable through the aggregate 404 redirect metric."
+        },
+        {
+          "id": "FR14",
+          "text": "Expose only the Actuator health and metrics endpoints on a separate management port bound to `127.0.0.1`."
+        },
+        {
+          "id": "FR15",
+          "text": "Add these headers to every response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`."
+        },
+        {
+          "id": "FR16",
+          "text": "Error responses must not include stack traces or internal details."
+        },
+        {
+          "id": "FR17",
+          "text": "Keep the existing public `/health` endpoint on the main port unchanged."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "While the service and database are available, an active link must not receive a 5xx response. A database outage is excluded from this target and must follow FR4."
+        },
+        {
+          "id": "NFR2",
+          "text": "The existing in-process redirect p99 latency check must continue to pass with a target below 50 ms."
+        },
+        {
+          "id": "NFR3",
+          "text": "Do not add logging of visitor information."
+        },
+        {
+          "id": "NFR4",
+          "text": "Changes are limited to the url-shortener service running as a single node; do not change infrastructure, deployment, or third-party integrations."
+        },
+        {
+          "id": "NFR5",
+          "text": "All existing and new tests must pass, and the test suite must not drop below its current 95 tests. Automated tests must cover the security headers and error behavior. Release approval requires product-owner approval."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "Which pre-existing links are in scope, and for how long must they continue to work (including expired, deleted, or otherwise inactive links)?",
+          "resolution": "Every active link keeps resolving to the same destination with identical behaviour. Expired links keep returning 410 and deleted links 404, as today. No change to how long links or tombstones are retained.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This defines the compatibility and retention requirements for existing links."
+        },
+        {
+          "question": "Which reliability measures and targets define “more reliable” (for example, availability, resolution success, latency, or recovery time)?",
+          "resolution": "Reliability is measured by redirect outcomes and latency, exposed as metrics through Spring Boot Actuator and Micrometer: count redirects by outcome (302, 404, 410, 5xx) and time them. Target: an active link never receives a 5xx while the service is running, and the existing in-process redirect p99 < 50 ms check keeps passing.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This specifies the reliability measurements and targets."
+        },
+        {
+          "question": "What failures have users experienced, how often do they occur, and which shortener workflows or user groups are affected?",
+          "resolution": "There is no incident data, only anecdotal reports. The goal is to make failures measurable and diagnosable (per-outcome redirect metrics, consistent JSON errors), not to fix a guessed bug. Likely causes to confirm with the metrics: expired links (410) and aliases typed with the wrong case.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This limits the work to measurement and diagnosability rather than a speculative bug fix."
+        },
+        {
+          "question": "What threats, attackers, and attack surfaces must the security work address, and what residual risk is acceptable?",
+          "resolution": "A public-internet attacker who probes codes and management tokens, floods link creation, sends oversized or malformed requests, or tries to extract internal details from error responses, plus browser-side attacks such as framing or content sniffing. Accepted residual risk for this release: no URL reputation or malware scanning of destinations, no authentication system beyond management tokens.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This defines the threat model and accepted residual risks."
+        },
+        {
+          "question": "Which security controls or data-handling requirements are expected, including requirements for access, privacy, logging, or compliance?",
+          "resolution": "Add standard security headers to every response (X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy: no-referrer, Content-Security-Policy: default-src 'none'; frame-ancestors 'none'), a request body size limit for the JSON API, and error responses that never include stack traces or internal details. Log nothing new about visitors. Actuator exposes only the health and metrics endpoints. No compliance regime applies to this release.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This specifies the required controls, data handling, and compliance scope."
+        },
+        {
+          "question": "Which service components, integrations, and deployment environments are in scope for reliability and security changes?",
+          "resolution": "Only the url-shortener service, running as a single node. No infrastructure, deployment or third-party integration changes.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This constrains implementation scope to the service itself."
+        },
+        {
+          "question": "What should happen for failed, malformed, unknown, or unreachable links, including response behavior, status codes, and retry behavior?",
+          "resolution": "Keep the existing contract: 400 for invalid input, 404 for unknown or deleted codes, 410 for expired links. If the database is unavailable during a redirect, return 503 with a Retry-After header and the standard JSON error body instead of an unhandled 500. Any other unexpected error returns a 500 JSON error without internal details. The service never checks whether a destination is reachable and never retries on the client's behalf.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This establishes the required link failure behavior and retry policy."
+        },
+        {
+          "question": "What broader-rollout decision or release gate must the reliability and security work satisfy?",
+          "resolution": "All existing tests and the new tests pass (the suite must not drop below its current 95 tests), the security headers and error behaviour are covered by automated tests, and the product owner approves the release.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This defines the release gate."
+        },
+        {
+          "question": "What maximum request-body size should the JSON API enforce?",
+          "resolution": "16 KB for requests to /api/**, well above the largest valid create request. A larger body is rejected with 413 Payload Too Large and the standard JSON error body.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This supplies the body limit and oversized-request behavior."
+        },
+        {
+          "question": "What controls and thresholds should protect against link-code or management-token probing and link-creation floods, including the response to requests that exceed those limits?",
+          "resolution": "Link-creation floods: keep the existing limit of 20 creates per minute per client IP (429 with Retry-After). Management-token probing: add a limit of 10 failed management-token attempts per minute per client IP, counted across the stats and delete endpoints; further attempts get 429 with Retry-After and the standard JSON error body. Link-code probing: no limit in this release, because 64^8 (about 2.8e14) possible codes makes brute force impractical and limiting 404s would hurt users with typos; this is an accepted residual risk, observable through the 404 redirect metric.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This defines the rate limits and accepted link-code probing risk."
+        },
+        {
+          "question": "Who may access the Actuator health and metrics endpoints?",
+          "resolution": "Only operators on the host. Serve the Actuator endpoints on a separate management port bound to 127.0.0.1, so they are unreachable from the public interface and no new authentication system is needed. The existing public /health endpoint on the main port stays as it is.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This defines access to Actuator and preserves the existing public health endpoint."
+        },
+        {
+          "question": "What is the standard JSON error-body schema, including its fields and message format?",
+          "resolution": "Keep the existing schema {\"error\": \"<stable machine-readable code>\", \"message\": \"<human-readable text>\"} and use it for every error response, including framework-generated ones such as unmatched routes, 405, 413, 500 and 503.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This establishes the error-body schema and its coverage."
+        },
+        {
+          "question": "Does the target that an active link never receives a 5xx while the service is running exclude database outages, or must the 503 database-unavailable response be changed?",
+          "resolution": "The target applies while the service and its database are available: then an active link never receives a 5xx. During a database outage the 503 with Retry-After is the intended, explicit behaviour.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This explicitly reconciles the reliability target with database-outage behavior."
+        },
+        {
+          "question": "Must redirect metrics distinguish 404 causes, such as unknown codes, deleted codes, or aliases entered with the wrong case, or is an aggregate 404 outcome sufficient?",
+          "resolution": "An aggregate 404 outcome is sufficient. No per-cause breakdown: it would add queries on the redirect hot path and record more about requests than needed. Diagnosing wrong-case aliases is out of scope for this release.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This defines the required 404 metric granularity and excludes wrong-case diagnosis."
+        },
+        {
+          "question": "What Retry-After delay or date should the 503 response use when the database is unavailable?",
+          "resolution": "Retry-After: 5 (seconds). Short enough that users are not kept waiting, long enough that clients do not hammer a database that is recovering.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This sets the database-unavailable retry delay."
+        },
+        {
+          "question": "How should the 16 KB request-body limit be measured?",
+          "resolution": "Interpret 16 KB as 16,384 bytes (16 KiB), measured as request-body bytes.",
+          "source": "assumption",
+          "rationale": "A binary 16 KiB byte limit is a conventional configuration for HTTP body limits and makes boundary behavior testable."
+        },
+        {
+          "question": "How should the service determine the client IP used for per-IP rate limits?",
+          "resolution": "Use the direct remote peer address. Do not trust forwarded-IP headers unless a trusted-proxy configuration is explicitly added in a future scope.",
+          "source": "assumption",
+          "rationale": "Using the socket peer avoids trusting attacker-controlled forwarding headers; no proxy or infrastructure changes are in scope."
+        },
+        {
+          "question": "What Retry-After value and counting window should apply to the new management-token rate limit?",
+          "resolution": "Use a rolling 60-second window. Once 10 failed attempts have occurred, return 429 for further stats or delete requests from that IP until an attempt expires from the window; provide Retry-After as an integer number of seconds until another attempt is allowed.",
+          "source": "assumption",
+          "rationale": "A rolling minute directly matches the stated per-minute limit, and seconds until the next allowed attempt is a conventional, actionable Retry-After value."
+        },
+        {
+          "question": "Which stable machine-readable error codes should the JSON error body use?",
+          "resolution": "Use lowercase snake_case codes: `invalid_request` for 400, `not_found` for 404, `link_expired` for 410, `method_not_allowed` for 405, `payload_too_large` for 413, `rate_limit_exceeded` for 429, `service_unavailable` for 503, and `internal_error` for unexpected 500 errors. Use `unauthorized` for invalid or missing management tokens.",
+          "source": "assumption",
+          "rationale": "Lowercase snake_case semantic codes are conventional and stable; explicit mappings make client and automated-test behavior deterministic."
+        },
+        {
+          "question": "What status should invalid or missing management tokens return before the attempt limit is reached?",
+          "resolution": "Return 401 with the standard JSON error body for an invalid or missing management token.",
+          "source": "assumption",
+          "rationale": "401 is the conventional HTTP response for missing or invalid authentication credentials and does not require introducing a new authentication mechanism."
+        },
+        {
+          "question": "What labels should redirect metrics use, and which Actuator paths and management-port value should be configured?",
+          "resolution": "Use only the outcome as a redirect metric label; do not label metrics with link codes, destinations, or client IPs. Use the standard `/actuator/health` and `/actuator/metrics` paths on a distinct management port configured separately from the main port, bound to `127.0.0.1`.",
+          "source": "assumption",
+          "rationale": "Outcome-only labels meet the requested aggregate measurements while avoiding visitor data and high-cardinality metrics. Standard Spring Boot Actuator paths are conventional; the numeric port is a service configuration choice because no product or deployment port was specified."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given an active pre-existing link, when its code is resolved, then it redirects to the same destination with the same behavior as before the change.",
+        "Given an expired link, when its code is resolved, then the response is 410; given a deleted link, then the response is 404. Retention behavior is unchanged.",
+        "Given invalid input, an unknown or deleted code, or an expired link, when the corresponding request is made, then the response is respectively 400, 404, or 410.",
+        "Given the database is unavailable during a redirect, when the redirect is requested, then the response is 503, includes `Retry-After: 5`, and has the standard JSON error body.",
+        "Given an unexpected server error, when it occurs, then the response is 500 with the standard JSON error body and contains no stack trace or internal detail.",
+        "Given a redirect outcome of 302, 404, 410, or 5xx, when the request is processed, then Actuator/Micrometer exposes the corresponding aggregate outcome count and redirect timing; 404 causes are not separately reported.",
+        "Given a request to `/api/**` with a body of at most 16,384 bytes, when the request is otherwise valid, then it is not rejected for body size; given a body larger than 16,384 bytes, then it returns 413 with the standard JSON error body.",
+        "Given an IP has reached the existing limit of 20 creates in a minute, when it makes another create request in that limit window, then the request returns 429 with `Retry-After`.",
+        "Given an IP has made 10 failed management-token attempts within 60 seconds across stats and delete, when it makes another stats or delete request before an attempt expires, then it returns 429 with `Retry-After` and the standard JSON error body. Before the limit is reached, an invalid or missing token returns 401 with that body.",
+        "Given repeated requests for unknown link codes, when those requests are made, then no new code-probing rate limit is applied and the 404 redirect metric aggregates the outcomes.",
+        "Given any response, including redirects and error responses, when it is returned, then it contains all four specified security headers with the specified values.",
+        "Given a request from the public interface to an Actuator endpoint, when it is made, then the management endpoint is unreachable; given access from the host, then only Actuator health and metrics endpoints are exposed on the separate management port. The existing main-port `/health` endpoint is unchanged.",
+        "Given an unmatched route or unsupported method, when requested, then the error response uses the standard JSON schema and the appropriate 404 or 405 status without internal details.",
+        "Given the completed change, when the test suite is run, then all existing and new tests pass, the suite contains at least 95 tests, security headers and error behavior are covered by automated tests, and the product owner approves the release."
+      ],
+      "clarifications": [
+        {
+          "question": "Which pre-existing links are in scope, and for how long must they continue to work (including expired, deleted, or otherwise inactive links)?",
+          "answer": "Every active link keeps resolving to the same destination with identical behaviour. Expired links keep returning 410 and deleted links 404, as today. No change to how long links or tombstones are retained."
+        },
+        {
+          "question": "Which reliability measures and targets define “more reliable” (for example, availability, resolution success, latency, or recovery time)?",
+          "answer": "Reliability is measured by redirect outcomes and latency, exposed as metrics through Spring Boot Actuator and Micrometer: count redirects by outcome (302, 404, 410, 5xx) and time them. Target: an active link never receives a 5xx while the service is running, and the existing in-process redirect p99 < 50 ms check keeps passing."
+        },
+        {
+          "question": "What failures have users experienced, how often do they occur, and which shortener workflows or user groups are affected?",
+          "answer": "There is no incident data, only anecdotal reports. The goal is to make failures measurable and diagnosable (per-outcome redirect metrics, consistent JSON errors), not to fix a guessed bug. Likely causes to confirm with the metrics: expired links (410) and aliases typed with the wrong case."
+        },
+        {
+          "question": "What threats, attackers, and attack surfaces must the security work address, and what residual risk is acceptable?",
+          "answer": "A public-internet attacker who probes codes and management tokens, floods link creation, sends oversized or malformed requests, or tries to extract internal details from error responses, plus browser-side attacks such as framing or content sniffing. Accepted residual risk for this release: no URL reputation or malware scanning of destinations, no authentication system beyond management tokens."
+        },
+        {
+          "question": "Which security controls or data-handling requirements are expected, including requirements for access, privacy, logging, or compliance?",
+          "answer": "Add standard security headers to every response (X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy: no-referrer, Content-Security-Policy: default-src 'none'; frame-ancestors 'none'), a request body size limit for the JSON API, and error responses that never include stack traces or internal details. Log nothing new about visitors. Actuator exposes only the health and metrics endpoints. No compliance regime applies to this release."
+        },
+        {
+          "question": "Which service components, integrations, and deployment environments are in scope for reliability and security changes?",
+          "answer": "Only the url-shortener service, running as a single node. No infrastructure, deployment or third-party integration changes."
+        },
+        {
+          "question": "What should happen for failed, malformed, unknown, or unreachable links, including response behavior, status codes, and retry behavior?",
+          "answer": "Keep the existing contract: 400 for invalid input, 404 for unknown or deleted codes, 410 for expired links. If the database is unavailable during a redirect, return 503 with a Retry-After header and the standard JSON error body instead of an unhandled 500. Any other unexpected error returns a 500 JSON error without internal details. The service never checks whether a destination is reachable and never retries on the client's behalf."
+        },
+        {
+          "question": "What broader-rollout decision or release gate must the reliability and security work satisfy?",
+          "answer": "All existing tests and the new tests pass (the suite must not drop below its current 95 tests), the security headers and error behaviour are covered by automated tests, and the product owner approves the release."
+        },
+        {
+          "question": "What maximum request-body size should the JSON API enforce?",
+          "answer": "16 KB for requests to /api/**, well above the largest valid create request. A larger body is rejected with 413 Payload Too Large and the standard JSON error body."
+        },
+        {
+          "question": "What controls and thresholds should protect against link-code or management-token probing and link-creation floods, including the response to requests that exceed those limits?",
+          "answer": "Link-creation floods: keep the existing limit of 20 creates per minute per client IP (429 with Retry-After). Management-token probing: add a limit of 10 failed management-token attempts per minute per client IP, counted across the stats and delete endpoints; further attempts get 429 with Retry-After and the standard JSON error body. Link-code probing: no limit in this release, because 64^8 (about 2.8e14) possible codes makes brute force impractical and limiting 404s would hurt users with typos; this is an accepted residual risk, observable through the 404 redirect metric."
+        },
+        {
+          "question": "Who may access the Actuator health and metrics endpoints?",
+          "answer": "Only operators on the host. Serve the Actuator endpoints on a separate management port bound to 127.0.0.1, so they are unreachable from the public interface and no new authentication system is needed. The existing public /health endpoint on the main port stays as it is."
+        },
+        {
+          "question": "What is the standard JSON error-body schema, including its fields and message format?",
+          "answer": "Keep the existing schema {\"error\": \"<stable machine-readable code>\", \"message\": \"<human-readable text>\"} and use it for every error response, including framework-generated ones such as unmatched routes, 405, 413, 500 and 503."
+        },
+        {
+          "question": "Does the target that an active link never receives a 5xx while the service is running exclude database outages, or must the 503 database-unavailable response be changed?",
+          "answer": "The target applies while the service and its database are available: then an active link never receives a 5xx. During a database outage the 503 with Retry-After is the intended, explicit behaviour."
+        },
+        {
+          "question": "Must redirect metrics distinguish 404 causes, such as unknown codes, deleted codes, or aliases entered with the wrong case, or is an aggregate 404 outcome sufficient?",
+          "answer": "An aggregate 404 outcome is sufficient. No per-cause breakdown: it would add queries on the redirect hot path and record more about requests than needed. Diagnosing wrong-case aliases is out of scope for this release."
+        },
+        {
+          "question": "What Retry-After delay or date should the 503 response use when the database is unavailable?",
+          "answer": "Retry-After: 5 (seconds). Short enough that users are not kept waiting, long enough that clients do not hammer a database that is recovering."
+        }
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "How should the 16 KB request-body limit be measured?",
+        "choice": "Interpret 16 KB as 16,384 bytes (16 KiB), measured as request-body bytes.",
+        "rationale": "A binary 16 KiB byte limit is a conventional configuration for HTTP body limits and makes boundary behavior testable.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How should the service determine the client IP used for per-IP rate limits?",
+        "choice": "Use the direct remote peer address. Do not trust forwarded-IP headers unless a trusted-proxy configuration is explicitly added in a future scope.",
+        "rationale": "Using the socket peer avoids trusting attacker-controlled forwarding headers; no proxy or infrastructure changes are in scope.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What Retry-After value and counting window should apply to the new management-token rate limit?",
+        "choice": "Use a rolling 60-second window. Once 10 failed attempts have occurred, return 429 for further stats or delete requests from that IP until an attempt expires from the window; provide Retry-After as an integer number of seconds until another attempt is allowed.",
+        "rationale": "A rolling minute directly matches the stated per-minute limit, and seconds until the next allowed attempt is a conventional, actionable Retry-After value.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Which stable machine-readable error codes should the JSON error body use?",
+        "choice": "Use lowercase snake_case codes: `invalid_request` for 400, `not_found` for 404, `link_expired` for 410, `method_not_allowed` for 405, `payload_too_large` for 413, `rate_limit_exceeded` for 429, `service_unavailable` for 503, and `internal_error` for unexpected 500 errors. Use `unauthorized` for invalid or missing management tokens.",
+        "rationale": "Lowercase snake_case semantic codes are conventional and stable; explicit mappings make client and automated-test behavior deterministic.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What status should invalid or missing management tokens return before the attempt limit is reached?",
+        "choice": "Return 401 with the standard JSON error body for an invalid or missing management token.",
+        "rationale": "401 is the conventional HTTP response for missing or invalid authentication credentials and does not require introducing a new authentication mechanism.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What labels should redirect metrics use, and which Actuator paths and management-port value should be configured?",
+        "choice": "Use only the outcome as a redirect metric label; do not label metrics with link codes, destinations, or client IPs. Use the standard `/actuator/health` and `/actuator/metrics` paths on a distinct management port configured separately from the main port, bound to `127.0.0.1`.",
+        "rationale": "Outcome-only labels meet the requested aggregate measurements while avoiding visitor data and high-cardinality metrics. Standard Spring Boot Actuator paths are conventional; the numeric port is a service configuration choice because no product or deployment port was specified.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

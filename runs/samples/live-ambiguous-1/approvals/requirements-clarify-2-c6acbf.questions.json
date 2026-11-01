@@ -1,0 +1,31 @@
+{
+  "run_id": "live-ambiguous-1",
+  "stage": "requirements",
+  "round": 2,
+  "questions": [
+    {
+      "question": "What maximum request-body size should the JSON API enforce?",
+      "why": "No numeric limit is specified, and available conventions vary. Choosing a limit may reject currently accepted requests, so a product decision is needed."
+    },
+    {
+      "question": "What controls and thresholds should protect against link-code or management-token probing and link-creation floods, including the response to requests that exceed those limits?",
+      "why": "These attack types are in the stated threat scope, but no rate limits, blocking rules, thresholds, or client-visible behavior are given. Guessing them could disrupt legitimate users or leave the intended protection unmet."
+    },
+    {
+      "question": "Who may access the Actuator health and metrics endpoints?",
+      "why": "Exposing only these endpoints does not specify whether they are public, authenticated, or otherwise restricted. Access to operational data is a security decision and cannot safely be inferred."
+    },
+    {
+      "question": "What is the standard JSON error-body schema, including its fields and message format?",
+      "why": "Consistency and omission of internal details are required, but the schema is not provided. Choosing a new shape could change the API contract for clients."
+    },
+    {
+      "question": "Does the target that an active link never receives a 5xx while the service is running exclude database outages, or must the 503 database-unavailable response be changed?",
+      "why": "The reliability target prohibits 5xx responses while the service is running, while the specified database-outage behavior requires a 503 in that same condition. Both cannot be satisfied for an active link during a database outage."
+    },
+    {
+      "question": "Must redirect metrics distinguish 404 causes, such as unknown codes, deleted codes, or aliases entered with the wrong case, or is an aggregate 404 outcome sufficient?",
+      "why": "The required status-level metrics can count 404s but cannot establish whether wrong-case aliases caused them. Further diagnostic detail could affect metric design and data handling; the required granularity is not specified."
+    }
+  ]
+}

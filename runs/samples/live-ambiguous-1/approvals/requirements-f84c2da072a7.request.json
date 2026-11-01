@@ -1,0 +1,20 @@
+{
+  "run_id": "live-ambiguous-1",
+  "stage": "requirements",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "17 functional and 5 non-functional requirements; 22 ambiguity decisions resolved and 0 left open.",
+  "gate_evidence": [
+    "outputs_present: PASS",
+    "ambiguities_resolved: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "How should the 16 KB request-body limit be measured?: Interpret 16 KB as 16,384 bytes (16 KiB), measured as request-body bytes. (assumption)",
+    "How should the service determine the client IP used for per-IP rate limits?: Use the direct remote peer address. Do not trust forwarded-IP headers unless a trusted-proxy configuration is explicitly added in a future scope. (assumption)",
+    "What Retry-After value and counting window should apply to the new management-token rate limit?: Use a rolling 60-second window. Once 10 failed attempts have occurred, return 429 for further stats or delete requests from that IP until an attempt expires from the window; provide Retry-After as an integer number of seconds until another attempt is allowed. (assumption)",
+    "Which stable machine-readable error codes should the JSON error body use?: Use lowercase snake_case codes: `invalid_request` for 400, `not_found` for 404, `link_expired` for 410, `method_not_allowed` for 405, `payload_too_large` for 413, `rate_limit_exceeded` for 429, `service_unavailable` for 503, and `internal_error` for unexpected 500 errors. Use `unauthorized` for invalid or missing management tokens. (assumption)",
+    "What status should invalid or missing management tokens return before the attempt limit is reached?: Return 401 with the standard JSON error body for an invalid or missing management token. (assumption)",
+    "What labels should redirect metrics use, and which Actuator paths and management-port value should be configured?: Use only the outcome as a redirect metric label; do not label metrics with link codes, destinations, or client IPs. Use the standard `/actuator/health` and `/actuator/metrics` paths on a distinct management port configured separately from the main port, bound to `127.0.0.1`. (assumption)"
+  ],
+  "artifact_sha": "f84c2da072a7846ea941b5792732f4fba685fd69c820defaea6b861b826d97d5"
+}

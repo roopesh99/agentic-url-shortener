@@ -1,0 +1,113 @@
+{
+  "name": "implement",
+  "version": 1,
+  "sha": "f46b5747fe5d88f30d9c6e8c5ba96fbee1d04fc35cd80e78f0973961961e4759",
+  "produced_by": "implement/coder#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 18,
+      "sha": "1750218b72b57329cf70cb1581ca888f41c43fb1ff5882c23afa9c5d257ba346"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "12c6f2b9ac0c439a287e0b0552a9f21eeaf7ec2a946ffa0e263b366160fed79c"
+    }
+  ],
+  "result": {
+    "summary": "Reliability and hardening per the approved plan: standard JSON errors everywhere, 503 on link-store outage, failed-token throttle, 16 KiB body limit, security headers, loopback-only Actuator metrics",
+    "outputs": {
+      "files": [
+        "url-shortener/pom.xml",
+        "url-shortener/src/main/java/com/example/shortener/api/ApiErrorController.java",
+        "url-shortener/src/main/java/com/example/shortener/api/ApiExceptionHandler.java",
+        "url-shortener/src/main/java/com/example/shortener/api/ErrorBodies.java",
+        "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+        "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+        "url-shortener/src/main/java/com/example/shortener/api/RedirectMetricsInterceptor.java",
+        "url-shortener/src/main/java/com/example/shortener/config/ApiBodyLimitFilter.java",
+        "url-shortener/src/main/java/com/example/shortener/config/ManagementSecurityHeadersConfig.java",
+        "url-shortener/src/main/java/com/example/shortener/config/SecurityHeadersFilter.java",
+        "url-shortener/src/main/java/com/example/shortener/config/ShortenerProperties.java",
+        "url-shortener/src/main/java/com/example/shortener/config/WebConfig.java",
+        "url-shortener/src/main/java/com/example/shortener/service/ApiException.java",
+        "url-shortener/src/main/java/com/example/shortener/service/ManagementTokenRateLimiter.java",
+        "url-shortener/src/main/java/com/example/shortener/service/RateLimitedException.java",
+        "url-shortener/src/main/java/com/example/shortener/service/ServiceUnavailableException.java",
+        "url-shortener/src/main/resources/META-INF/spring/org.springframework.boot.actuate.autoconfigure.web.ManagementContextConfiguration.imports",
+        "url-shortener/src/main/resources/application.yml"
+      ]
+    },
+    "files_written": [
+      "url-shortener/pom.xml",
+      "url-shortener/src/main/java/com/example/shortener/api/ApiErrorController.java",
+      "url-shortener/src/main/java/com/example/shortener/api/ApiExceptionHandler.java",
+      "url-shortener/src/main/java/com/example/shortener/api/ErrorBodies.java",
+      "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+      "url-shortener/src/main/java/com/example/shortener/api/RedirectController.java",
+      "url-shortener/src/main/java/com/example/shortener/api/RedirectMetricsInterceptor.java",
+      "url-shortener/src/main/java/com/example/shortener/config/ApiBodyLimitFilter.java",
+      "url-shortener/src/main/java/com/example/shortener/config/ManagementSecurityHeadersConfig.java",
+      "url-shortener/src/main/java/com/example/shortener/config/SecurityHeadersFilter.java",
+      "url-shortener/src/main/java/com/example/shortener/config/ShortenerProperties.java",
+      "url-shortener/src/main/java/com/example/shortener/config/WebConfig.java",
+      "url-shortener/src/main/java/com/example/shortener/service/ApiException.java",
+      "url-shortener/src/main/java/com/example/shortener/service/ManagementTokenRateLimiter.java",
+      "url-shortener/src/main/java/com/example/shortener/service/RateLimitedException.java",
+      "url-shortener/src/main/java/com/example/shortener/service/ServiceUnavailableException.java",
+      "url-shortener/src/main/resources/META-INF/spring/org.springframework.boot.actuate.autoconfigure.web.ManagementContextConfiguration.imports",
+      "url-shortener/src/main/resources/application.yml"
+    ],
+    "decisions": [
+      {
+        "topic": "Error contract",
+        "choice": "Existing ApiException codes stay authoritative; only framework errors (via their own status and headers) and unexpected exceptions are translated, with fixed messages",
+        "rationale": "Reviewer change request: the existing 400/401/403/404/409/410/429 contract must not change",
+        "source": "agent"
+      },
+      {
+        "topic": "Token throttle",
+        "choice": "Counted in LinkController after the service reports invalid_token, keyed by getRemoteAddr(), one shared rolling 60 s window for stats and delete; the 11th wrong token gets 429; valid and missing tokens bypass it",
+        "rationale": "FR10 and the owner's decisions; never pre-rejecting means a valid owner cannot be locked out",
+        "source": "agent"
+      },
+      {
+        "topic": "Database outage",
+        "choice": "Only the redirect's required link lookup maps resource-failure, transient and cannot-create-transaction exceptions to 503 service_unavailable with Retry-After 5; click recording stays best-effort",
+        "rationale": "FR6 as scoped to redirects; keeps ClickFailureIsolationTest's guarantee intact",
+        "source": "agent"
+      },
+      {
+        "topic": "Body limit",
+        "choice": "A filter on /api/** counts received bytes (stops at limit+1) and replays the buffered body; Content-Length above the limit is rejected early",
+        "rationale": "FR12; a missing or false Content-Length cannot bypass it (verified with a chunked 20 KB request)",
+        "source": "agent"
+      },
+      {
+        "topic": "Security headers",
+        "choice": "A highest-precedence filter that also runs on error dispatches, registered on the management child context through ManagementContextConfiguration as well",
+        "rationale": "FR13 says every response; the management server is a separate context with its own filter chain",
+        "source": "agent"
+      },
+      {
+        "topic": "Metrics",
+        "choice": "One Micrometer timer shortener.redirects tagged only by outcome (302/404/410/5xx/other): its count is the outcome count and its timing the latency",
+        "rationale": "FR14; low cardinality and no codes, IPs or destinations, so no privacy or hot-path cost",
+        "source": "agent"
+      },
+      {
+        "topic": "Management server",
+        "choice": "Port 8081 bound to 127.0.0.1 exposing only health and metrics; verified unreachable from the LAN address",
+        "rationale": "FR15; operators only, without adding an authentication system",
+        "source": "agent"
+      },
+      {
+        "topic": "Configuration change",
+        "choice": "application.yml gains management and new shortener limits; properties are configurable so tests can use ephemeral ports",
+        "rationale": "Modifying existing config is a policy-gated change, expected here",
+        "source": "agent"
+      }
+    ]
+  }
+}

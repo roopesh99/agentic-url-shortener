@@ -1,0 +1,5 @@
+{
+  "approved": false,
+  "approver": "roopeshkotte",
+  "comment": "Keep the existing error contract exactly: missing token 401 missing_token; wrong token 403 invalid_token; 404 not_found; 410 expired; 429 rate_limited (also for the new failed-token limit); existing 400/409 codes unchanged. New codes only for new cases: 405 method_not_allowed, 413 payload_too_large, 500 internal_error, 503 service_unavailable."
+}

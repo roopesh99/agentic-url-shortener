@@ -1,0 +1,208 @@
+{
+  "request": {
+    "agent": "analyst",
+    "effort": "high",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ambiguities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "enum": [
+                  "assumption",
+                  "unresolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "resolution",
+              "source",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "non_functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "goal",
+        "functional",
+        "non_functional",
+        "ambiguities",
+        "acceptance_criteria"
+      ],
+      "type": "object"
+    },
+    "system": "You are the requirements analyst in a governed software delivery pipeline. You turn a product owner's requirement into a normalized engineering specification that the architect, coders and testers downstream will build from. You do not write code.\n\nYour output is checked by automated gates and then reviewed by a human before any design or code work starts, so precision matters more than polish.\n\nHow to work:\n- Restate the goal in one or two sentences an engineer could act on.\n- List functional and non-functional requirements as atomic, testable statements. Keep the requirement's own ids (FR1, NFR2, ...) when it provides them; otherwise assign them. Do not invent scope the requirement does not ask for.\n- Surface every ambiguity: anything an engineer would have to guess about (formats, limits, error behaviour, status codes, security posture). Include the requirement's own \"open points\" and any you find yourself.\n- For each ambiguity, decide whether a safe, conventional default exists.\n  - If it does, set `source` to \"assumption\", put the default in `resolution`, and explain in `rationale` why it is the conventional and low-risk choice. These become recorded decisions a human will review.\n  - If the answer is a genuine product decision (who may see data, business rules, legal or compliance posture, anything where a wrong guess would be costly to reverse), set `source` to \"unresolved\" and `resolution` to null. This stops the pipeline until a human answers, which is the intended behaviour. Do not guess on these to keep things moving.\n- Write acceptance criteria as observable behaviours (request \u2192 expected response), covering the main path and the important failure paths.\n- `summary`: one line, e.g. counts of requirements and how many ambiguities were resolved vs. left open.",
+    "user": "<requirement>\n# Request: make the shortener more reliable\n\n> Input to the orchestrator, verbatim from a product owner's chat message. Deliberately\n> under-specified: this scenario tests that the pipeline turns a vague request into an\n> explicit, human-approved scope instead of guessing one.\n\n\"Some users say their links sometimes don't work, and the security team wants the service\nhardened before we roll it out more widely. Can you make it more reliable and secure?\nWhatever you think matters most \u2014 just don't break the links people already have.\"\n</requirement>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "acceptance_criteria": [
+        "Given a pre-change link that successfully resolves, when that same link is requested after the change under equivalent conditions, it resolves to the same destination and retains its existing externally observable resolution behavior. A failure to resolve or a different destination fails acceptance.",
+        "Reliability and security changes cannot be objectively accepted or rejected from this request alone. Before they can be verified, a human must define measurable reliability targets and approve the security scope and success criteria.",
+        "Expected behavior for malformed, unknown, or otherwise failing links cannot be specified from the request; those failure-path criteria remain blocked pending a human decision."
+      ],
+      "ambiguities": [
+        {
+          "question": "What does \u201cdon\u2019t break the links people already have\u201d mean in observable terms?",
+          "rationale": "Preserving the existing user-facing behavior is the conventional, low-risk interpretation of backward compatibility. This does not determine which links must be preserved or for how long.",
+          "resolution": "Treat a link as unbroken when it continues to resolve to the same destination and retains its existing externally observable resolution behavior.",
+          "source": "assumption"
+        },
+        {
+          "question": "Which pre-existing links are in scope, and for how long must they continue to work (including expired, deleted, or otherwise inactive links)?",
+          "rationale": "The population and retention period affect user expectations, data retention, and implementation cost; the request does not establish them.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "Which reliability measures and targets define \u201cmore reliable\u201d (for example, availability, resolution success, latency, or recovery time)?",
+          "rationale": "Choosing metrics or thresholds determines what work is required and when it is acceptable to release.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "What failures have users experienced, how often do they occur, and which shortener workflows or user groups are affected?",
+          "rationale": "Without examples or failure evidence, engineers cannot identify the problem to address or verify that it has been fixed.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "What threats, attackers, and attack surfaces must the security work address, and what residual risk is acceptable?",
+          "rationale": "Threat coverage and risk acceptance are security decisions; guessing could leave material risks unaddressed or impose inappropriate controls.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "Which security controls or data-handling requirements are expected, including requirements for access, privacy, logging, or compliance?",
+          "rationale": "These choices can affect who may access data and may carry legal, privacy, or compliance consequences.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "Which service components, integrations, and deployment environments are in scope for reliability and security changes?",
+          "rationale": "The request does not identify the system boundary, and selecting it would materially change delivery scope.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "What should happen for failed, malformed, unknown, or unreachable links, including response behavior, status codes, and retry behavior?",
+          "rationale": "The request does not specify error behavior, and inventing it could change the user-facing contract or hide failures.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "What broader-rollout decision or release gate must the reliability and security work satisfy?",
+          "rationale": "The request gives rollout context but no rollout scope, approval owner, or criteria for proceeding.",
+          "resolution": null,
+          "source": "unresolved"
+        }
+      ],
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "Links created before the change shall continue to resolve to the same destinations, without changing their existing externally observable resolution behavior."
+        }
+      ],
+      "goal": "Preserve links people already use while improving the shortener\u2019s reliability and security ahead of broader rollout. The request does not define the required reliability or security outcomes, so those objectives need human-approved scope and pass/fail criteria.",
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "The service\u2019s reliability shall be improved; the relevant reliability measures and required improvement are not specified."
+        },
+        {
+          "id": "NFR2",
+          "text": "The service\u2019s security shall be strengthened; the threat model, required controls, and acceptable residual risk are not specified."
+        }
+      ],
+      "summary": "3 requirements (1 functional, 2 non-functional); 9 ambiguities (1 resolved by assumption, 8 unresolved)."
+    },
+    "duration_ms": 34347,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_53d38a76060e4fbfab0b660a933e9fd7",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 669,
+      "output_tokens": 3556
+    }
+  }
+}

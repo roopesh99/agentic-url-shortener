@@ -1,0 +1,10 @@
+{
+  "answers": [
+    {
+      "question": "Do missing management tokens count toward the 10 failed management-token attempts per client IP, or does the limit count only supplied but incorrect tokens?",
+      "answer": "Only supplied-but-incorrect tokens count toward the 10 failed attempts per minute per client IP. A request without a token always gets 401 missing_token and does not count: it is a client bug, not token guessing, and counting it would let one misconfigured client on a shared IP lock others out."
+    }
+  ],
+  "answered_by": "roopeshkotte",
+  "source": "human"
+}

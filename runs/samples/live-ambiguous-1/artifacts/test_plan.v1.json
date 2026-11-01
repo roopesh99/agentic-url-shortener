@@ -1,0 +1,210 @@
+{
+  "name": "test_plan",
+  "version": 1,
+  "sha": "39f8365da5b3b78e5f6e4a40871c19068c819de4edc44e97f8a8da26cdbb922e",
+  "produced_by": "test_plan/test_planner#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 18,
+      "sha": "1750218b72b57329cf70cb1581ca888f41c43fb1ff5882c23afa9c5d257ba346"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "12c6f2b9ac0c439a287e0b0552a9f21eeaf7ec2a946ffa0e263b366160fed79c"
+    }
+  ],
+  "result": {
+    "summary": "30 cases cover all 19 functional requirements and all 4 non-functional requirements, including specified failure paths, abuse limits, response contracts, observability, and release gates.",
+    "outputs": {
+      "test_cases": [
+        {
+          "id": "TC-FR1-01",
+          "covers": "FR1",
+          "level": "integration",
+          "check": "Request a pre-existing active link and verify the response is the existing 302 with the same Location and Cache-Control behavior; verify the stored destination is unchanged."
+        },
+        {
+          "id": "TC-FR2-01",
+          "covers": "FR2",
+          "level": "integration",
+          "check": "Verify existing expired and deleted link records retain their current 410 and 404 behavior across an application restart, and verify no migration changes the existing link or tombstone data."
+        },
+        {
+          "id": "TC-FR3-01",
+          "covers": "FR3",
+          "level": "integration",
+          "check": "Submit invalid create input and a conflicting alias; verify each returns its existing 400 or 409 status and exact existing error code."
+        },
+        {
+          "id": "TC-FR4-01",
+          "covers": "FR4",
+          "level": "integration",
+          "check": "Call stats and delete without a token and with an incorrect token below the limit; verify respectively 401/missing_token and 403/invalid_token."
+        },
+        {
+          "id": "TC-FR5-01",
+          "covers": "FR5",
+          "level": "integration",
+          "check": "Request unknown and deleted codes and an expired link; verify 404/not_found for the first two and 410/expired for the last."
+        },
+        {
+          "id": "TC-FR6-01",
+          "covers": "FR6",
+          "level": "integration",
+          "check": "Make the database link lookup fail during a redirect; verify 503/service_unavailable, Retry-After: 5, the standard JSON error body, and exactly one lookup attempt."
+        },
+        {
+          "id": "TC-FR7-01",
+          "covers": "FR7",
+          "level": "integration",
+          "check": "Cause an unexpected server exception; verify 500/internal_error with the standard JSON body and confirm the response contains no exception text, stack trace, or internal details."
+        },
+        {
+          "id": "TC-FR8-01",
+          "covers": "FR8",
+          "level": "integration",
+          "check": "Exercise application and framework errors, including unmatched route, unsupported method, oversized body, and unexpected exception; verify each has application/json and exactly the error and message fields with its specified status/code pair."
+        },
+        {
+          "id": "TC-FR9-01",
+          "covers": "FR9",
+          "level": "integration",
+          "check": "From one direct peer IP, create 20 links within a minute and verify they are admitted; verify the next create returns 429/rate_limited with a Retry-After header."
+        },
+        {
+          "id": "TC-FR10-01",
+          "covers": "FR10",
+          "level": "unit",
+          "check": "With a controlled clock, verify the limiter admits 10 supplied incorrect attempts per peer in a rolling 60-second window, blocks the next incorrect attempt with a positive delta-seconds retry time, and admits an attempt after the oldest blocking entry expires."
+        },
+        {
+          "id": "TC-FR10-02",
+          "covers": "FR10",
+          "level": "integration",
+          "check": "Make 10 incorrect-token requests distributed across stats and delete from one direct peer; verify the next incorrect request to either route returns 429/rate_limited with Retry-After. Verify missing-token requests return 401 without consuming attempts, a valid token is still processed at the limit, and spoofed forwarding headers do not change the peer identity."
+        },
+        {
+          "id": "TC-FR11-01",
+          "covers": "FR11",
+          "level": "integration",
+          "check": "Issue a sequence of unknown and deleted-code redirects from one peer; verify none is rate-limited and their metrics share one aggregate 404 outcome with no code or cause dimension."
+        },
+        {
+          "id": "TC-FR12-01",
+          "covers": "FR12",
+          "level": "integration",
+          "check": "Send /api/** bodies of exactly 16,384 and 16,385 actual bytes; verify the boundary-sized request is not rejected for size and the larger request returns 413/payload_too_large with the standard JSON body. Repeat with absent or inaccurate Content-Length to verify enforcement uses received bytes."
+        },
+        {
+          "id": "TC-FR13-01",
+          "covers": "FR13",
+          "level": "integration",
+          "check": "Inspect representative success, redirect, error, public health, and Actuator responses; verify all include X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy: no-referrer, and Content-Security-Policy: default-src 'none'; frame-ancestors 'none'."
+        },
+        {
+          "id": "TC-FR14-01",
+          "covers": "FR14",
+          "level": "integration",
+          "check": "Generate redirect outcomes 302, 404, 410, and 5xx, then query local Actuator metrics; verify each outcome count and redirect timing are observable, and unknown/deleted 404s are aggregated without code- or cause-specific labels."
+        },
+        {
+          "id": "TC-FR15-01",
+          "covers": "FR15",
+          "level": "integration",
+          "check": "Verify the management listener is bound to 127.0.0.1 on its separate port, health and metrics are reachable locally, no other Actuator endpoint is exposed, and a request through the public listener cannot reach Actuator."
+        },
+        {
+          "id": "TC-FR16-01",
+          "covers": "FR16",
+          "level": "integration",
+          "check": "Request /health on the main port and verify its existing status and response body are unchanged."
+        },
+        {
+          "id": "TC-FR17-01",
+          "covers": "FR17",
+          "level": "integration",
+          "check": "Exercise successful and failed visitor redirects, then inspect captured application logs; verify the change emits no visitor-specific code, IP, destination, or request logging."
+        },
+        {
+          "id": "TC-FR18-01",
+          "covers": "FR18",
+          "level": "integration",
+          "check": "Redirect to a destination served by a recording test server and verify no outbound request is made; verify redirect handling performs no destination retry or reputation/malware lookup and introduces no authentication requirement beyond the existing management token."
+        },
+        {
+          "id": "TC-FR19-01",
+          "covers": "FR19",
+          "level": "unit",
+          "check": "Review the change manifest and build artifacts; verify changes are confined to the url-shortener service and introduce no infrastructure, deployment, or third-party integration changes."
+        },
+        {
+          "id": "TC-NFR1-01",
+          "covers": "NFR1",
+          "level": "integration",
+          "check": "With the service and database available, request active links repeatedly and verify every response is the expected successful redirect and none is 5xx."
+        },
+        {
+          "id": "TC-NFR2-01",
+          "covers": "NFR2",
+          "level": "integration",
+          "check": "Run the existing in-process redirect latency check and verify the measured p99 is below 50 ms."
+        },
+        {
+          "id": "TC-NFR3-01",
+          "covers": "NFR3",
+          "level": "integration",
+          "check": "Capture logs while exercising visitor requests and verify no new visitor-specific log entries or fields are emitted."
+        },
+        {
+          "id": "TC-NFR4-01",
+          "covers": "NFR4",
+          "level": "integration",
+          "check": "Run the complete existing and new automated test suite; verify all tests pass, the reported suite count is at least 95, and automated tests exercise the required security headers and error behavior."
+        }
+      ]
+    },
+    "files_written": [
+      "docs/test-plan.md"
+    ],
+    "decisions": [
+      {
+        "topic": "FR2 retention duration",
+        "choice": "Verify existing records and tombstones across restart and verify no migration alters them; do not invent a time-based retention test.",
+        "rationale": "The specification requires retention behavior to remain unchanged but provides no retention duration or expiry schedule that an automated test could assert.",
+        "source": "agent"
+      },
+      {
+        "topic": "NFR2 latency target",
+        "choice": "Run the existing in-process p99 check as the automated gate.",
+        "rationale": "Results can vary with the test environment; this is the closest specified automated check, but it does not establish production latency under all deployment conditions.",
+        "source": "agent"
+      },
+      {
+        "topic": "FR15 external reachability",
+        "choice": "Verify loopback binding and test that the public listener cannot access management endpoints.",
+        "rationale": "The test environment may not provide a separate external network host; the listener binding and public-interface behavior are the closest meaningful automated checks.",
+        "source": "agent"
+      },
+      {
+        "topic": "FR17 and NFR3 logging",
+        "choice": "Inspect captured logs for visitor-specific information while exercising representative requests.",
+        "rationale": "Automated tests can check observed logs but cannot prove the absence of such logging on every future execution path.",
+        "source": "agent"
+      },
+      {
+        "topic": "FR19 change scope",
+        "choice": "Use a change-manifest and artifact review rather than a runtime behavior test.",
+        "rationale": "Whether infrastructure, deployment, or third-party changes occurred is a repository and delivery-scope property, not a service behavior that can be proven through HTTP tests.",
+        "source": "agent"
+      },
+      {
+        "topic": "NFR4 product-owner approval",
+        "choice": "Track product-owner approval as a release checklist gate outside the automated test suite.",
+        "rationale": "Approval is a human decision and cannot be established by an automated test.",
+        "source": "agent"
+      }
+    ]
+  }
+}

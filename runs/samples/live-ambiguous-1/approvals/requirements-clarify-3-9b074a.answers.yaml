@@ -1,0 +1,9 @@
+# Open questions from stage 'requirements' (run live-ambiguous-1, round 3).
+# These are product decisions the agent would not guess. Fill in every `answer`,
+# then submit:  orch answer live-ambiguous-1 requirements-clarify-3-9b074a
+# Your answers become binding human decisions in the audit log.
+
+- question: What Retry-After delay or date should the 503 response use when the database is unavailable?
+  why: The human decision requires a Retry-After header but does not specify its value. Guessing a retry
+    interval could cause clients to retry too aggressively or wait unnecessarily during a database outage.
+  answer: ''

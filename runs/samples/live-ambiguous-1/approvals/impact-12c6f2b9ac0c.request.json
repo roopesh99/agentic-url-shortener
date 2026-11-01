@@ -1,0 +1,19 @@
+{
+  "run_id": "live-ambiguous-1",
+  "stage": "impact",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Add consistent errors and security controls, management-token throttling, loopback-only Actuator metrics, and low-cardinality redirect observability without changing link retention or redirect destinations.",
+  "gate_evidence": [
+    "outputs_present: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "Persistence and migrations: Make no schema or retention changes and create no migration. (agent)",
+    "Management-token limiter: Use a shared in-memory rolling 60-second limiter keyed by the direct peer address; count only supplied incorrect tokens and calculate Retry-After from the oldest blocking attempt. (agent)",
+    "Redirect metrics: Record a redirect counter and duration with fixed outcome tags for 302, 404, 410, and 5xx, with no code or cause tags. (agent)",
+    "Database outage boundary: Return 503 for database failure during the required link lookup, while retaining best-effort click-write behavior. (agent)",
+    "Request body enforcement: Enforce 16 KiB on bytes actually received for /api/** and return the standard JSON 413 response before MVC processing. (agent)",
+    "Actuator listener: Use a separate management port, configured as 8081, bound to 127.0.0.1, exposing only /actuator/health and /actuator/metrics. (agent)"
+  ],
+  "artifact_sha": "12c6f2b9ac0c439a287e0b0552a9f21eeaf7ec2a946ffa0e263b366160fed79c"
+}

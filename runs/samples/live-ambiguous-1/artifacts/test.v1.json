@@ -1,0 +1,102 @@
+{
+  "name": "test",
+  "version": 1,
+  "sha": "7fb958453bc37b6945408934fccc11a4e04d43f450de6ae426c423869f7c240b",
+  "produced_by": "test/tester#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 18,
+      "sha": "1750218b72b57329cf70cb1581ca888f41c43fb1ff5882c23afa9c5d257ba346"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "12c6f2b9ac0c439a287e0b0552a9f21eeaf7ec2a946ffa0e263b366160fed79c"
+    },
+    {
+      "name": "implement",
+      "version": 1,
+      "sha": "f46b5747fe5d88f30d9c6e8c5ba96fbee1d04fc35cd80e78f0973961961e4759"
+    },
+    {
+      "name": "test_plan",
+      "version": 1,
+      "sha": "39f8365da5b3b78e5f6e4a40871c19068c819de4edc44e97f8a8da26cdbb922e"
+    }
+  ],
+  "result": {
+    "summary": "25 new tests in 5 new classes plus a test properties file; no existing test modified; suite 120/120",
+    "outputs": {
+      "files": [
+        "url-shortener/src/test/java/com/example/shortener/ManagementServerTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/BodyLimitTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/ErrorContractAndHeadersTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/ManagementTokenRateLimitTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/RedirectOutageAndMetricsTest.java",
+        "url-shortener/src/test/java/com/example/shortener/support/SecurityHeaders.java",
+        "url-shortener/src/test/resources/application.properties"
+      ],
+      "implementation_defects": []
+    },
+    "files_written": [
+      "url-shortener/src/test/java/com/example/shortener/ManagementServerTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/BodyLimitTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/ErrorContractAndHeadersTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/ManagementTokenRateLimitTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/RedirectOutageAndMetricsTest.java",
+      "url-shortener/src/test/java/com/example/shortener/support/SecurityHeaders.java",
+      "url-shortener/src/test/resources/application.properties"
+    ],
+    "decisions": [
+      {
+        "topic": "Deviation from the impact plan",
+        "choice": "Instead of editing IntegrationTest, RateLimitTest, PersistenceRestartTest and ClickPersistenceAndUpgradeTest to set an ephemeral management port, one new src/test/resources/application.properties sets management.server.port=0 for every test",
+        "rationale": "Same effect with zero edits to protected existing tests; verified: all 95 existing tests pass unchanged against the new code",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-FR10",
+        "choice": "Unit test of the rolling window on a controlled clock (10 admitted, 11th is 429 with exact Retry-After, window rolls, peers isolated) plus integration across stats and delete, missing tokens never counted, valid token works while limited, X-Forwarded-For ignored",
+        "rationale": "Each test uses its own peer IP because the limiter is shared across the test context; verified by mutation: disabling the throttle fails 3 tests",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-FR13/FR15",
+        "choice": "A RANDOM_PORT test starts both real listeners: management only on 127.0.0.1, only health and metrics exposed (env, beans, configprops, heapdump 404), unreachable from this machine's non-loopback IPv4, security headers on management responses too",
+        "rationale": "Real sockets are the only honest proof of a network binding; verified by mutation: dropping a header fails 3 tests",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-FR6",
+        "choice": "Controller-level test for each store failure type, plus HTTP through a mocked LinkService: 503 service_unavailable, Retry-After: 5, no Location, no internals, counted as outcome 5xx",
+        "rationale": "A real H2 outage cannot be produced reliably in-process",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-FR12",
+        "choice": "Exact 16,384 accepted and 16,385 rejected via MockMvc, plus a filter-level test with an undeclared length (as with chunked encoding) proving bytes received are counted and a within-limit body is forwarded unchanged",
+        "rationale": "MockMvc always declares a length, so the bypass case needs the filter directly",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-FR17/NFR3",
+        "choice": "Output capture while sending requests carrying user agent, forwarded IP, token, cookie and code probes; none appears in logs",
+        "rationale": "Executable form of the no-visitor-logging requirement",
+        "source": "agent"
+      },
+      {
+        "topic": "Covered by existing tests, unchanged",
+        "choice": "TC-FR1/FR2/FR3/FR5/FR9/FR16/FR18/NFR1/NFR2 by LinkLifecycleTest, PersistenceRestartTest, LinkCreationTest, RateLimitTest, NoOutboundFetchTest and RedirectLatencyTest (p99 2.5 ms); TC-FR19 is a review property of the change set (git diff), not a test",
+        "rationale": "The existing suite is the contract for unchanged behaviour",
+        "source": "agent"
+      },
+      {
+        "topic": "Implementation review",
+        "choice": "No implementation defects found",
+        "rationale": "Recorded so the absence of defects is an explicit finding",
+        "source": "agent"
+      }
+    ]
+  }
+}

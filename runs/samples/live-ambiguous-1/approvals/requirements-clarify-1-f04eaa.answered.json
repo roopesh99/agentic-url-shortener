@@ -1,0 +1,38 @@
+{
+  "answers": [
+    {
+      "question": "Which pre-existing links are in scope, and for how long must they continue to work (including expired, deleted, or otherwise inactive links)?",
+      "answer": "Every active link keeps resolving to the same destination with identical behaviour. Expired links keep returning 410 and deleted links 404, as today. No change to how long links or tombstones are retained."
+    },
+    {
+      "question": "Which reliability measures and targets define “more reliable” (for example, availability, resolution success, latency, or recovery time)?",
+      "answer": "Reliability is measured by redirect outcomes and latency, exposed as metrics through Spring Boot Actuator and Micrometer: count redirects by outcome (302, 404, 410, 5xx) and time them. Target: an active link never receives a 5xx while the service is running, and the existing in-process redirect p99 < 50 ms check keeps passing."
+    },
+    {
+      "question": "What failures have users experienced, how often do they occur, and which shortener workflows or user groups are affected?",
+      "answer": "There is no incident data, only anecdotal reports. The goal is to make failures measurable and diagnosable (per-outcome redirect metrics, consistent JSON errors), not to fix a guessed bug. Likely causes to confirm with the metrics: expired links (410) and aliases typed with the wrong case."
+    },
+    {
+      "question": "What threats, attackers, and attack surfaces must the security work address, and what residual risk is acceptable?",
+      "answer": "A public-internet attacker who probes codes and management tokens, floods link creation, sends oversized or malformed requests, or tries to extract internal details from error responses, plus browser-side attacks such as framing or content sniffing. Accepted residual risk for this release: no URL reputation or malware scanning of destinations, no authentication system beyond management tokens."
+    },
+    {
+      "question": "Which security controls or data-handling requirements are expected, including requirements for access, privacy, logging, or compliance?",
+      "answer": "Add standard security headers to every response (X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy: no-referrer, Content-Security-Policy: default-src 'none'; frame-ancestors 'none'), a request body size limit for the JSON API, and error responses that never include stack traces or internal details. Log nothing new about visitors. Actuator exposes only the health and metrics endpoints. No compliance regime applies to this release."
+    },
+    {
+      "question": "Which service components, integrations, and deployment environments are in scope for reliability and security changes?",
+      "answer": "Only the url-shortener service, running as a single node. No infrastructure, deployment or third-party integration changes."
+    },
+    {
+      "question": "What should happen for failed, malformed, unknown, or unreachable links, including response behavior, status codes, and retry behavior?",
+      "answer": "Keep the existing contract: 400 for invalid input, 404 for unknown or deleted codes, 410 for expired links. If the database is unavailable during a redirect, return 503 with a Retry-After header and the standard JSON error body instead of an unhandled 500. Any other unexpected error returns a 500 JSON error without internal details. The service never checks whether a destination is reachable and never retries on the client's behalf."
+    },
+    {
+      "question": "What broader-rollout decision or release gate must the reliability and security work satisfy?",
+      "answer": "All existing tests and the new tests pass (the suite must not drop below its current 95 tests), the security headers and error behaviour are covered by automated tests, and the product owner approves the release."
+    }
+  ],
+  "answered_by": "roopeshkotte",
+  "source": "human"
+}

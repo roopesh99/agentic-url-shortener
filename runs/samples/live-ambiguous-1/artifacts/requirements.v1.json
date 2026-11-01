@@ -1,0 +1,99 @@
+{
+  "name": "requirements",
+  "version": 1,
+  "sha": "f2a0e32cc75a6797f846120367d0fef8c6103de8bad82eab38b0be9a17d0e9c1",
+  "produced_by": "requirements/analyst#1",
+  "inputs": [],
+  "result": {
+    "summary": "3 requirements (1 functional, 2 non-functional); 9 ambiguities (1 resolved by assumption, 8 unresolved).",
+    "outputs": {
+      "goal": "Preserve links people already use while improving the shortener’s reliability and security ahead of broader rollout. The request does not define the required reliability or security outcomes, so those objectives need human-approved scope and pass/fail criteria.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "Links created before the change shall continue to resolve to the same destinations, without changing their existing externally observable resolution behavior."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "The service’s reliability shall be improved; the relevant reliability measures and required improvement are not specified."
+        },
+        {
+          "id": "NFR2",
+          "text": "The service’s security shall be strengthened; the threat model, required controls, and acceptable residual risk are not specified."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "What does “don’t break the links people already have” mean in observable terms?",
+          "resolution": "Treat a link as unbroken when it continues to resolve to the same destination and retains its existing externally observable resolution behavior.",
+          "source": "assumption",
+          "rationale": "Preserving the existing user-facing behavior is the conventional, low-risk interpretation of backward compatibility. This does not determine which links must be preserved or for how long."
+        },
+        {
+          "question": "Which pre-existing links are in scope, and for how long must they continue to work (including expired, deleted, or otherwise inactive links)?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "The population and retention period affect user expectations, data retention, and implementation cost; the request does not establish them."
+        },
+        {
+          "question": "Which reliability measures and targets define “more reliable” (for example, availability, resolution success, latency, or recovery time)?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "Choosing metrics or thresholds determines what work is required and when it is acceptable to release."
+        },
+        {
+          "question": "What failures have users experienced, how often do they occur, and which shortener workflows or user groups are affected?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "Without examples or failure evidence, engineers cannot identify the problem to address or verify that it has been fixed."
+        },
+        {
+          "question": "What threats, attackers, and attack surfaces must the security work address, and what residual risk is acceptable?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "Threat coverage and risk acceptance are security decisions; guessing could leave material risks unaddressed or impose inappropriate controls."
+        },
+        {
+          "question": "Which security controls or data-handling requirements are expected, including requirements for access, privacy, logging, or compliance?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "These choices can affect who may access data and may carry legal, privacy, or compliance consequences."
+        },
+        {
+          "question": "Which service components, integrations, and deployment environments are in scope for reliability and security changes?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "The request does not identify the system boundary, and selecting it would materially change delivery scope."
+        },
+        {
+          "question": "What should happen for failed, malformed, unknown, or unreachable links, including response behavior, status codes, and retry behavior?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "The request does not specify error behavior, and inventing it could change the user-facing contract or hide failures."
+        },
+        {
+          "question": "What broader-rollout decision or release gate must the reliability and security work satisfy?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "The request gives rollout context but no rollout scope, approval owner, or criteria for proceeding."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given a pre-change link that successfully resolves, when that same link is requested after the change under equivalent conditions, it resolves to the same destination and retains its existing externally observable resolution behavior. A failure to resolve or a different destination fails acceptance.",
+        "Reliability and security changes cannot be objectively accepted or rejected from this request alone. Before they can be verified, a human must define measurable reliability targets and approve the security scope and success criteria.",
+        "Expected behavior for malformed, unknown, or otherwise failing links cannot be specified from the request; those failure-path criteria remain blocked pending a human decision."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "What does “don’t break the links people already have” mean in observable terms?",
+        "choice": "Treat a link as unbroken when it continues to resolve to the same destination and retains its existing externally observable resolution behavior.",
+        "rationale": "Preserving the existing user-facing behavior is the conventional, low-risk interpretation of backward compatibility. This does not determine which links must be preserved or for how long.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

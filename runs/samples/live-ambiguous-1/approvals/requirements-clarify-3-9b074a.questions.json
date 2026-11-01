@@ -1,0 +1,11 @@
+{
+  "run_id": "live-ambiguous-1",
+  "stage": "requirements",
+  "round": 3,
+  "questions": [
+    {
+      "question": "What Retry-After delay or date should the 503 response use when the database is unavailable?",
+      "why": "The human decision requires a Retry-After header but does not specify its value. Guessing a retry interval could cause clients to retry too aggressively or wait unnecessarily during a database outage."
+    }
+  ]
+}

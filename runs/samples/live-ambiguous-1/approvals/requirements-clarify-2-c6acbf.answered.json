@@ -1,0 +1,30 @@
+{
+  "answers": [
+    {
+      "question": "What maximum request-body size should the JSON API enforce?",
+      "answer": "16 KB for requests to /api/**, well above the largest valid create request. A larger body is rejected with 413 Payload Too Large and the standard JSON error body."
+    },
+    {
+      "question": "What controls and thresholds should protect against link-code or management-token probing and link-creation floods, including the response to requests that exceed those limits?",
+      "answer": "Link-creation floods: keep the existing limit of 20 creates per minute per client IP (429 with Retry-After). Management-token probing: add a limit of 10 failed management-token attempts per minute per client IP, counted across the stats and delete endpoints; further attempts get 429 with Retry-After and the standard JSON error body. Link-code probing: no limit in this release, because 64^8 (about 2.8e14) possible codes makes brute force impractical and limiting 404s would hurt users with typos; this is an accepted residual risk, observable through the 404 redirect metric."
+    },
+    {
+      "question": "Who may access the Actuator health and metrics endpoints?",
+      "answer": "Only operators on the host. Serve the Actuator endpoints on a separate management port bound to 127.0.0.1, so they are unreachable from the public interface and no new authentication system is needed. The existing public /health endpoint on the main port stays as it is."
+    },
+    {
+      "question": "What is the standard JSON error-body schema, including its fields and message format?",
+      "answer": "Keep the existing schema {\"error\": \"<stable machine-readable code>\", \"message\": \"<human-readable text>\"} and use it for every error response, including framework-generated ones such as unmatched routes, 405, 413, 500 and 503."
+    },
+    {
+      "question": "Does the target that an active link never receives a 5xx while the service is running exclude database outages, or must the 503 database-unavailable response be changed?",
+      "answer": "The target applies while the service and its database are available: then an active link never receives a 5xx. During a database outage the 503 with Retry-After is the intended, explicit behaviour."
+    },
+    {
+      "question": "Must redirect metrics distinguish 404 causes, such as unknown codes, deleted codes, or aliases entered with the wrong case, or is an aggregate 404 outcome sufficient?",
+      "answer": "An aggregate 404 outcome is sufficient. No per-cause breakdown: it would add queries on the redirect hot path and record more about requests than needed. Diagnosing wrong-case aliases is out of scope for this release."
+    }
+  ],
+  "answered_by": "roopeshkotte",
+  "source": "human"
+}

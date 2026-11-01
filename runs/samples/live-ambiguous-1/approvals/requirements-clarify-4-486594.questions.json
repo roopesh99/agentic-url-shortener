@@ -1,0 +1,11 @@
+{
+  "run_id": "live-ambiguous-1",
+  "stage": "requirements",
+  "round": 4,
+  "questions": [
+    {
+      "question": "Do missing management tokens count toward the 10 failed management-token attempts per client IP, or does the limit count only supplied but incorrect tokens?",
+      "why": "The answer specifies a limit on failed token attempts but does not define whether missing-token requests count. This changes observable 401-versus-429 behavior and can affect other users sharing an IP, so it requires a human decision."
+    }
+  ]
+}
