@@ -1,0 +1,62 @@
+{
+  "name": "fix",
+  "version": 1,
+  "sha": "4fa0fc5897d2728ff0c3e8067bead67f193b419cebc8ce7b400052943adcb19d",
+  "produced_by": "fix/coder#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 2,
+      "sha": "4e1e39cacf35da2639858614d54818d32b8226d440bef37610c131076940bd8d"
+    },
+    {
+      "name": "impact",
+      "version": 2,
+      "sha": "9b198068b6ba4def8b5a8cdb770e6a0dc0cfd0882e15ac3e732bc4521577da33"
+    },
+    {
+      "name": "reproduce",
+      "version": 1,
+      "sha": "244f87cfe17aa0196c07afaa5008ad384599d803a0b5ffa43cee05c862f5b23c"
+    }
+  ],
+  "result": {
+    "summary": "Replace Tomcat's host error-report valve with one that writes the API's JSON error body (ErrorBodies), so errors the server produces before the application, such as a malformed percent-escape, are JSON on every route; status and headers unchanged.",
+    "outputs": {
+      "files": [
+        "url-shortener/src/main/java/com/example/shortener/api/ApiErrorReportValve.java",
+        "url-shortener/src/main/java/com/example/shortener/config/WebConfig.java"
+      ]
+    },
+    "files_written": [
+      "url-shortener/src/main/java/com/example/shortener/api/ApiErrorReportValve.java",
+      "url-shortener/src/main/java/com/example/shortener/config/WebConfig.java"
+    ],
+    "decisions": [
+      {
+        "topic": "Where the HTML came from",
+        "choice": "Tomcat rejects a malformed request target before the servlet layer and its host's ErrorReportValve renders the page; MVC handlers and the /error controller never see it",
+        "rationale": "Confirmed against the packaged jar; the regression tests send raw requests to the real listener",
+        "source": "agent"
+      },
+      {
+        "topic": "How the valve is installed",
+        "choice": "A TomcatServletWebServerFactory subclass names the valve class on the host before the server starts",
+        "rationale": "StandardHost only adds its error-report valve by class name at start; replacing it afterwards would race the start. A named class because the management server is built from the same factory type, so its errors become JSON too (verified)",
+        "source": "agent"
+      },
+      {
+        "topic": "Valve rules",
+        "choice": "Same guards as Tomcat's valve: error status only, nothing written yet, error not yet reported, I/O still allowed; status and headers untouched; body from ErrorBodies.forStatus",
+        "rationale": "FR3 and the approved plan: no new error codes and no container details; 405 still carries Allow (verified on the jar)",
+        "source": "agent"
+      },
+      {
+        "topic": "Verification",
+        "choice": "155 tests pass; coverage 91.7% overall, the valve 83.3%; the release smoke steps plus %ZZ on /api and on /, 405 Allow and a management 404 pass on the packaged jar; without the valve the 4 regression tests fail",
+        "rationale": "Orchestrator gates re-run all of this",
+        "source": "agent"
+      }
+    ]
+  }
+}

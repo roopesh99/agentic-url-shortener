@@ -1,0 +1,216 @@
+{
+  "request": {
+    "agent": "release",
+    "effort": "high",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "changelog_markdown": {
+          "type": "string"
+        },
+        "checklist": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "evidence": {
+                "type": "string"
+              },
+              "item": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "n/a"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "item",
+              "status",
+              "evidence"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "decisions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "choice": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "topic": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "topic",
+              "choice",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "risks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "mitigation": {
+                "type": "string"
+              },
+              "risk": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "risk",
+              "mitigation"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "rollback_plan": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "version",
+        "changelog_markdown",
+        "checklist",
+        "risks",
+        "rollback_plan",
+        "decisions"
+      ],
+      "type": "object"
+    },
+    "system": "You are the release manager in a governed software delivery pipeline. You decide whether a change is ready to release and prepare the release record a human signs off.\n\nFacts you can rely on: every upstream artifact you are shown was accepted only after the orchestrator's own exit gates passed and every required human approval was granted, and the orchestrator re-ran the full test suite on the current workspace immediately before this stage (its entry gate) and it passed. You are shown each stage's summary and recorded decisions.\n\nThe release record you produce is the release-readiness review. After its checks pass, the orchestrator asks a human for the release sign-off; nothing ships without it. Do not list the review itself or the pending human sign-off as checklist items: they cannot be complete while you are writing the record, and the sign-off is enforced by the workflow, not by you.\n\nProduce:\n- `version`: the next semantic version: a minor bump for new backward-compatible features, a patch bump for fixes only, a major bump only for breaking changes (call them out).\n- `changelog_markdown`: the complete CHANGELOG.md, newest release first, keeping every earlier entry unchanged. The new entry lists Added / Changed / Fixed / Security items in user-facing terms.\n- `checklist`: release-readiness items, each `pass`, `fail` or `n/a` with concrete evidence from what you are shown: requirements approved; open questions resolved; design approved; API definition valid and implemented; tests passing; documentation updated; backward compatibility; security and privacy requirements addressed; migrations reviewed; rollback possible. Mark an item `fail` if the evidence is missing; a failing item blocks the release, which is the intended behaviour.\n- `risks`: the residual risks of releasing, each with a mitigation.\n- `rollback_plan`: how to roll this release back, including any database migration.\n- `decisions` and a one-line `summary`.",
+    "user": "<approved_specification>\n{\n  \"acceptance_criteria\": [\n    \"Given a request such as `GET /api/links/%ZZ`, when it is sent to the packaged service over HTTP, the response status is 400, the content type is `application/json`, and the body is valid JSON containing `error` and `message` in the existing documented 400 format.\",\n    \"Given a path with an incomplete percent-escape, such as `/api/links/%` or `/api/links/%A`, when requested over HTTP, the response is a JSON error with status 400.\",\n    \"Given a malformed JSON body, unsupported media type, unknown path, or wrong method, when the request produces an API error, the existing status code and other headers remain unchanged and the response continues to use the documented JSON error body.\",\n    \"Given a valid request, when it is sent to the packaged service, its request handling, status code, and headers remain unchanged.\"\n  ],\n  \"ambiguities\": [\n    {\n      \"question\": \"What values should the `error` and `message` fields contain for a malformed-path error?\",\n      \"rationale\": \"The requirement refers to the service's documented body and says other bad requests already use it. Reusing the existing 400 representation avoids introducing new error semantics or wording.\",\n      \"resolution\": \"Use the existing documented JSON error representation for a 400 response, including its established field values.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"Does \\u201cevery error response from the public API\\u201d include errors produced before controller handling, and does it include connection-level failures that are not responses to an API request?\",\n      \"rationale\": \"The reported defect occurs before controller handling, so limiting the change to controller-generated errors would not address it. Connection-level failures without an HTTP response are conventionally outside an API's response-format contract.\",\n      \"resolution\": \"Apply the JSON error format to errors returned for HTTP requests to the public API, including embedded-server request-processing errors before controller handling. Exclude failures that do not produce an HTTP response for an API request.\",\n      \"source\": \"assumption\"\n    }\n  ],\n  \"functional\": [\n    {\n      \"id\": \"FR1\",\n      \"text\": \"When a request to the public API has a malformed percent-escape in its path, return status 400 with the documented JSON error body containing `error` and `message`, and `Content-Type: application/json`.\"\n    },\n    {\n      \"id\": \"FR2\",\n      \"text\": \"Every error response for a request to the public API, including errors produced before the request reaches an application controller, uses the documented JSON error body and `Content-Type: application/json`.\"\n    },\n    {\n      \"id\": \"FR3\",\n      \"text\": \"Do not change request handling, status codes, or headers except as needed to return the required JSON body and content type for errors that currently do not meet FR2.\"\n    }\n  ],\n  \"goal\": \"Ensure errors returned for requests to the public API use the service's documented JSON error format, including errors produced by the embedded server before requests reach application controllers. A request with a malformed percent-escape in its path must continue to receive status 400.\",\n  \"non_functional\": []\n}\n</approved_specification>\n\n<accepted_stages>\n{\n  \"fix\": {\n    \"artifact\": \"fix@v1\",\n    \"decisions\": [\n      {\n        \"choice\": \"Tomcat rejects a malformed request target before the servlet layer and its host's ErrorReportValve renders the page; MVC handlers and the /error controller never see it\",\n        \"rationale\": \"Confirmed against the packaged jar; the regression tests send raw requests to the real listener\",\n        \"source\": \"agent\",\n        \"topic\": \"Where the HTML came from\"\n      },\n      {\n        \"choice\": \"A TomcatServletWebServerFactory subclass names the valve class on the host before the server starts\",\n        \"rationale\": \"StandardHost only adds its error-report valve by class name at start; replacing it afterwards would race the start. A named class because the management server is built from the same factory type, so its errors become JSON too (verified)\",\n        \"source\": \"agent\",\n        \"topic\": \"How the valve is installed\"\n      },\n      {\n        \"choice\": \"Same guards as Tomcat's valve: error status only, nothing written yet, error not yet reported, I/O still allowed; status and headers untouched; body from ErrorBodies.forStatus\",\n        \"rationale\": \"FR3 and the approved plan: no new error codes and no container details; 405 still carries Allow (verified on the jar)\",\n        \"source\": \"agent\",\n        \"topic\": \"Valve rules\"\n      },\n      {\n        \"choice\": \"155 tests pass; coverage 91.7% overall, the valve 83.3%; the release smoke steps plus %ZZ on /api and on /, 405 Allow and a management 404 pass on the packaged jar; without the valve the 4 regression tests fail\",\n        \"rationale\": \"Orchestrator gates re-run all of this\",\n        \"source\": \"agent\",\n        \"topic\": \"Verification\"\n      }\n    ],\n    \"files\": [\n      \"url-shortener/src/main/java/com/example/shortener/api/ApiErrorReportValve.java\",\n      \"url-shortener/src/main/java/com/example/shortener/config/WebConfig.java\"\n    ],\n    \"produced_by\": \"fix/coder#1\",\n    \"summary\": \"Replace Tomcat's host error-report valve with one that writes the API's JSON error body (ErrorBodies), so errors the server produces before the application, such as a malformed percent-escape, are JSON on every route; status and headers unchanged.\"\n  },\n  \"impact\": {\n    \"artifact\": \"impact@v2\",\n    \"decisions\": [\n      {\n        \"choice\": \"Use a Tomcat ErrorReportValve registered on the public embedded server.\",\n        \"rationale\": \"The malformed-path failure occurs before controller handling, so MVC advice alone cannot format it.\",\n        \"source\": \"agent\",\n        \"topic\": \"Pre-controller errors\"\n      },\n      {\n        \"choice\": \"Apply the valve without path inspection to every route on the main listener, including /{code} and /health.\",\n        \"rationale\": \"The binding review instruction clarifies that every main-listener route is part of the documented API and FR2 applies to all its error responses.\",\n        \"source\": \"agent\",\n        \"topic\": \"Route scope\"\n      },\n      {\n        \"choice\": \"Reuse ErrorBodies.forStatus(status) and preserve the server-provided status and existing headers, setting the required JSON content type.\",\n        \"rationale\": \"This maintains established field values and avoids introducing new error semantics.\",\n        \"source\": \"agent\",\n        \"topic\": \"Error representation\"\n      },\n      {\n        \"choice\": \"Make no schema changes and add no migration.\",\n        \"rationale\": \"The behavior is limited to HTTP error rendering and does not read or write persisted data.\",\n        \"source\": \"agent\",\n        \"topic\": \"Persistence\"\n      }\n    ],\n    \"files\": [],\n    \"produced_by\": \"impact/impact_analyst#2\",\n    \"summary\": \"Add an unfiltered main-server Tomcat error valve so pre-controller HTTP errors use the existing JSON error body without changing their status or other headers.\"\n  },\n  \"reproduce\": {\n    \"artifact\": \"reproduce@v1\",\n    \"decisions\": [\n      {\n        \"choice\": \"Send raw request targets over a socket and assert the established 400 JSON representation for API, incomplete-escape, and redirect-path cases.\",\n        \"rationale\": \"A raw socket avoids client-side URI validation and exercises the embedded server\\u2019s pre-controller error handling described in the report.\",\n        \"source\": \"agent\",\n        \"topic\": \"Malformed-target HTTP tests\"\n      },\n      {\n        \"choice\": \"Retain the existing listener tests and add a real-listener /health success assertion covering status, JSON body, content type, and security headers.\",\n        \"rationale\": \"This checks that fixing rendered errors does not alter a successful public request.\",\n        \"source\": \"agent\",\n        \"topic\": \"Regression guards\"\n      }\n    ],\n    \"files\": [\n      \"url-shortener/src/test/java/com/example/shortener/ManagementServerTest.java\"\n    ],\n    \"produced_by\": \"reproduce/reproducer#1\",\n    \"summary\": \"ManagementServerTest fails for malformed percent-escapes because Tomcat\\u2019s pre-controller error response is not the documented JSON error body.\"\n  },\n  \"requirements\": {\n    \"artifact\": \"requirements@v2\",\n    \"decisions\": [\n      {\n        \"choice\": \"Use the existing documented JSON error representation for a 400 response, including its established field values.\",\n        \"rationale\": \"The requirement refers to the service's documented body and says other bad requests already use it. Reusing the existing 400 representation avoids introducing new error semantics or wording.\",\n        \"source\": \"assumption\",\n        \"topic\": \"What values should the `error` and `message` fields contain for a malformed-path error?\"\n      },\n      {\n        \"choice\": \"Apply the JSON error format to errors returned for HTTP requests to the public API, including embedded-server request-processing errors before controller handling. Exclude failures that do not produce an HTTP response for an API request.\",\n        \"rationale\": \"The reported defect occurs before controller handling, so limiting the change to controller-generated errors would not address it. Connection-level failures without an HTTP response are conventionally outside an API's response-format contract.\",\n        \"source\": \"assumption\",\n        \"topic\": \"Does \\u201cevery error response from the public API\\u201d include errors produced before controller handling, and does it include connection-level failures that are not responses to an API request?\"\n      }\n    ],\n    \"files\": [],\n    \"produced_by\": \"requirements/analyst#1\",\n    \"summary\": \"3 functional requirements, 0 non-functional requirements, 2 ambiguities resolved by assumption, 0 unresolved.\"\n  }\n}\n</accepted_stages>\n\n<upstream_gate_results>\nThe exit gates the orchestrator itself ran on each accepted stage's artifact, with their evidence. Use them as evidence for the checklist. The stages listed in accepted_stages are the whole workflow: a checklist item for a lifecycle stage this workflow does not have (for example design or documentation in a bug fix) is n/a, with the evidence saying so and whether the change needed it; mark it fail only if the change evidently required that stage's work.\n{\n  \"fix\": [\n    {\n      \"evidence\": \"mvn test passed (155 tests in 23 class(es))\",\n      \"gate\": \"maven_test\",\n      \"passed\": true\n    },\n    {\n      \"evidence\": \"7 operation(s) documented and implemented, none undocumented\",\n      \"gate\": \"openapi_conformance\",\n      \"passed\": true\n    },\n    {\n      \"evidence\": \"overall line 91.7%, branch 83.9%; changed files: ApiErrorReportValve.java 83.3% (branch 50.0%), WebConfig.java 100.0%\",\n      \"gate\": \"coverage\",\n      \"passed\": true\n    }\n  ],\n  \"impact\": [\n    {\n      \"evidence\": \"outputs present: ['impacted', 'risks', 'test_strategy']\",\n      \"gate\": \"outputs_present\",\n      \"passed\": true\n    }\n  ],\n  \"reproduce\": [\n    {\n      \"evidence\": \"reproduced: 4 new test(s) fail on the current code, every other test passes. ManagementServerTest.TC_FR1_01_malformedPercentEscapeOnApiPathReturnsTheDocumentedJsonBadRequest: Expecting actual:; ManagementServerTest.TC_FR2_01_malformedPercentEscapeOnRedirectPathAlsoReturnsTheDocumentedJsonBadRequest: Expecting actual:; ManagementServerTest.TC_FR1_02_incompletePercentEscapesReturnTheDocumentedJsonBadRequest(String)[1]: Expecting actual:; ManagementServerTest.TC_FR1_02_incompletePercentEscapesReturnTheDocumentedJsonBadRequest(String)[2]: Expecting actual:\",\n      \"gate\": \"regression_reproduces\",\n      \"passed\": true\n    }\n  ],\n  \"requirements\": [\n    {\n      \"evidence\": \"outputs present: ['goal', 'functional']\",\n      \"gate\": \"outputs_present\",\n      \"passed\": true\n    },\n    {\n      \"evidence\": \"2 ambiguity(ies), all resolved (0 by a human)\",\n      \"gate\": \"ambiguities_resolved\",\n      \"passed\": true\n    }\n  ]\n}\n</upstream_gate_results>\n\n<existing_release_files>\n<file path=\"url-shortener/CHANGELOG.md\">\n# Changelog\n\n## [1.2.0]\n\n### Added\n- Added support for shortening permitted HTTP(S) destinations with Unicode internationalized domain names and the reported underscore-host form.\n\n### Changed\n- Redirects use the ASCII/Punycode host when required, while preserving existing path and query escaping behavior and the exact submitted URL in `originalUrl` metadata.\n\n### Fixed\n- Fixed URL creation failures that incorrectly reported `url must include a host` for supported Unicode IDN and underscore-host destinations.\n\n### Security\n- Destination rules check the same ASCII host used for redirects, preserving rejection of prohibited destinations entered in Unicode or equivalent Punycode form.\n\n## [1.1.0]\n\n### Added\n- Added `PATCH /api/links/{code}` so link owners can set or remove a link\u2019s expiry using their management token.\n\n### Changed\n- Successful expiry changes are reflected in link metadata and apply to subsequent redirects immediately. Existing endpoints retain their behavior.\n\n### Fixed\n- No unrelated fixes in this release.\n\n### Security\n- Expiry changes use the existing management-token authentication and wrong-token throttling. Invalid or unauthorized requests do not change the link.\n</file>\n</existing_release_files>\n\n<write_scope>\n- url-shortener/CHANGELOG.md\n- url-shortener/docs/releases/**\n</write_scope>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "changelog_markdown": "# Changelog\n\n## [1.2.1]\n\n### Added\n- No new endpoints or features.\n\n### Changed\n- HTTP errors generated by the embedded server before application handling now use the service's documented JSON error format, while preserving the status code and existing headers.\n\n### Fixed\n- Fixed malformed and incomplete percent-escapes in request paths returning a non-JSON error response; these requests now receive the documented JSON 400 response.\n\n### Security\n- Error responses continue to use the established body without exposing container diagnostic details; existing headers remain intact.\n\n## [1.2.0]\n\n### Added\n- Added support for shortening permitted HTTP(S) destinations with Unicode internationalized domain names and the reported underscore-host form.\n\n### Changed\n- Redirects use the ASCII/Punycode host when required, while preserving existing path and query escaping behavior and the exact submitted URL in `originalUrl` metadata.\n\n### Fixed\n- Fixed URL creation failures that incorrectly reported `url must include a host` for supported Unicode IDN and underscore-host destinations.\n\n### Security\n- Destination rules check the same ASCII host used for redirects, preserving rejection of prohibited destinations entered in Unicode or equivalent Punycode form.\n\n## [1.1.0]\n\n### Added\n- Added `PATCH /api/links/{code}` so link owners can set or remove a link\u2019s expiry using their management token.\n\n### Changed\n- Successful expiry changes are reflected in link metadata and apply to subsequent redirects immediately. Existing endpoints retain their behavior.\n\n### Fixed\n- No unrelated fixes in this release.\n\n### Security\n- Expiry changes use the existing management-token authentication and wrong-token throttling. Invalid or unauthorized requests do not change the link.\n",
+      "checklist": [
+        {
+          "evidence": "The accepted requirements artifact specifies FR1\u2013FR3 and the acceptance criteria; the requirements stage was accepted.",
+          "item": "Requirements approved",
+          "status": "pass"
+        },
+        {
+          "evidence": "The requirements gate reports 2 ambiguities, all resolved, with 0 unresolved.",
+          "item": "Open questions resolved",
+          "status": "pass"
+        },
+        {
+          "evidence": "There is no separate design stage in this bug-fix workflow. The accepted impact and fix artifacts record the technical approach and its rationale.",
+          "item": "Design approved",
+          "status": "n/a"
+        },
+        {
+          "evidence": "The OpenAPI conformance gate passed: 7 operations documented and implemented, none undocumented.",
+          "item": "API definition valid and implemented",
+          "status": "pass"
+        },
+        {
+          "evidence": "The orchestrator reran the full test suite on the current workspace immediately before this stage and it passed. The fix-stage Maven gate also passed: 155 tests in 23 classes. Packaged-jar smoke checks covered malformed escapes, 405 Allow, and management 404 behavior.",
+          "item": "Tests passing",
+          "status": "pass"
+        },
+        {
+          "evidence": "This release record adds the 1.2.1 CHANGELOG entry. The change reuses the existing documented 400 error representation, and the OpenAPI conformance gate passed.",
+          "item": "Documentation updated",
+          "status": "pass"
+        },
+        {
+          "evidence": "FR3 requires preserving request handling, status codes, and headers except for the error body and content type. The accepted fix preserves status and headers; packaged-jar checks verified 405 Allow and valid-request behavior.",
+          "item": "Backward compatibility",
+          "status": "pass"
+        },
+        {
+          "evidence": "The accepted fix reuses ErrorBodies.forStatus and does not expose container details. The impact review found no persistence changes, and packaged-jar smoke testing checked successful-request security headers.",
+          "item": "Security and privacy requirements addressed",
+          "status": "pass"
+        },
+        {
+          "evidence": "The accepted impact review states there are no schema changes and no migration; this HTTP error-rendering change does not read or write persisted data.",
+          "item": "Migrations reviewed",
+          "status": "n/a"
+        },
+        {
+          "evidence": "The change is an application/container error-rendering change with no schema migration, so the previous application artifact can be redeployed without database rollback.",
+          "item": "Rollback possible",
+          "status": "pass"
+        }
+      ],
+      "decisions": [
+        {
+          "choice": "Release as 1.2.1",
+          "rationale": "This is a backward-compatible error-response fix with no new feature or breaking change, so a patch version bump is appropriate.",
+          "topic": "Release version"
+        },
+        {
+          "choice": "Use the existing documented JSON 400 representation for malformed and incomplete percent-escapes.",
+          "rationale": "This matches the resolved requirement and avoids introducing new error fields or wording.",
+          "topic": "Malformed-path response"
+        },
+        {
+          "choice": "Use the Tomcat host error-report valve to format eligible embedded-server HTTP errors as JSON.",
+          "rationale": "Tomcat rejects malformed request targets before servlet or controller handling; the accepted implementation addresses that path while preserving status and existing headers.",
+          "topic": "Pre-controller errors"
+        },
+        {
+          "choice": "Make no schema changes and add no migration; roll back by redeploying the prior application artifact if needed.",
+          "rationale": "The change affects HTTP error rendering only and does not read or write persisted data.",
+          "topic": "Persistence and rollback"
+        }
+      ],
+      "risks": [
+        {
+          "mitigation": "Retain the raw-request regression tests and packaged-jar smoke checks when upgrading dependencies; those checks exercise the real listener and verify the error format and preserved headers.",
+          "risk": "The custom error valve depends on embedded Tomcat behavior and installation timing, which could be affected by future container or framework upgrades."
+        },
+        {
+          "mitigation": "This behavior was explicitly recorded in the accepted fix decisions and verified with a packaged-jar management 404 check; keep that check to detect unintended changes.",
+          "risk": "The valve class is also used by the management server's factory, so its pre-controller errors use JSON there as well."
+        },
+        {
+          "mitigation": "The focused malformed-target tests exercise the reported failure paths, and packaged-jar checks cover malformed escapes, 405 header preservation, and management-server behavior; expand tests if the valve's guards or error-writing behavior change.",
+          "risk": "The valve has less than complete changed-file coverage (83.3% line coverage and 50.0% branch coverage)."
+        }
+      ],
+      "rollback_plan": "If the release causes issues, redeploy the previous known-good 1.2.0 application artifact and restart the service using the normal deployment procedure. No database rollback is required because this release introduces no schema changes or migration. Rolling back will restore the previous error-rendering behavior, including the malformed-path response defect this release fixes.",
+      "summary": "Patch 1.2.1 is ready for human release sign-off: pre-controller HTTP errors now use the documented JSON error format, with status codes and existing headers preserved.",
+      "version": "1.2.1"
+    },
+    "duration_ms": 52365,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_a80b92e7211f4572bd3a044ff42eb6ad",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 3546,
+      "output_tokens": 4681
+    }
+  }
+}

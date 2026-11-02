@@ -1,0 +1,16 @@
+{
+  "run_id": "live-bugfix-2",
+  "stage": "requirements",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "3 functional requirements, 0 non-functional requirements, 2 ambiguities resolved by assumption, 0 unresolved.",
+  "gate_evidence": [
+    "outputs_present: PASS",
+    "ambiguities_resolved: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "What values should the `error` and `message` fields contain for a malformed-path error?: Use the existing documented JSON error representation for a 400 response, including its established field values. (assumption)",
+    "Does “every error response from the public API” include errors produced before controller handling, and does it include connection-level failures that are not responses to an API request?: Apply the JSON error format to errors returned for HTTP requests to the public API, including embedded-server request-processing errors before controller handling. Exclude failures that do not produce an HTTP response for an API request. (assumption)"
+  ],
+  "artifact_sha": "4e1e39cacf35da2639858614d54818d32b8226d440bef37610c131076940bd8d"
+}

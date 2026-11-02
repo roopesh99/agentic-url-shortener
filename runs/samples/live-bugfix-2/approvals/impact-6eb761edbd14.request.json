@@ -1,0 +1,17 @@
+{
+  "run_id": "live-bugfix-2",
+  "stage": "impact",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Route embedded-server errors for malformed public API paths through the existing JSON error representation without changing successful requests or existing error statuses and headers.",
+  "gate_evidence": [
+    "outputs_present: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "Error body for malformed paths: Use ErrorBodies.forStatus(400), yielding invalid_request and the established generic 400 message. (agent)",
+    "Where to handle pre-controller errors: Customize the embedded Tomcat error-report path rather than adding controller routes or changing application exception handling. (agent)",
+    "Scope of response changes: Change only the body and content type for eligible unhandled public API errors; preserve status and other headers, and leave handled errors and successful responses unchanged. (agent)",
+    "Persistence: Make no schema or migration changes. (agent)"
+  ],
+  "artifact_sha": "6eb761edbd14db2b7bf5d426387ab39374748f5e3160c1bb9596d30c7ae74587"
+}

@@ -11,7 +11,7 @@ Workflow `bugfix` · **SUCCEEDED** · 2 process(es) · 2026-11-02 05:40 → 2026
 | Clarification rounds / change requests / fallbacks | 1 / 0 / 0 |
 | Rollbacks (reverted change sets / stages ended ROLLED_BACK) | 1 / 1 |
 | Incidents (unrecovered) | 1 (0) |
-| MTTR | 8.8 min |
+| MTTR | 4.7 min |
 | Gate checks passed / failed | 12 / 2 |
 | Policy evaluations by risk tier | low 5, high 2 |
 | Re-plans | 1 |
@@ -50,7 +50,7 @@ Workflow `bugfix` · **SUCCEEDED** · 2 process(es) · 2026-11-02 05:40 → 2026
 
 | Stage | Opened | Failures | Recovered after | First failure |
 |---|---|---|---|---|
-| `release` | 06:04:22 | 1 | 8.8 min | exit gate(s) failed: ['release_checklist_passed']; retries exhausted (1) |
+| `release` | 06:04:22 | 1 | 4.7 min | exit gate(s) failed: ['release_checklist_passed']; retries exhausted (1) |
 
 ## LLM usage
 
@@ -87,5 +87,5 @@ gantt
 
 ---
 
-_Computed from the hash-chained event log only (`orch verify-audit` checks it). Retries are split by cause; clarification rounds and change requests are not failures. An incident opens at a stage's first failure (including a switch to the fallback agent) and closes at its next success; MTTR includes time a run sat stopped before a person fixed it. Stage success rate counts executed stages (SKIPPED ones never ran). Human decisions replayed by a resume are counted once._
+_Computed from the hash-chained event log only (`orch verify-audit` checks it). Retries are split by cause; clarification rounds and change requests are not failures. An incident opens at a stage's first failure (including a switch to the fallback agent) and closes when its work next passes its gates (a later wait for a sign-off is human wait); MTTR includes time a run sat stopped before a person fixed it. Stage success rate counts executed stages (SKIPPED ones never ran). Human decisions replayed by a resume are counted once._
 

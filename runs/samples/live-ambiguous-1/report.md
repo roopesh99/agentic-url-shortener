@@ -10,8 +10,8 @@ Workflow `brownfield` · **SUCCEEDED** · 4 process(es) · 2026-10-31 21:56 → 
 | Failure retries | 0 |
 | Clarification rounds / change requests / fallbacks | 12 / 2 / 0 |
 | Rollbacks (reverted change sets / stages ended ROLLED_BACK) | 0 / 0 |
-| Incidents (unrecovered) | 1 (0) |
-| MTTR | 54.0 min |
+| Incidents (unrecovered) | 3 (0) |
+| MTTR | 11.5 min |
 | Gate checks passed / failed | 26 / 14 |
 | Policy evaluations by risk tier | low 21, high 1 |
 | Re-plans | 0 |
@@ -52,7 +52,9 @@ Workflow `brownfield` · **SUCCEEDED** · 4 process(es) · 2026-10-31 21:56 → 
 
 | Stage | Opened | Failures | Recovered after | First failure |
 |---|---|---|---|---|
-| `requirements` | 23:30:49 | 3 | 54.0 min | exit gate(s) failed: ['ambiguities_resolved']; retries exhausted (1) |
+| `requirements` | 23:30:49 | 1 | 13.0 min | exit gate(s) failed: ['ambiguities_resolved']; retries exhausted (1) |
+| `requirements` | 23:51:33 | 1 | 2.3 min | rejected by roopeshkotte |
+| `requirements` | 23:55:42 | 1 | 19.2 min | exit gate(s) failed: ['ambiguities_resolved']; retries exhausted (1) |
 
 ## LLM usage
 
@@ -115,4 +117,5 @@ gantt
 
 ---
 
-_Computed from the hash-chained event log only (`orch verify-audit` checks it). Retries are split by cause; clarification rounds and change requests are not failures. An incident opens at a stage's first failure (including a switch to the fallback agent) and closes at its next success; MTTR includes time a run sat stopped before a person fixed it. Stage success rate counts executed stages (SKIPPED ones never ran). Human decisions replayed by a resume are counted once._
+_Computed from the hash-chained event log only (`orch verify-audit` checks it). Retries are split by cause; clarification rounds and change requests are not failures. An incident opens at a stage's first failure (including a switch to the fallback agent) and closes when its work next passes its gates (a later wait for a sign-off is human wait); MTTR includes time a run sat stopped before a person fixed it. Stage success rate counts executed stages (SKIPPED ones never ran). Human decisions replayed by a resume are counted once._
+

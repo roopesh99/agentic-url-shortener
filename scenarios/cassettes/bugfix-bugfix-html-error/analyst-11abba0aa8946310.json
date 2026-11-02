@@ -1,0 +1,166 @@
+{
+  "request": {
+    "agent": "analyst",
+    "effort": "high",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ambiguities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "enum": [
+                  "assumption",
+                  "unresolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "resolution",
+              "source",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "non_functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "goal",
+        "functional",
+        "non_functional",
+        "ambiguities",
+        "acceptance_criteria"
+      ],
+      "type": "object"
+    },
+    "system": "You are the requirements analyst in a governed software delivery pipeline. You turn a product owner's requirement into a normalized engineering specification that the architect, coders and testers downstream will build from. You do not write code.\n\nYour output is checked by automated gates and then reviewed by a human before any design or code work starts, so precision matters more than polish.\n\nHow to work:\n- Restate the goal in one or two sentences an engineer could act on.\n- List functional and non-functional requirements as atomic, testable statements. Keep the requirement's own ids (FR1, NFR2, ...) when it provides them; otherwise assign them. Do not invent scope the requirement does not ask for.\n- Surface every ambiguity: anything an engineer would have to guess about (formats, limits, error behaviour, status codes, security posture). Include the requirement's own \"open points\" and any you find yourself.\n- For each ambiguity, decide whether a safe, conventional default exists.\n  - If it does, set `source` to \"assumption\", put the default in `resolution`, and explain in `rationale` why it is the conventional and low-risk choice. These become recorded decisions a human will review.\n  - If the answer is a genuine product decision (who may see data, business rules, legal or compliance posture, anything where a wrong guess would be costly to reverse), set `source` to \"unresolved\" and `resolution` to null. This stops the pipeline until a human answers, which is the intended behaviour. Do not guess on these to keep things moving.\n- Write acceptance criteria as observable behaviours (request \u2192 expected response), covering the main path and the important failure paths.\n- `summary`: one line, e.g. counts of requirements and how many ambiguities were resolved vs. left open.",
+    "user": "<requirement>\n# Bug report: some bad requests get an HTML page instead of a JSON error\n\n> Found by the release smoke test, which starts the packaged service and calls it over HTTP.\n\n## What happens\nA client that sends a request whose path contains a malformed percent-escape, for example\n\n    GET /api/links/%ZZ\n\ngets `400 Bad Request` with an HTML page (\"HTTP Status 400 \u2013 Bad Request\", Content-Type\n`text/html`) from the embedded server. Client libraries that parse every error as JSON fail on it.\n\n## Expected\nEvery error response from the public API uses the service's documented JSON error body\n(`{\"error\": ..., \"message\": ...}` with `Content-Type: application/json`), as other bad requests\nalready do (malformed JSON bodies, unsupported media types, unknown paths, wrong methods). The\nstatus code for this case stays 400.\n\n## Notes\n- The in-process test suite does not show the problem: it happens in the real HTTP server, before\n  the request reaches the application's controllers.\n- Nothing else about request handling, status codes or headers should change.\n</requirement>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "acceptance_criteria": [
+        "Given a request such as `GET /api/links/%ZZ`, when it is sent to the packaged service over HTTP, the response status is 400, the content type is `application/json`, and the body is valid JSON containing `error` and `message` in the existing documented 400 format.",
+        "Given a path with an incomplete percent-escape, such as `/api/links/%` or `/api/links/%A`, when requested over HTTP, the response is a JSON error with status 400.",
+        "Given a malformed JSON body, unsupported media type, unknown path, or wrong method, when the request produces an API error, the existing status code and other headers remain unchanged and the response continues to use the documented JSON error body.",
+        "Given a valid request, when it is sent to the packaged service, its request handling, status code, and headers remain unchanged."
+      ],
+      "ambiguities": [
+        {
+          "question": "What values should the `error` and `message` fields contain for a malformed-path error?",
+          "rationale": "The requirement refers to the service's documented body and says other bad requests already use it. Reusing the existing 400 representation avoids introducing new error semantics or wording.",
+          "resolution": "Use the existing documented JSON error representation for a 400 response, including its established field values.",
+          "source": "assumption"
+        },
+        {
+          "question": "Does \u201cevery error response from the public API\u201d include errors produced before controller handling, and does it include connection-level failures that are not responses to an API request?",
+          "rationale": "The reported defect occurs before controller handling, so limiting the change to controller-generated errors would not address it. Connection-level failures without an HTTP response are conventionally outside an API's response-format contract.",
+          "resolution": "Apply the JSON error format to errors returned for HTTP requests to the public API, including embedded-server request-processing errors before controller handling. Exclude failures that do not produce an HTTP response for an API request.",
+          "source": "assumption"
+        }
+      ],
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "When a request to the public API has a malformed percent-escape in its path, return status 400 with the documented JSON error body containing `error` and `message`, and `Content-Type: application/json`."
+        },
+        {
+          "id": "FR2",
+          "text": "Every error response for a request to the public API, including errors produced before the request reaches an application controller, uses the documented JSON error body and `Content-Type: application/json`."
+        },
+        {
+          "id": "FR3",
+          "text": "Do not change request handling, status codes, or headers except as needed to return the required JSON body and content type for errors that currently do not meet FR2."
+        }
+      ],
+      "goal": "Ensure errors returned for requests to the public API use the service's documented JSON error format, including errors produced by the embedded server before requests reach application controllers. A request with a malformed percent-escape in its path must continue to receive status 400.",
+      "non_functional": [],
+      "summary": "3 functional requirements, 0 non-functional requirements, 2 ambiguities resolved by assumption, 0 unresolved."
+    },
+    "duration_ms": 31837,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_4334070b4a2c4f479a8c8314fe4740bd",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 786,
+      "output_tokens": 3232
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "name": "requirements",
+  "version": 2,
+  "sha": "4e1e39cacf35da2639858614d54818d32b8226d440bef37610c131076940bd8d",
+  "produced_by": "requirements/analyst#1",
+  "inputs": [],
+  "result": {
+    "summary": "3 functional requirements, 0 non-functional requirements, 2 ambiguities resolved by assumption, 0 unresolved.",
+    "outputs": {
+      "goal": "Ensure errors returned for requests to the public API use the service's documented JSON error format, including errors produced by the embedded server before requests reach application controllers. A request with a malformed percent-escape in its path must continue to receive status 400.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "When a request to the public API has a malformed percent-escape in its path, return status 400 with the documented JSON error body containing `error` and `message`, and `Content-Type: application/json`."
+        },
+        {
+          "id": "FR2",
+          "text": "Every error response for a request to the public API, including errors produced before the request reaches an application controller, uses the documented JSON error body and `Content-Type: application/json`."
+        },
+        {
+          "id": "FR3",
+          "text": "Do not change request handling, status codes, or headers except as needed to return the required JSON body and content type for errors that currently do not meet FR2."
+        }
+      ],
+      "non_functional": [],
+      "ambiguities": [
+        {
+          "question": "What values should the `error` and `message` fields contain for a malformed-path error?",
+          "resolution": "Use the existing documented JSON error representation for a 400 response, including its established field values.",
+          "source": "assumption",
+          "rationale": "The requirement refers to the service's documented body and says other bad requests already use it. Reusing the existing 400 representation avoids introducing new error semantics or wording."
+        },
+        {
+          "question": "Does “every error response from the public API” include errors produced before controller handling, and does it include connection-level failures that are not responses to an API request?",
+          "resolution": "Apply the JSON error format to errors returned for HTTP requests to the public API, including embedded-server request-processing errors before controller handling. Exclude failures that do not produce an HTTP response for an API request.",
+          "source": "assumption",
+          "rationale": "The reported defect occurs before controller handling, so limiting the change to controller-generated errors would not address it. Connection-level failures without an HTTP response are conventionally outside an API's response-format contract."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given a request such as `GET /api/links/%ZZ`, when it is sent to the packaged service over HTTP, the response status is 400, the content type is `application/json`, and the body is valid JSON containing `error` and `message` in the existing documented 400 format.",
+        "Given a path with an incomplete percent-escape, such as `/api/links/%` or `/api/links/%A`, when requested over HTTP, the response is a JSON error with status 400.",
+        "Given a malformed JSON body, unsupported media type, unknown path, or wrong method, when the request produces an API error, the existing status code and other headers remain unchanged and the response continues to use the documented JSON error body.",
+        "Given a valid request, when it is sent to the packaged service, its request handling, status code, and headers remain unchanged."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "What values should the `error` and `message` fields contain for a malformed-path error?",
+        "choice": "Use the existing documented JSON error representation for a 400 response, including its established field values.",
+        "rationale": "The requirement refers to the service's documented body and says other bad requests already use it. Reusing the existing 400 representation avoids introducing new error semantics or wording.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Does “every error response from the public API” include errors produced before controller handling, and does it include connection-level failures that are not responses to an API request?",
+        "choice": "Apply the JSON error format to errors returned for HTTP requests to the public API, including embedded-server request-processing errors before controller handling. Exclude failures that do not produce an HTTP response for an API request.",
+        "rationale": "The reported defect occurs before controller handling, so limiting the change to controller-generated errors would not address it. Connection-level failures without an HTTP response are conventionally outside an API's response-format contract.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

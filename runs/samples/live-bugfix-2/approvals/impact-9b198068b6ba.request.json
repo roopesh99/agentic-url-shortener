@@ -1,0 +1,17 @@
+{
+  "run_id": "live-bugfix-2",
+  "stage": "impact",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Add an unfiltered main-server Tomcat error valve so pre-controller HTTP errors use the existing JSON error body without changing their status or other headers.",
+  "gate_evidence": [
+    "outputs_present: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "Pre-controller errors: Use a Tomcat ErrorReportValve registered on the public embedded server. (agent)",
+    "Route scope: Apply the valve without path inspection to every route on the main listener, including /{code} and /health. (agent)",
+    "Error representation: Reuse ErrorBodies.forStatus(status) and preserve the server-provided status and existing headers, setting the required JSON content type. (agent)",
+    "Persistence: Make no schema changes and add no migration. (agent)"
+  ],
+  "artifact_sha": "9b198068b6ba4def8b5a8cdb770e6a0dc0cfd0882e15ac3e732bc4521577da33"
+}

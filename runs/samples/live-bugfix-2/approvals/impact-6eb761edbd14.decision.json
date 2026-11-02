@@ -1,0 +1,5 @@
+{
+  "approved": false,
+  "approver": "roopeshkotte",
+  "comment": "Keep the mechanism and everything else unchanged, but do not limit the valve to /api paths: every route on this server is part of the documented API (including /{code} and /health), and FR2 covers every error response. Apply the JSON error body to all errors the embedded server renders on the main port, with no path inspection (which removes risk 1). Replace the test that a non-API error stays unchanged with tests that /%ZZ (the redirect path) also gets the 400 JSON body."
+}

@@ -1,0 +1,43 @@
+{
+  "name": "reproduce",
+  "version": 1,
+  "sha": "244f87cfe17aa0196c07afaa5008ad384599d803a0b5ffa43cee05c862f5b23c",
+  "produced_by": "reproduce/reproducer#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 2,
+      "sha": "4e1e39cacf35da2639858614d54818d32b8226d440bef37610c131076940bd8d"
+    },
+    {
+      "name": "impact",
+      "version": 2,
+      "sha": "9b198068b6ba4def8b5a8cdb770e6a0dc0cfd0882e15ac3e732bc4521577da33"
+    }
+  ],
+  "result": {
+    "summary": "ManagementServerTest fails for malformed percent-escapes because Tomcat’s pre-controller error response is not the documented JSON error body.",
+    "outputs": {
+      "files": [
+        "url-shortener/src/test/java/com/example/shortener/ManagementServerTest.java"
+      ]
+    },
+    "files_written": [
+      "url-shortener/src/test/java/com/example/shortener/ManagementServerTest.java"
+    ],
+    "decisions": [
+      {
+        "topic": "Malformed-target HTTP tests",
+        "choice": "Send raw request targets over a socket and assert the established 400 JSON representation for API, incomplete-escape, and redirect-path cases.",
+        "rationale": "A raw socket avoids client-side URI validation and exercises the embedded server’s pre-controller error handling described in the report.",
+        "source": "agent"
+      },
+      {
+        "topic": "Regression guards",
+        "choice": "Retain the existing listener tests and add a real-listener /health success assertion covering status, JSON body, content type, and security headers.",
+        "rationale": "This checks that fixing rendered errors does not alter a successful public request.",
+        "source": "agent"
+      }
+    ]
+  }
+}

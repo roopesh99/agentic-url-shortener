@@ -1,0 +1,21 @@
+{
+  "run_id": "live-bugfix-2",
+  "stage": "release",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Patch 1.2.1 is ready for human release sign-off: pre-controller HTTP errors now use the documented JSON error format, with status codes and existing headers preserved.",
+  "gate_evidence": [
+    "release_checklist_passed: PASS",
+    "files_exist: PASS"
+  ],
+  "files_changed": [
+    "url-shortener/CHANGELOG.md",
+    "url-shortener/docs/releases/1.2.1.md"
+  ],
+  "decisions": [
+    "Release version: Release as 1.2.1 (agent)",
+    "Malformed-path response: Use the existing documented JSON 400 representation for malformed and incomplete percent-escapes. (agent)",
+    "Pre-controller errors: Use the Tomcat host error-report valve to format eligible embedded-server HTTP errors as JSON. (agent)",
+    "Persistence and rollback: Make no schema changes and add no migration; roll back by redeploying the prior application artifact if needed. (agent)"
+  ],
+  "artifact_sha": "d3c622543b5621967126224a487f26073386da6ece7d3c6dc0910a4bfb4d600a"
+}

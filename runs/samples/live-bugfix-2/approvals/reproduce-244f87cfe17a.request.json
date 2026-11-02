@@ -1,0 +1,17 @@
+{
+  "run_id": "live-bugfix-2",
+  "stage": "reproduce",
+  "reason": "policy: high-risk change (1 violation(s); require_approval by high_impact_paths)",
+  "summary": "ManagementServerTest fails for malformed percent-escapes because Tomcat’s pre-controller error response is not the documented JSON error body.",
+  "gate_evidence": [
+    "[change_control/high_impact_paths] url-shortener/src/test/java/com/example/shortener/ManagementServerTest.java: modifies high-impact path (matches '*/src/test/*')"
+  ],
+  "files_changed": [
+    "url-shortener/src/test/java/com/example/shortener/ManagementServerTest.java"
+  ],
+  "decisions": [
+    "Malformed-target HTTP tests: Send raw request targets over a socket and assert the established 400 JSON representation for API, incomplete-escape, and redirect-path cases. (agent)",
+    "Regression guards: Retain the existing listener tests and add a real-listener /health success assertion covering status, JSON body, content type, and security headers. (agent)"
+  ],
+  "artifact_sha": "244f87cfe17aa0196c07afaa5008ad384599d803a0b5ffa43cee05c862f5b23c"
+}

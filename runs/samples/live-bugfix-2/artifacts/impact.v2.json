@@ -1,0 +1,111 @@
+{
+  "name": "impact",
+  "version": 2,
+  "sha": "9b198068b6ba4def8b5a8cdb770e6a0dc0cfd0882e15ac3e732bc4521577da33",
+  "produced_by": "impact/impact_analyst#2",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 2,
+      "sha": "4e1e39cacf35da2639858614d54818d32b8226d440bef37610c131076940bd8d"
+    }
+  ],
+  "result": {
+    "summary": "Add an unfiltered main-server Tomcat error valve so pre-controller HTTP errors use the existing JSON error body without changing their status or other headers.",
+    "outputs": {
+      "impacted": [
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/config/WebConfig.java",
+          "kind": "modify",
+          "reason": "FR2: register the error valve on the public embedded server without path inspection, covering API, redirect, and health routes."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/ApiErrorReportValve.java",
+          "kind": "create",
+          "reason": "FR1, FR2: format errors rendered by embedded Tomcat before controller handling as the existing status-based JSON error body."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/ManagementServerTest.java",
+          "kind": "modify",
+          "reason": "FR1, FR2, FR3: test malformed and incomplete percent-escapes over the real HTTP listener, including the redirect path."
+        }
+      ],
+      "api_changes": [
+        {
+          "method": "ANY",
+          "path": "All paths on the public/main listener, including /api/**, /{code}, and /health",
+          "change": "Request: any existing request method, path, headers, and body. Response: preserve the status code and all existing headers except set Content-Type to application/json when required; error body is the existing JSON ErrorResponse with error and message. A malformed percent-escape returns 400 with the established 400 values (error=invalid_request, message=\"the request is not valid\"). Existing endpoints keep their current contracts unless the specification says otherwise; only error responses that currently fail FR2 have their body and content type corrected."
+        }
+      ],
+      "data_changes": [],
+      "data_flows": [
+        "For malformed request targets rejected before MVC, Tomcat's error-report path supplies the existing status to the valve; the valve uses ErrorBodies.forStatus(status) and writes the JSON response. It does not inspect the path, so this applies to every route on the public/main listener.",
+        "Requests that reach servlet filters, MVC exception handling, or the existing /error dispatch continue through their current JSON error handling; successful requests continue to controllers and retain their existing responses.",
+        "The valve operates only when embedded Tomcat renders an error. It must not add work to successful redirects or perform database, DNS, logging, or other blocking operations."
+      ],
+      "risks": [
+        {
+          "risk": "The valve could alter the status or protocol headers of a server-generated error, such as the Allow header on a 405.",
+          "mitigation": "Retain Tomcat's existing status and headers; change only the error body and required Content-Type.",
+          "detection": "The real-listener malformed-target tests assert 400, and ErrorContractAndHeadersTest continues to assert the wrong-method status and Allow header."
+        },
+        {
+          "risk": "The valve could fail to cover a route if its behavior is restricted by path or servlet mapping.",
+          "mitigation": "Register it on the public embedded server with no path inspection.",
+          "detection": "ManagementServerTest sends malformed targets to both /api/links/%ZZ and /%ZZ, plus incomplete escapes, over HTTP."
+        },
+        {
+          "risk": "The response could use different error values or expose container details instead of the documented representation.",
+          "mitigation": "Reuse ErrorBodies.forStatus rather than introducing a separate mapping or using exception text.",
+          "detection": "New HTTP tests parse the body as JSON and assert its error and message fields and the established 400 values; ErrorContractAndHeadersTest protects existing error-body behavior."
+        },
+        {
+          "risk": "Registering the valve could interfere with successful requests or add latency to the redirect hot path.",
+          "mitigation": "Keep response generation confined to Tomcat's error-report path; do not add work to normal request handling.",
+          "detection": "Existing valid-request tests, including LinkLifecycleTest, protect redirect status and headers; RedirectLatencyTest detects a material hot-path regression."
+        },
+        {
+          "risk": "Failures that do not produce an HTTP response, such as connection-level failures, cannot be formatted by the valve.",
+          "mitigation": "Keep the scope to HTTP request errors for which the embedded server renders a response, consistent with the approved assumption.",
+          "detection": "Real-listener tests verify the response-producing malformed-path cases; connection failures are not treated as API responses."
+        }
+      ],
+      "test_strategy": [
+        "Modify ManagementServerTest to send raw HTTP request targets (avoiding client-side URI validation) for /api/links/%ZZ, /api/links/%, /api/links/%A, and /%ZZ; assert status 400, application/json, and valid JSON containing the established error and message fields.",
+        "Retain ErrorContractAndHeadersTest coverage for documented JSON errors, malformed JSON, unsupported media type, unknown paths, wrong methods, security headers, and stable error codes.",
+        "Retain BodyLimitTest coverage for filter-generated 413 responses and LinkLifecycleTest coverage for unchanged successful redirect behavior.",
+        "Run RedirectLatencyTest as a regression check that error handling has not added work to successful redirects."
+      ],
+      "change_requests": [
+        "Keep the mechanism and everything else unchanged, but do not limit the valve to /api paths: every route on this server is part of the documented API (including /{code} and /health), and FR2 covers every error response. Apply the JSON error body to all errors the embedded server renders on the main port, with no path inspection (which removes risk 1). Replace the test that a non-API error stays unchanged with tests that /%ZZ (the redirect path) also gets the 400 JSON body."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Pre-controller errors",
+        "choice": "Use a Tomcat ErrorReportValve registered on the public embedded server.",
+        "rationale": "The malformed-path failure occurs before controller handling, so MVC advice alone cannot format it.",
+        "source": "agent"
+      },
+      {
+        "topic": "Route scope",
+        "choice": "Apply the valve without path inspection to every route on the main listener, including /{code} and /health.",
+        "rationale": "The binding review instruction clarifies that every main-listener route is part of the documented API and FR2 applies to all its error responses.",
+        "source": "agent"
+      },
+      {
+        "topic": "Error representation",
+        "choice": "Reuse ErrorBodies.forStatus(status) and preserve the server-provided status and existing headers, setting the required JSON content type.",
+        "rationale": "This maintains established field values and avoids introducing new error semantics.",
+        "source": "agent"
+      },
+      {
+        "topic": "Persistence",
+        "choice": "Make no schema changes and add no migration.",
+        "rationale": "The behavior is limited to HTTP error rendering and does not read or write persisted data.",
+        "source": "agent"
+      }
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Replays the five recorded scenarios offline: no API key, no network calls to an LLM, $0.
+# Replays the six recorded scenarios offline: no API key, no network calls to an LLM, $0.
 # Every LLM exchange comes from scenarios/cassettes/, every human decision from runs/samples/.
 # Each scenario starts from the repository state it originally started from (a temporary git
 # worktree) and its generated url-shortener is compared with the commit the original run produced.
@@ -11,7 +11,8 @@ trap 'git -C "$ROOT" worktree remove --force "$WORK/wt-brownfield" 2>/dev/null |
       git -C "$ROOT" worktree remove --force "$WORK/wt-ambiguous" 2>/dev/null || true
       git -C "$ROOT" worktree remove --force "$WORK/wt-lifecycle" 2>/dev/null || true
       git -C "$ROOT" worktree remove --force "$WORK/wt-bugfix" 2>/dev/null || true
-      git -C "$ROOT" branch -D orch/replay-brownfield orch/replay-ambiguous orch/replay-lifecycle orch/replay-bugfix >/dev/null 2>&1 || true
+      git -C "$ROOT" worktree remove --force "$WORK/wt-auto" 2>/dev/null || true
+      git -C "$ROOT" branch -D orch/replay-brownfield orch/replay-ambiguous orch/replay-lifecycle orch/replay-bugfix orch/replay-auto >/dev/null 2>&1 || true
       rm -rf "$WORK"' EXIT
 
 unset OPENAI_API_KEY ANTHROPIC_API_KEY
@@ -64,5 +65,18 @@ orch run "$WORK/bugfix.yaml" --requirement scenarios/bugfix-idn.md --workspace "
     "${llm[@]}" --recorded-decisions runs/samples/live-bugfix-1/approvals --run-id replay-bugfix | tail -2
 git -C "$WORK/wt-bugfix" diff --quiet e6671c9 -- url-shortener; check bugfix $?
 
-for r in replay-greenfield replay-brownfield replay-ambiguous replay-lifecycle replay-bugfix; do echo "  $r: $(orch verify-audit $r)"; done
+echo "== auto: a bug report routed by 'orch run auto', with the live run's failure and re-plan"
+# The selection (recorded exchange and the owner's confirmation) is replayed too. The live run failed
+# its first gate and was re-planned with a corrected workflow; the replay does the same, because the
+# release agent sees stage versions (requirements@v2), which only that sequence reproduces.
+git worktree add -q --detach "$WORK/wt-auto" b0409fe
+mkdir -p "$WORK/wf-auto" && git archive b0409fe workflows | tar -x -C "$WORK/wf-auto"
+orch run auto --requirement scenarios/bugfix-html-error.md --workspace "$WORK/wt-auto" \
+    --workflows-dir "$WORK/wf-auto/workflows" "${llm[@]}" \
+    --recorded-decisions runs/samples/live-bugfix-2/approvals --run-id replay-auto | tail -1
+git show a9a858e:workflows/bugfix.yaml > "$WORK/wf-auto/workflows/bugfix.yaml"
+orch replan replay-auto --from requirements --reason "replay of the live re-plan" | tail -2
+git -C "$WORK/wt-auto" diff --quiet dc311a5 -- url-shortener; check auto $?
+
+for r in replay-greenfield replay-brownfield replay-ambiguous replay-lifecycle replay-bugfix replay-auto; do echo "  $r: $(orch verify-audit $r)"; done
 exit $status

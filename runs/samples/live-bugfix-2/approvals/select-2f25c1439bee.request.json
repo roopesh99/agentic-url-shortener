@@ -1,0 +1,18 @@
+{
+  "run_id": "live-bugfix-2",
+  "stage": "select",
+  "reason": "confirm the workflow this requirement will run through",
+  "summary": "bugfix (high confidence): This is a defect in the existing service: malformed percent-escapes currently produce an HTML 400 response, contrary to the expected JSON error behavior. The request asks to restore the existing error contract while keeping the status code and other handling unchanged, not to introduce an API change or prepare API documentation or release readiness.",
+  "gate_evidence": [
+    "eligible: brownfield, bugfix, lifecycle",
+    "excluded skeleton: needs a new codebase; url-shortener/pom.xml exists",
+    "signal: Observed: `GET /api/links/%ZZ` returns an HTML 400 page instead of JSON.",
+    "signal: Expected: every public API error uses the documented JSON error body and `application/json`.",
+    "signal: The issue occurs in the real HTTP server before requests reach controllers; the status code stays 400."
+  ],
+  "files_changed": [],
+  "decisions": [
+    "runner-up: brownfield"
+  ],
+  "artifact_sha": "2f25c1439bee99a20c50d254ae6e223d3a52b49b0e289963c50449ccce4b97e6"
+}

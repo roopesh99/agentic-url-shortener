@@ -1,0 +1,131 @@
+{
+  "name": "release",
+  "version": 1,
+  "sha": "d3c622543b5621967126224a487f26073386da6ece7d3c6dc0910a4bfb4d600a",
+  "produced_by": "release/release#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 2,
+      "sha": "4e1e39cacf35da2639858614d54818d32b8226d440bef37610c131076940bd8d"
+    },
+    {
+      "name": "impact",
+      "version": 2,
+      "sha": "9b198068b6ba4def8b5a8cdb770e6a0dc0cfd0882e15ac3e732bc4521577da33"
+    },
+    {
+      "name": "reproduce",
+      "version": 1,
+      "sha": "244f87cfe17aa0196c07afaa5008ad384599d803a0b5ffa43cee05c862f5b23c"
+    },
+    {
+      "name": "fix",
+      "version": 1,
+      "sha": "4fa0fc5897d2728ff0c3e8067bead67f193b419cebc8ce7b400052943adcb19d"
+    }
+  ],
+  "result": {
+    "summary": "Patch 1.2.1 is ready for human release sign-off: pre-controller HTTP errors now use the documented JSON error format, with status codes and existing headers preserved.",
+    "outputs": {
+      "version": "1.2.1",
+      "checklist": [
+        {
+          "item": "Requirements approved",
+          "status": "pass",
+          "evidence": "The accepted requirements artifact specifies FR1–FR3 and the acceptance criteria; the requirements stage was accepted."
+        },
+        {
+          "item": "Open questions resolved",
+          "status": "pass",
+          "evidence": "The requirements gate reports 2 ambiguities, all resolved, with 0 unresolved."
+        },
+        {
+          "item": "Design approved",
+          "status": "n/a",
+          "evidence": "There is no separate design stage in this bug-fix workflow. The accepted impact and fix artifacts record the technical approach and its rationale."
+        },
+        {
+          "item": "API definition valid and implemented",
+          "status": "pass",
+          "evidence": "The OpenAPI conformance gate passed: 7 operations documented and implemented, none undocumented."
+        },
+        {
+          "item": "Tests passing",
+          "status": "pass",
+          "evidence": "The orchestrator reran the full test suite on the current workspace immediately before this stage and it passed. The fix-stage Maven gate also passed: 155 tests in 23 classes. Packaged-jar smoke checks covered malformed escapes, 405 Allow, and management 404 behavior."
+        },
+        {
+          "item": "Documentation updated",
+          "status": "pass",
+          "evidence": "This release record adds the 1.2.1 CHANGELOG entry. The change reuses the existing documented 400 error representation, and the OpenAPI conformance gate passed."
+        },
+        {
+          "item": "Backward compatibility",
+          "status": "pass",
+          "evidence": "FR3 requires preserving request handling, status codes, and headers except for the error body and content type. The accepted fix preserves status and headers; packaged-jar checks verified 405 Allow and valid-request behavior."
+        },
+        {
+          "item": "Security and privacy requirements addressed",
+          "status": "pass",
+          "evidence": "The accepted fix reuses ErrorBodies.forStatus and does not expose container details. The impact review found no persistence changes, and packaged-jar smoke testing checked successful-request security headers."
+        },
+        {
+          "item": "Migrations reviewed",
+          "status": "n/a",
+          "evidence": "The accepted impact review states there are no schema changes and no migration; this HTTP error-rendering change does not read or write persisted data."
+        },
+        {
+          "item": "Rollback possible",
+          "status": "pass",
+          "evidence": "The change is an application/container error-rendering change with no schema migration, so the previous application artifact can be redeployed without database rollback."
+        }
+      ],
+      "risks": [
+        {
+          "risk": "The custom error valve depends on embedded Tomcat behavior and installation timing, which could be affected by future container or framework upgrades.",
+          "mitigation": "Retain the raw-request regression tests and packaged-jar smoke checks when upgrading dependencies; those checks exercise the real listener and verify the error format and preserved headers."
+        },
+        {
+          "risk": "The valve class is also used by the management server's factory, so its pre-controller errors use JSON there as well.",
+          "mitigation": "This behavior was explicitly recorded in the accepted fix decisions and verified with a packaged-jar management 404 check; keep that check to detect unintended changes."
+        },
+        {
+          "risk": "The valve has less than complete changed-file coverage (83.3% line coverage and 50.0% branch coverage).",
+          "mitigation": "The focused malformed-target tests exercise the reported failure paths, and packaged-jar checks cover malformed escapes, 405 header preservation, and management-server behavior; expand tests if the valve's guards or error-writing behavior change."
+        }
+      ],
+      "rollback_plan": "If the release causes issues, redeploy the previous known-good 1.2.0 application artifact and restart the service using the normal deployment procedure. No database rollback is required because this release introduces no schema changes or migration. Rolling back will restore the previous error-rendering behavior, including the malformed-path response defect this release fixes."
+    },
+    "files_written": [
+      "url-shortener/CHANGELOG.md",
+      "url-shortener/docs/releases/1.2.1.md"
+    ],
+    "decisions": [
+      {
+        "topic": "Release version",
+        "choice": "Release as 1.2.1",
+        "rationale": "This is a backward-compatible error-response fix with no new feature or breaking change, so a patch version bump is appropriate.",
+        "source": "agent"
+      },
+      {
+        "topic": "Malformed-path response",
+        "choice": "Use the existing documented JSON 400 representation for malformed and incomplete percent-escapes.",
+        "rationale": "This matches the resolved requirement and avoids introducing new error fields or wording.",
+        "source": "agent"
+      },
+      {
+        "topic": "Pre-controller errors",
+        "choice": "Use the Tomcat host error-report valve to format eligible embedded-server HTTP errors as JSON.",
+        "rationale": "Tomcat rejects malformed request targets before servlet or controller handling; the accepted implementation addresses that path while preserving status and existing headers.",
+        "source": "agent"
+      },
+      {
+        "topic": "Persistence and rollback",
+        "choice": "Make no schema changes and add no migration; roll back by redeploying the prior application artifact if needed.",
+        "rationale": "The change affects HTTP error rendering only and does not read or write persisted data.",
+        "source": "agent"
+      }
+    ]
+  }
+}
