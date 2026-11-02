@@ -220,6 +220,13 @@ class WriterAgent(LLMAgent):
                            decisions=_decisions(out.decisions))
 
 
+GATES_NOTE = ("The exit gates the orchestrator itself ran on each accepted stage's artifact, with their evidence. "
+              "Use them as evidence for the checklist. The stages listed in accepted_stages are the whole "
+              "workflow: a checklist item for a lifecycle stage this workflow does not have (for example design "
+              "or documentation in a bug fix) is n/a, with the evidence saying so and whether the change needed "
+              "it; mark it fail only if the change evidently required that stage's work.")
+
+
 class ReleaseAgent(LLMAgent):
     name = "release"
     prompts = ("release",)
@@ -235,8 +242,10 @@ class ReleaseAgent(LLMAgent):
                          "decisions": [d.model_dump() for d in a.result.decisions],
                          "files": a.result.files_written}
                   for name, a in ctx.inputs.items()}
-        return [self.spec_section(ctx), _tag("accepted_stages", _canonical(stages)),
-                self.files_section(ctx, "existing_release_files"), self.scope_section(ctx)]
+        sections = [self.spec_section(ctx), _tag("accepted_stages", _canonical(stages))]
+        if ctx.upstream_gates:  # opt-in (gate_context), so earlier recorded release prompts stay identical
+            sections.append(_tag("upstream_gate_results", GATES_NOTE + "\n" + _canonical(ctx.upstream_gates)))
+        return sections + [self.files_section(ctx, "existing_release_files"), self.scope_section(ctx)]
 
     def to_result(self, ctx, out: ReleaseOutput):
         ctx.write_file(self.CHANGELOG, out.changelog_markdown.strip() + "\n")

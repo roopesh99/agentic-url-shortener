@@ -313,6 +313,7 @@ class Engine:
                 downstream_scopes={s: self.workflow.stage(s).write_scope for s in self._order
                                    if s in downstream(self.workflow, stage.id) and self.workflow.stage(s).write_scope}
                 if stage.downstream_context else {},
+                upstream_gates=self._upstream_gates(inputs) if stage.gate_context else {},
             )
             result = await self._invoke_agent(stage, ctx, agent)
             if self._charge(ctx.telemetry):
@@ -716,6 +717,17 @@ class Engine:
             if was != NodeState.PENDING.value:  # a sanctioned reset, recorded like any other transition
                 self.events.append(EventType.STAGE_STATE, stage_id, **{"from": was, "to": NodeState.PENDING.value},
                                    reason=f"resume: was {was}")
+
+    def _upstream_gates(self, inputs: dict[str, Artifact]) -> dict[str, list[dict[str, Any]]]:
+        """The exit gates the orchestrator ran on each input artifact, read from the audit log, so an
+        agent judging readiness sees verified evidence rather than upstream agents' own claims."""
+        refs = {stage_id: a.ref().model_dump() for stage_id, a in inputs.items()}
+        gates: dict[str, list[dict[str, Any]]] = {stage_id: [] for stage_id in inputs}
+        for e in EventStore.load(self.events.path):
+            if e.type == EventType.GATE_RESULT and e.stage in refs and e.payload.get("artifact") == refs[e.stage]:
+                gates[e.stage].append({"gate": e.payload["gate"], "passed": e.payload["passed"],
+                                       "evidence": e.payload["evidence"][:1500]})
+        return gates
 
     def _workflow_sha(self) -> str:
         """Hash of the parsed workflow (not the file, so comments and formatting don't count):

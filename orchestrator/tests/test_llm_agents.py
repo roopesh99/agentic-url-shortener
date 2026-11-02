@@ -301,3 +301,24 @@ async def test_the_coder_sees_no_regression_section_outside_bug_fixes(tmp_path):
                        "coder": [code([])], "tester": [code([])]})
     assert (await engine(tmp_path, llm, wf).run()).succeeded
     assert "regression_tests" not in llm.prompts("coder")[0]
+
+
+async def test_release_sees_the_orchestrators_gate_results_when_the_stage_opts_in(tmp_path):
+    """In the live bug-fix run the release agent failed 'API definition valid' although the conformance
+    gate had passed: it could not see gate results. With gate_context it gets them from the audit log."""
+    wf = load_workflow(ROOT / "workflows" / "bugfix.yaml")
+    for s in wf.stages:
+        s.entry_gates = []
+        s.exit_gates = [g for g in s.exit_gates if g.name == "outputs_present"]
+    llm = ScriptedLLM({"analyst": [SPEC], "impact_analyst": [IMPACT], "reproducer": [code([])],
+                       "coder": [code([])], "release": [RELEASE]})
+    assert (await engine(tmp_path, llm, wf).run()).succeeded
+    prompt = llm.prompts("release")[0]
+    assert "<upstream_gate_results>" in prompt and "is n/a" in prompt
+    assert '"gate": "outputs_present"' in prompt and "outputs present" in prompt
+
+    wf.stage("release").gate_context = False
+    llm2 = ScriptedLLM({"analyst": [SPEC], "impact_analyst": [IMPACT], "reproducer": [code([])],
+                        "coder": [code([])], "release": [RELEASE]})
+    assert (await engine(tmp_path / "off", llm2, wf).run()).succeeded
+    assert "upstream_gate_results" not in llm2.prompts("release")[0]

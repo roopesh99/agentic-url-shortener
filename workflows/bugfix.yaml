@@ -62,6 +62,7 @@ stages:
     needs: [fix]
     read_scope: ["url-shortener/CHANGELOG.md"]
     write_scope: ["url-shortener/CHANGELOG.md", "url-shortener/docs/releases/**"]
+    gate_context: true               # judge readiness on the orchestrator's gate results, not agents' claims
     entry_gates:
       - name: maven_test
         args: { project: url-shortener, timeout_seconds: 900, min_tests: 139 }

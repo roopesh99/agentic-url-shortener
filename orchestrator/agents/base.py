@@ -38,6 +38,7 @@ class AgentContext:
     clarifications: list[dict[str, str]] = field(default_factory=list)  # binding human answers so far
     telemetry: list[dict[str, Any]] = field(default_factory=list)  # one entry per LLM call
     downstream_scopes: dict[str, list[str]] = field(default_factory=dict)  # where later stages may write
+    upstream_gates: dict[str, list[dict[str, Any]]] = field(default_factory=dict)  # gate results per input stage
 
     def in_scope(self, rel_path: str) -> bool:
         return any(fnmatch(rel_path, pattern) for pattern in self.stage.write_scope)
