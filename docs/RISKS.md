@@ -18,6 +18,7 @@
 | Upstream output changes after downstream finished | `orch replan` / automatic on resume; lineage decides reuse or re-run | `test_replan.py` |
 | Code drifts from the approved API definition | Conformance gate fails the implementation (documented but not built, or built but not documented) | `test_lifecycle.py`, `live-lifecycle-1` |
 | A "fix" without proof of the bug | The reproduce stage must produce a test that fails on the current code, with every other test passing, before the fix stage may start; the fix cannot change tests | `test_bugfix.py`, `live-bugfix-1` |
+| A requirement routed to the wrong workflow | Rules decide eligibility; the selector can only name eligible workflows; a person confirms every choice and can redirect it with a comment | `test_selection.py`, `orch eval-selector` (9 of 9) |
 | Release prepared from a stale or broken build | Release entry gate re-runs the full suite; a failing checklist item blocks the release | `live-lifecycle-1` (blocked once, rolled back) |
 
 ## Trade-offs
@@ -40,7 +41,8 @@
 - Re-planning happens between processes, not while stages are in flight; a re-run does not delete files that only the previous version created.
 - Policy rules are regex and allowlist based; no SAST, secret-scanning service or CVE scan.
 - Gates verify what tests check: weak tests pass weak code (mitigated by the test-count floor, the protected-test rule and human review of the test plan).
-- LLM nondeterminism: the analyst re-opened a question it had resolved earlier (handled, but it costs a round); output quality is not measured by an eval set.
+- LLM nondeterminism: the analyst re-opened a question it had resolved earlier (handled, but it costs a round). Only the workflow selector has an eval (9 author-written cases); other agents' output quality is measured only by gates and review.
+- Workflow eligibility uses a single codebase marker (`url-shortener/pom.xml`); a repository with several services would need a richer rule.
 - Prompt injection: requirement text and code reach prompts. Agents cannot write outside their scope or skip policy and gates, which contains the damage, but a malicious requirement could still steer what an agent proposes within its scope.
 - The conformance gate compares methods and paths found by a static scan of Spring annotations, not request or response schemas; it would miss a route built some other way (e.g. functional routing).
 - `regression_reproduces` proves a new test fails, not that it fails *for the reported reason*: a person reads the failures (the gate puts every one, with its message, in the evidence). In the live run all 10 failed with the reported error.

@@ -48,6 +48,11 @@ set in the shell take precedence; only variable *names* are ever printed.
 # interactive: you approve the normalized requirements before any code is written
 .venv/bin/orch run workflows/skeleton.yaml --requirement scenarios/greenfield.md --workspace ./out
 
+# or let it propose the workflow (rules decide what is eligible; you confirm the choice)
+.venv/bin/orch run auto --requirement scenarios/bugfix-idn.md --workspace . --agents llm --llm record \
+    --llm-config config/llm.openai-hybrid.yaml --approvals file
+.venv/bin/orch eval-selector --llm-config config/llm.openai-hybrid.yaml   # selection eval, offline
+
 # non-interactive (recorded in the audit log as a non-human approver)
 .venv/bin/orch run workflows/skeleton.yaml --requirement scenarios/greenfield.md --workspace ./out --auto-approve
 
@@ -164,6 +169,7 @@ Every evaluation (`POLICY_EVALUATED`) and the policy file's sha256 are in the au
 | `orchestrator/llm/` | provider-neutral contract, provider registry + config, providers, session backend, cassettes, strict-schema generation |
 | `config/` | LLM backend configurations (which provider serves which agent) |
 | `orchestrator/policy/` | policy engine, rules, risk tiers |
+| `orchestrator/planner/` | workflow selection for `orch run auto` and its eval |
 | `orchestrator/workspace/` | proposed change sets; the only code path that writes agent output |
 | `policies/` | governance policy (policy-as-code) |
 | `workflows/` | declarative DAGs: `skeleton` (greenfield), `brownfield`, `lifecycle` (full SDLC), `bugfix` (reproduce, then fix), `fault-demo` |

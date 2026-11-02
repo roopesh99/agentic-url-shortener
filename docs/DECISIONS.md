@@ -79,6 +79,11 @@ Short records of the decisions that shaped the system: the context, the choice, 
 **Decision.** The bug-fix workflow puts a reproduce stage (tests only) before the fix stage (code only). Its gate clears old reports, runs the suite, and passes only if the tests compile, at least one new test fails, and nothing else fails; the fix stage cannot write tests and must make the whole suite pass.
 **Consequences.** Every bug fix comes with a regression test that is known to have failed on the old code and to pass on the new. Whether a test fails for the *reported* reason is still a human judgement; the gate shows each failure's message to support it. Release readiness reads the orchestrator's gate results (`gate_context`), not agents' summaries.
 
+### D19. A model proposes the workflow; rules bound it and a person confirms it
+**Context.** Choosing the workflow decides which risks a change is governed for: a bug fixed without reproduction, or an API change shipped without docs, starts with the wrong choice.
+**Decision.** Eligibility is a rule over facts (does the codebase exist), not a model judgement. Among the eligible workflows a selector agent proposes one, through a schema whose enum holds only their names, with confidence, rationale, the signals it relied on and a runner-up. A person confirms; a commented rejection is a bounded change request. The selection is recorded in `RUN_STARTED`.
+**Consequences.** The model cannot pick an ineligible or invented workflow, and low confidence is visible to the person confirming. Workflows are chosen, not composed: a requirement that needs a new shape of process still needs a new workflow file. The eval (9 cases, 9 correct) is small and written by the same author as the `use_when` texts, so it guards against regressions rather than proving accuracy.
+
 ## URL shortener
 
 | # | Decision | Why |

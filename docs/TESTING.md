@@ -4,7 +4,7 @@ Three layers, plus checks on the tests themselves.
 
 | Layer | What | Count | Run |
 |---|---|---|---|
-| Orchestrator | unit and integration tests of the engine, governance and observability | 195 | `.venv/bin/pytest` |
+| Orchestrator | unit and integration tests of the engine, governance and observability | 204 | `.venv/bin/pytest` |
 | Generated service | unit, MockMvc integration, real-listener, concurrency and restart tests | 150 (23 classes) | `cd url-shortener && mvn test` |
 | End to end | the five scenarios replayed offline through the real CLI, gates and Maven | 5 runs | `scripts/replay-scenarios.sh` |
 
@@ -20,7 +20,7 @@ Three layers, plus checks on the tests themselves.
 - **Real where it matters.** Real Maven builds as gates, real sockets for network bindings, a real V1
   database upgraded in place, a real application restart.
 
-## Orchestrator (195 tests)
+## Orchestrator (204 tests)
 
 | File | Covers |
 |---|---|
@@ -36,6 +36,7 @@ Three layers, plus checks on the tests themselves.
 | `test_clarification.py` (10) | pause and readable answers file, incomplete answers refused, non-human never answers, bounded rounds, seeding recorded decisions |
 | `test_resilience.py` (22) | rollback, conflict-safe revert, fallback, stop and time budget, resume, tamper refusal, git ownership, content-bound approvals, change requests, extra round per revision, workflow hash |
 | `test_replan.py` (11) | lineage reuse vs re-run, branch precision, approvals on reuse vs new content, requirement change detection, re-planning a failed stage is recorded with its reason |
+| `test_selection.py` (9) | catalog and codebase eligibility, rule proposal without a model call, schema limited to eligible names, rejection with a comment followed, rejection without one starts nothing, selection in `RUN_STARTED` and the report, the recorded eval replayed (9 of 9), `orch run auto` end to end |
 | `test_bugfix.py` (6) | real Maven: a new failing test reproduces; a passing one does not; a failing existing test is not a reproduction; a test that does not compile is not one even with stale failing reports; the fix cannot write tests |
 | `test_lifecycle.py` (10) | OpenAPI validation, two-way conformance against real Spring mappings (class prefixes, regex path variables, the error controller), docs coverage, release checklist, an entry gate blocking implementation without a valid design, the 8-stage lifecycle end to end with real Maven |
 | `test_metrics.py` (10) | every metric against runs with known faults; human-wait overlap; resume de-duplication; tampered-log refusal |
@@ -75,6 +76,7 @@ the plan the test planner produced (`runs/samples/<run>/artifacts/test_plan.v1.j
 | Service: destination check on the host as written; redirect to the URL as entered | 3 regression tests fail each |
 | Orchestrator: entry gates ignored | the entry-gate tests fail |
 | Orchestrator: old Surefire reports not cleared before a reproduction | the stale-report test fails |
+| Orchestrator: codebase eligibility ignored; reviewer's comment dropped | 5 and 1 selection tests fail |
 | Orchestrator: re-plans of failed stages not recorded (the bug found in the lifecycle run) | the new re-plan test fails |
 
 ## End-to-end evidence
@@ -92,4 +94,7 @@ the plan the test planner produced (`runs/samples/<run>/artifacts/test_plan.v1.j
 - No load or soak testing; the latency figure is an indicative in-process check.
 - No real database outage: the 503 path is tested with injected store failures.
 - The policy rules are pattern-based; there is no SAST or dependency vulnerability scanner in the loop.
-- LLM output quality is not measured beyond the gates (no eval set).
+- LLM output quality is measured beyond the gates only for the workflow selector: `orch eval-selector`
+  (`scenarios/selection/eval.yaml`, 9 cases with every defensible answer accepted; recorded live 9 of 9,
+  replayed as a test). The cases and the workflows' `use_when` texts have the same author, so this is a
+  regression check, not a benchmark.

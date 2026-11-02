@@ -2,7 +2,7 @@
 
 ## What was built
 
-1. **A governed agentic SDLC orchestrator** (`orchestrator/`, Python, ~4.8k lines, 195 tests). It takes
+1. **A governed agentic SDLC orchestrator** (`orchestrator/`, Python, ~5.1k lines, 204 tests). It takes
    a requirement through an explicit dependency graph of stages covering the full lifecycle
    (requirements, impact analysis, API design, implementation, test planning, testing, documentation,
    release readiness) and a reproduce-then-fix path for bugs, with entry/exit gates, parallel paths and joins, a policy engine, human
@@ -34,6 +34,7 @@ The work followed a walking skeleton, then layers, each committed separately (`g
 | 5 | lineage-based re-planning | the last orchestration capability |
 | 6 | metrics and reports from the log | measure what was built |
 | 7 | documentation, offline replay of the scenarios | deliverables |
+| Selection | `orch run auto`: rule-based eligibility, selector agent, human confirmation; `orch eval-selector` | the audit found the workflow was always named by a person |
 | Bug fix | reproduce-then-fix workflow, `regression_reproduces` gate, reproducer agent; release sees gate results | the audit found bug fixes in scope but undemonstrated |
 | Lifecycle | design, documentation and release stages; OpenAPI, conformance, docs-coverage and checklist gates; entry gates in use; fixes the run exposed | an audit against the assignment found the lifecycle stages missing |
 
@@ -42,7 +43,7 @@ The work followed a walking skeleton, then layers, each committed separately (`g
 | Requirement | Where it is met | Evidence |
 |---|---|---|
 | 1. Requirement understanding | analyst agent; ambiguity gate; clarification checkpoints | 27 human answers across the runs; a contradiction caught; "make it more reliable" → 23 requirements |
-| 2. Task decomposition | declarative stage DAGs with dependencies, scopes, gates (`workflows/`); work broken down further inside stages (impact plan: files, risks, tests; test plan: cases traced to requirements) | 4-, 5-, 5- and 8-stage workflows, two fork/join points in the lifecycle |
+| 2. Task decomposition | `orch run auto` proposes the workflow (stage graph) from the requirement and the codebase, a person confirms; declarative stage DAGs with dependencies, scopes, gates (`workflows/`); work broken down further inside stages (impact plan: files, risks, tests; test plan: cases traced to requirements) | 4-, 5-, 5- and 8-stage workflows, two fork/join points in the lifecycle; selection eval 9 of 9 |
 | 3. Codebase reasoning (brownfield) | impact-analyst stage reading the code; plan approved before changes; bug fixes reproduced before they are fixed | impacted files, API/data changes, races and risks named before coding; a real bug's root cause found from a user report |
 | 4. Workflow orchestration | engine with explicit DAG, entry/exit gates, parallel paths, context and lineage, approvals, retries, fallback, rollback, safe-stop, policy, audit, metrics, re-planning; the lifecycle workflow covers requirements → design → implementation → testing → documentation → release readiness | [ARCHITECTURE.md](ARCHITECTURE.md); `test_scheduler`, `test_resilience`, `test_replan`, `test_lifecycle`; `live-lifecycle-1` |
 | 5. Engineering output | layered service; Flyway migrations; an OpenAPI 3.0.3 definition of every endpoint, checked against the code both ways; README and API reference; changelog; 150 tests | `url-shortener/`, `url-shortener/openapi.yaml`, `url-shortener/docs/` |
@@ -114,8 +115,8 @@ Per scenario: [SCENARIOS.md](SCENARIOS.md).
 
 1. A web approval UI (the `Approver` interface is the seam) and notifications when a run waits.
 2. Real security tooling as gates: SAST, dependency CVE scanning, secret scanning.
-3. An eval set for agent output quality, and per-agent model choice tuned against it.
+3. Evals for every agent's output quality (today only the selector has one, 9 cases written by me), and per-agent model choice tuned against them.
 4. Event log in a database with an external anchor for the hash chain; a queue-backed scheduler.
 5. Production datastore and shared rate-limit state for the service.
-6. Choose the workflow from the requirement (greenfield, brownfield, lifecycle, bug fix) instead of naming it,
-   and let the release stage bump the build version (today `pom.xml` stays `1.0.0-SNAPSHOT`).
+6. Let the release stage bump the build version (today `pom.xml` stays `1.0.0-SNAPSHOT`), and compose
+   workflows from stage fragments instead of choosing among fixed ones.

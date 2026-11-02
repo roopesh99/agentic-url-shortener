@@ -99,6 +99,18 @@ everything; `replay` never calls it.
 `--workspace .` targets this repository: only if the tree is clean, and only on a new
 `orch/<run-id>` branch, one commit per accepted stage; merge it like a pull request.
 
+### Let the orchestrator choose the workflow
+
+```bash
+.venv/bin/orch run auto --requirement <requirement.md> --workspace . \
+    --agents llm --llm record --llm-config config/llm.openai-hybrid.yaml --approvals file
+.venv/bin/orch eval-selector --llm-config config/llm.openai-hybrid.yaml    # offline by default
+```
+
+Eligible workflows are decided by a rule (an existing codebase or not); the selector proposes one of
+them; you confirm with `orch approve <run-id> select-…`, or reject with `--comment "use bugfix: …"` to
+have it reconsider. The choice is recorded in the run's first event and its report.
+
 ### Human checkpoints (with `--approvals file`)
 
 The run pauses and prints what is waiting. Answer from any terminal:
@@ -128,7 +140,7 @@ assistant answers with `orch respond <request.json> --files-from <dir> --summary
 ## 4. Tests
 
 ```bash
-.venv/bin/pytest                    # orchestrator: 195 tests, incl. real Maven builds (~50 s)
+.venv/bin/pytest                    # orchestrator: 204 tests, incl. real Maven builds (~50 s)
 .venv/bin/pytest -m "not maven"     # without the Maven builds (~6 s)
 cd url-shortener && mvn test        # service: 150 tests
 ```

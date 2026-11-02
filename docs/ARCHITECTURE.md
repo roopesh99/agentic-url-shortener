@@ -4,7 +4,7 @@ Two systems live in this repository:
 
 | System | What it is | Where |
 |---|---|---|
-| **Orchestrator** | A governed, agentic SDLC engine (Python, ~4.8k lines): it turns a requirement into reviewed, tested code through a dependency graph of stages, with gates, policy, human checkpoints, rollback, resume, re-planning and an audit trail. | `orchestrator/` |
+| **Orchestrator** | A governed, agentic SDLC engine (Python, ~5.1k lines): it turns a requirement into reviewed, tested code through a dependency graph of stages, with gates, policy, human checkpoints, rollback, resume, re-planning and an audit trail. | `orchestrator/` |
 | **URL shortener** | The service the orchestrator built and then changed four times (Java 17, Spring Boot 3.4, ~1.7k lines + ~2.5k lines of tests), with its OpenAPI definition and docs. | `url-shortener/` |
 
 The principle throughout: **agents propose, the orchestrator verifies, humans decide.** No agent writes a
@@ -285,11 +285,34 @@ rolling minute, shared by stats, delete and expiry changes), 16 KiB API body lim
 every response, one JSON error schema. The API is defined in `url-shortener/openapi.yaml` and documented
 in `url-shortener/README.md` and `url-shortener/docs/api.md`.
 
+## 8b. Choosing the workflow (`orch run auto`)
+
+```mermaid
+flowchart LR
+    Q["requirement"] --> E{"eligibility rule<br/>codebase exists?"}
+    E -- "one eligible" --> R["proposed by rule"]
+    E -- "several" --> S["selector agent<br/>schema: eligible names only"]
+    R --> H{"person confirms"}
+    S --> H
+    H -- "approved" --> RUN["RUN_STARTED<br/>(selection recorded)"]
+    H -- "rejected + comment<br/>(≤2)" --> S
+    H -- "rejected" --> X["no run"]
+```
+
+Each selectable workflow declares `selection: {codebase: new|existing, use_when: …}`; workflows
+without it (`fault-demo`) are never offered. A model never decides eligibility, and it cannot name a
+workflow that is not eligible, because the output schema's enum holds only those names. The proposal
+(workflow, confidence, rationale, signals from the requirement, runner-up), the eligibility facts and
+every decision are recorded in the hash-chained `RUN_STARTED` event and shown in the run report.
+`orch eval-selector` checks the selector against requirements with known answers
+(`scenarios/selection/eval.yaml`).
+
 ## 9. Extension points
 
 | To add | Do |
 |---|---|
 | A stage | Add it to a workflow YAML; no code |
+| A workflow `orch run auto` can choose | Add a `selection` block (`codebase`, `use_when`) to it, and cases to the selection eval |
 | A gate | Subclass `Gate`, register in `gates/builtin.py` |
 | A policy rule | Subclass `Rule`, add to `RULE_TYPES`, configure in `policies/*.yaml` |
 | An agent | Subclass `LLMAgent` (prompt + output model + context sections), register in `llm_agents()` |
