@@ -4,8 +4,8 @@ Two systems live in this repository:
 
 | System | What it is | Where |
 |---|---|---|
-| **Orchestrator** | A governed, agentic SDLC engine (Python, ~4.3k lines): it turns a requirement into reviewed, tested code through a dependency graph of stages, with gates, policy, human checkpoints, rollback, resume, re-planning and an audit trail. | `orchestrator/` |
-| **URL shortener** | The service the orchestrator built and then changed twice (Java 17, Spring Boot 3.4, ~1.5k lines + ~2k lines of tests). | `url-shortener/` |
+| **Orchestrator** | A governed, agentic SDLC engine (Python, ~4.7k lines): it turns a requirement into reviewed, tested code through a dependency graph of stages, with gates, policy, human checkpoints, rollback, resume, re-planning and an audit trail. | `orchestrator/` |
+| **URL shortener** | The service the orchestrator built and then changed three times (Java 17, Spring Boot 3.4, ~1.6k lines + ~2.4k lines of tests), with its OpenAPI definition and docs. | `url-shortener/` |
 
 The principle throughout: **agents propose, the orchestrator verifies, humans decide.** No agent writes a
 file, judges its own output, or approves anything.
@@ -24,7 +24,7 @@ flowchart LR
     end
     subgraph Agents["Agents (agents/, llm/)"]
         REG["Agent registry"]
-        LLMA["LLM agents<br/>analyst · impact · planner · coder · tester"]
+        LLMA["LLM agents<br/>analyst · impact · architect · planner<br/>coder · tester · writer · release"]
         ROUTE["Backend router<br/>config/llm.*.yaml"]
         P1["Anthropic"]
         P2["OpenAI"]
@@ -32,7 +32,7 @@ flowchart LR
         CAS["Cassettes<br/>record / replay"]
     end
     subgraph Governance
-        GATES["Gates<br/>mvn compile/test, ambiguity,<br/>test-count floor"]
+        GATES["Gates<br/>mvn compile/test, ambiguity, test-count floor,<br/>OpenAPI valid, API conformance,<br/>docs coverage, release checklist"]
         POL["Policy engine<br/>policies/default.yaml"]
         APP["Human checkpoints<br/>approvals · clarifications<br/>change requests"]
     end
@@ -62,7 +62,7 @@ flowchart LR
 | Event store | Append-only, hash-chained log: the single source of truth. State, metrics and resume are rebuilt from it; any edit, deletion or reordering is detected. | `engine/events.py` |
 | Agents | One structured-output LLM call per attempt; output validated against a Pydantic model; files proposed through a scoped context. Deterministic stubs implement the same contract. | `agents/` |
 | LLM backends | A provider-neutral contract (`LLMClient`), a registry (Anthropic, OpenAI, session), per-agent routing from config, and cassettes for offline replay. | `llm/` |
-| Gates | Checks the orchestrator runs itself (never the agent's word): Maven compile/test with a test-count floor, ambiguity resolution, structural output checks. | `gates/builtin.py` |
+| Gates | Checks the orchestrator runs itself (never the agent's word): Maven compile/test with a test-count floor, ambiguity resolution, structural output checks, OpenAPI validity, two-way API conformance (documented = implemented), documentation coverage of the API, release checklist. | `gates/builtin.py`, `gates/api.py` |
 | Policy engine | Rules over every proposed change set (secrets, dangerous code, PII in logs, dependency allowlist, high-impact paths, diff size), each mapped to a risk tier and an action. Policy-as-code; its hash is recorded on every run. | `policy/`, `policies/default.yaml` |
 | Human checkpoints | Approvals (workflow-declared or policy-required), clarification rounds for open questions, change requests from commented rejections. Persisted and bound to content hashes. | `approvals/service.py` |
 | Workspace | Change sets (the only path agent output reaches disk), file-level revert, workspace escape and symlink protection, git checkpoint per accepted stage. | `workspace/` |
@@ -89,7 +89,33 @@ flowchart LR
 
 `implement` and `test_plan` run **in parallel**; `test` **joins** them. Every stage can declare:
 entry gates (preconditions), exit gates (verification), `approval: required`, `retry`, `fallback`,
-`write_scope` / `read_scope` (least privilege, both ways), `clarification.max_rounds`, `max_revisions`.
+`write_scope` / `read_scope` (least privilege, both ways), `clarification.max_rounds`, `max_revisions`,
+`downstream_context` (show the agent where later stages write).
+
+The **full lifecycle** (`workflows/lifecycle.yaml`) adds design, documentation and release readiness,
+with two fork/join points and entry gates on implementation and release:
+
+```mermaid
+flowchart LR
+    R["requirements<br/>analyst<br/>(clarify ≤3 · approve)"]
+    I["impact<br/>impact_analyst<br/>(approve)"]
+    D["design<br/>architect<br/>(OpenAPI valid · approve)"]
+    C["implement<br/>coder<br/>entry: OpenAPI valid<br/>exit: compile · conformance"]
+    P["test_plan<br/>test_planner"]
+    T["test<br/>tester<br/>(mvn test, ≥121)"]
+    W["docs<br/>writer<br/>(docs cover API)"]
+    L["release<br/>release<br/>entry: full mvn test<br/>exit: checklist · approve"]
+    R --> I --> D --> C --> T --> L
+    D --> P --> T
+    C --> W --> L
+```
+
+| Stage | Produces | Why the gate is there |
+|---|---|---|
+| `design` | `url-shortener/openapi.yaml`, `docs/design.md` | a human approves the contract before code is written; the validator rejects a malformed one |
+| `implement` | code | entry: build only against a valid approved contract; exit: the code implements exactly what is documented, both ways |
+| `docs` | `README.md`, `docs/api.md` | every documented path appears in the documentation |
+| `release` | `CHANGELOG.md`, `docs/releases/<version>.md` | entry: release only from a build that is green *now*; exit: a failing checklist item blocks the release; a person signs off |
 
 ### Stage lifecycle
 
@@ -240,6 +266,7 @@ repositories) → file-based H2 with Flyway migrations (`V1__create_links`, `V2_
 | `POST /api/links` | Create: generated 8-char code or custom alias (3–32 `[A-Za-z0-9_-]`, reserved words refused), optional expiry; returns a one-time management token (stored only as SHA-256) |
 | `GET /{code}` | 302 + `Cache-Control: no-store`; 410 expired; 404 unknown/deleted; 503 + `Retry-After: 5` if the store is down; best-effort click recording |
 | `GET /api/links/{code}` | Public metadata |
+| `PATCH /api/links/{code}` | Token-authorized: set a future `expiresAt` or remove it with `null` (a missing field is 400); 410 if already expired (never revived), 400 `invalid_expiry` for a non-future value; under the link's row lock |
 | `GET /api/links/{code}/stats` | Private (token): total, 30 UTC days, last click; no visitor data |
 | `DELETE /api/links/{code}` | Token-authorized; tombstone keeps the code reserved forever; clicks erased in the same transaction |
 | `GET /health` | 200/503 by database reachability |
@@ -247,7 +274,9 @@ repositories) → file-based H2 with Flyway migrations (`V1__create_links`, `V2_
 
 Cross-cutting: destination policy (http/https, ≤2048 chars, no loopback/private/link-local/unique-local/
 multicast targets, DNS fail-closed), per-IP create limit (20/min, Bucket4j), failed-token limit (10 per
-rolling minute), 16 KiB API body limit, security headers on every response, one JSON error schema.
+rolling minute, shared by stats, delete and expiry changes), 16 KiB API body limit, security headers on
+every response, one JSON error schema. The API is defined in `url-shortener/openapi.yaml` and documented
+in `url-shortener/README.md` and `url-shortener/docs/api.md`.
 
 ## 9. Extension points
 

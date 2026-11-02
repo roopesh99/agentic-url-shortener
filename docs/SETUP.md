@@ -19,16 +19,16 @@ python3 -m venv .venv
 # or only what you use: .venv/bin/pip install -e '.[openai]'  /  '.[anthropic]'
 ```
 
-## 1. Reproduce the three scenarios offline (no key, $0)
+## 1. Reproduce the four scenarios offline (no key, $0)
 
 ```bash
 scripts/replay-scenarios.sh
 ```
 
-Replays greenfield, brownfield and ambiguous from the recorded LLM exchanges (`scenarios/cassettes/`)
+Replays greenfield, brownfield, ambiguous and the full lifecycle from the recorded LLM exchanges (`scenarios/cassettes/`)
 and the recorded human decisions (`runs/samples/*/approvals/`), each from the repository state it
 originally started from, runs the real Maven gates, and checks that the generated `url-shortener`
-is identical to the committed result. Expected output ends with three `✓` lines and three
+is identical to the committed result. Expected output ends with four `✓` lines and four
 `events verified` lines.
 
 ## 2. Run the service
@@ -44,8 +44,10 @@ curl -s -X POST localhost:8080/api/links -H 'Content-Type: application/json' \
 #  {"code":"demo","shortPath":"/demo","managementToken":"…"}      (keep the token)
 curl -si localhost:8080/demo | head -4                             # 302 Location: https://example.com/a/long/path
 curl -s localhost:8080/api/links/demo/stats -H "X-Management-Token: <token>"
+curl -s -X PATCH localhost:8080/api/links/demo -H "X-Management-Token: <token>" \
+     -H 'Content-Type: application/json' -d '{"expiresAt":"2030-01-01T00:00:00Z"}'   # or null to remove
 curl -s 127.0.0.1:8081/actuator/metrics/shortener.redirects
-mvn test                                                           # 120 tests
+mvn test                                                           # 138 tests
 ```
 
 ## 3. Run the orchestrator
@@ -55,6 +57,14 @@ mvn test                                                           # 120 tests
 ```bash
 .venv/bin/orch run workflows/skeleton.yaml --requirement scenarios/greenfield.md --agents stub --auto-approve
 .venv/bin/orch run workflows/fault-demo.yaml --requirement scenarios/greenfield.md --agents stub --auto-approve
+```
+
+The full lifecycle (`workflows/lifecycle.yaml`: design, docs and release stages included) runs with LLM
+agents against this repository's service, as in the recorded run:
+
+```bash
+.venv/bin/orch run workflows/lifecycle.yaml --requirement scenarios/lifecycle-expiry.md --workspace . \
+    --agents llm --llm record --llm-config config/llm.openai-hybrid.yaml --approvals file
 ```
 
 The second injects a compile failure (rolled back and retried) and a refusal (handled by the fallback
@@ -110,9 +120,9 @@ assistant answers with `orch respond <request.json> --files-from <dir> --summary
 ## 4. Tests
 
 ```bash
-.venv/bin/pytest                    # orchestrator: 171 tests, incl. real Maven builds (~30 s)
+.venv/bin/pytest                    # orchestrator: 186 tests, incl. real Maven builds (~40 s)
 .venv/bin/pytest -m "not maven"     # without the Maven builds (~6 s)
-cd url-shortener && mvn test        # service: 120 tests
+cd url-shortener && mvn test        # service: 138 tests
 ```
 
 See [TESTING.md](TESTING.md).

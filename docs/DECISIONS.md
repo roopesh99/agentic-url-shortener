@@ -31,7 +31,7 @@ Short records of the decisions that shaped the system: the context, the choice, 
 
 ### D7. Record/replay cassettes keyed by the full request
 **Decision.** Each exchange is stored under a hash of model, prompt, context, schema and effort; `replay` fails on a miss instead of calling the API.
-**Consequences.** Demos and CI are offline, deterministic and free; the three scenarios reproduce byte for byte. Any prompt or context change invalidates the matching recordings (by design), so prompt changes are deliberate events.
+**Consequences.** Demos and CI are offline, deterministic and free; the four scenarios reproduce byte for byte. Any prompt or context change invalidates the matching recordings (by design), so prompt changes are deliberate events: new context an agent receives is opt-in per stage (`downstream_context`), and the lifecycle replay uses the workflow file the run started with.
 
 ### D8. Human decisions are bound to content
 **Decision.** An approval's id is the approved artifact's hash; a clarification's id is the hash of its question set.
@@ -68,6 +68,11 @@ Short records of the decisions that shaped the system: the context, the choice, 
 ### D16. Metrics only from the log
 **Decision.** `orch report` computes everything from the verified event log, with explicit definitions (failure retries vs clarifications; incidents and MTTR; human wait merged across parallel stages; replayed decisions counted once).
 **Consequences.** Any number is recomputable by a reviewer. Definitions were corrected against real runs (see RISKS, "lessons").
+
+### D17. The API definition is a gated, approved artifact, checked against the code both ways
+**Context.** The assignment asks for API definitions; a definition that drifts from the code is worse than none.
+**Decision.** A design stage produces the complete OpenAPI definition before implementation, validated by a real OpenAPI validator and approved by a person. Implementation has an entry gate (the definition is still valid) and an exit gate that compares the documented operations with the Spring mappings in the code, in both directions. Documentation must cover every documented path; release re-runs the full suite as an entry gate and is blocked by any failing checklist item.
+**Consequences.** Design-to-code traceability is enforced, not described. The conformance scan reads annotations statically (method and path, not request or response shapes), so schema-level drift is caught only by tests and review.
 
 ## URL shortener
 

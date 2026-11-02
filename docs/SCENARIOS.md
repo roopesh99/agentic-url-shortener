@@ -1,20 +1,22 @@
-# The three scenarios
+# The scenarios
 
-Each scenario ran live through the orchestrator (analyst, impact analyst and test planner on OpenAI
+The three the assignment asks for (greenfield, brownfield, ambiguous), plus a fourth that runs the
+full lifecycle: requirements, impact, **design, implementation, testing, documentation and release
+readiness**. Each scenario ran live through the orchestrator (analyst, impact analyst and test planner on OpenAI
 `gpt-6-luna`; coder and tester served by a Claude Code session; every human decision by the product
 owner). Each one replays offline and reproduces its committed code exactly
 (`scripts/replay-scenarios.sh`). Full reports: `runs/samples/<run>/report.md`.
 
-| | Greenfield | Brownfield | Ambiguous |
-|---|---|---|---|
-| Input | `scenarios/greenfield.md` | `scenarios/brownfield-analytics.md` | `scenarios/ambiguous-reliability.md` (3 sentences) |
-| Run | `live-greenfield-2` | `live-brownfield-1` | `live-ambiguous-1` |
-| Workflow | `skeleton` (4 stages) | `brownfield` (5 stages) | `brownfield` (5 stages) |
-| Human decisions | 7 answers, 2 approvals | 4 answers, 4 approvals | 16 answers, 4 approvals incl. 1 change request |
-| Outcome | service v1, 77 tests | click analytics, 95 tests | hardening and observability, 120 tests |
-| Active time / waiting for humans | 15.2 min / 34.8 h | 11.8 min / 44.4 min | 20.6 min / 1.8 h (+32.8 min stopped) |
-| Live LLM calls, output tokens | 3, 32,140 | 5, 35,336 | 8, 88,089 |
-| Commits produced | `cbb7946` | `1a9a262` `a3b4aed` `94d3336` | `014bce6` `f688d03` `c225b82` |
+| | Greenfield | Brownfield | Ambiguous | Full lifecycle |
+|---|---|---|---|---|
+| Input | `scenarios/greenfield.md` | `scenarios/brownfield-analytics.md` | `scenarios/ambiguous-reliability.md` (3 sentences) | `scenarios/lifecycle-expiry.md` |
+| Run | `live-greenfield-2` | `live-brownfield-1` | `live-ambiguous-1` | `live-lifecycle-1` |
+| Workflow | `skeleton` (4 stages) | `brownfield` (5 stages) | `brownfield` (5 stages) | `lifecycle` (8 stages) |
+| Human decisions | 7 answers, 2 approvals | 4 answers, 4 approvals | 16 answers, 4 approvals incl. 1 change request | 3 answers, 7 approval decisions incl. 2 change requests and the release sign-off |
+| Outcome | service v1, 77 tests | click analytics, 95 tests | hardening and observability, 120 tests | expiry changes, OpenAPI definition, README and API reference, changelog and release 1.1.0 record, 138 tests |
+| Active time / waiting for humans | 15.2 min / 34.8 h | 11.8 min / 44.4 min | 20.6 min / 1.8 h (+32.8 min stopped) | 17.7 min / 1.7 h (+59 s stopped) |
+| Live LLM calls, output tokens | 3, 32,140 | 5, 35,336 | 8, 88,089 | 11, 76,712 |
+| Commits produced | `cbb7946` | `1a9a262` `a3b4aed` `94d3336` | `014bce6` `f688d03` `c225b82` | `d78c69a` `704504f` `6b5d32f` `2fb6279` `55cbb75` `f404c98` |
 
 ---
 
@@ -94,11 +96,64 @@ on 127.0.0.1 and is unreachable from the machine's LAN address. Disabling the th
 header, fails 3 tests each. Run metrics: 1 incident (`requirements`, 3 failures, recovered after 54 min,
 including the time spent fixing the orchestrator), 4 processes, 10 recorded decisions reused by resumes.
 
+## 4. Full lifecycle: let owners change a link's expiry
+
+**Decomposition.** `workflows/lifecycle.yaml`, 8 stages, 4 of them human-approved:
+
+```
+requirements ─► impact ─► design ─┬─► implement ─┬─► test ─────┐
+  (approve)    (approve)  (approve)│ [entry gate] │              ├─► release  [entry gate] (approve)
+                                   └─► test_plan ─┘ └─► docs ────┘
+```
+
+| Stage | Agent produces | Gates the orchestrator runs |
+|---|---|---|
+| `design` | `url-shortener/openapi.yaml` (the whole API) and `docs/design.md` | exit: a real OpenAPI validator; human approval |
+| `implement` | the code | **entry:** the approved definition is still valid; exit: `mvn compile` and **two-way conformance** (every documented operation is implemented, no implemented endpoint is undocumented) |
+| `docs` | `README.md`, `docs/api.md` | exit: every path in the definition is documented |
+| `release` | `CHANGELOG.md`, `docs/releases/<version>.md` (checklist, risks, rollback plan) | **entry: the full test suite is re-run**; exit: no failing checklist item; the human release sign-off |
+
+**Orchestration, as it happened.**
+1. The analyst resolved 8 points itself (PATCH, `null` removes the expiry, existing error contracts)
+   and asked the 2 product questions. The owner: **an expired link is never revived** (410
+   `expired`); no maximum expiry. The analyst then noticed that this answer made an accidental past
+   expiry irreversible and asked a follow-up; the owner: reject it with 400 `invalid_expiry`, as at
+   creation. Spec v3 approved: 10 requirements, 11 acceptance criteria.
+2. **Two change requests on the impact plan.** v1 was technically sound but named documentation files
+   the workflow never produces (the analyst could not see where later stages write; fixed since, see
+   `downstream_context`). v2 fixed the locations but, despite "keep the technical plan unchanged",
+   dropped the PATCH throttle test and the click-recording race test. v3 restored both; approved.
+3. The architect wrote a 679-line OpenAPI 3.0.3 definition of all 7 operations (6 existing, checked
+   against the code status by status, plus PATCH) and a design note; validator passed; approved.
+4. `implement` ∥ `test_plan`. The entry gate re-validated the definition; the conformance gate then
+   confirmed **7 operations documented and implemented, none undocumented**.
+5. `test` ∥ `docs`. Tester: 18 new tests (13 in a new class; a PATCH case added to the throttle test and
+   4 expiry races added to the race test, as the approved plan required). Policy flagged the two edited
+   existing test files; the owner approved after seeing that only class comments changed and every
+   existing test method was untouched. `mvn test`: 138. Docs gate: 7 of 7 operations covered.
+6. **Release failed once, and the guardrail held.** The entry gate re-ran all 138 tests; the release
+   agent passed 11 checklist items but marked "readiness review recorded complete" as failing, since
+   the record it was writing *is* that review and the human sign-off comes after it. A prompt bug: the
+   checklist gate blocked the release and the stage was rolled back (2 files reverted). After a
+   prompt fix, `orch replan --from release` re-ran only that stage (7 stages reused by lineage).
+   Release 1.1.0: 10 items, none failing; the owner signed off.
+
+**Validation.** All 120 previous tests pass unchanged. Four mutations (reviving an expired link,
+reading a missing field as "remove", PATCH bypassing the throttle, updating without the row lock)
+each fail a new test. Run metrics: 89% stage success (the rolled-back release attempt), 1 incident,
+MTTR 3.0 min.
+
+**Found by this run and fixed afterwards** (`cac2dea`): the re-plan of a *failed* stage was logged as a
+plain resume, so its reason is missing from this run's log (it is in the evidence commit message);
+the release prompt bug; the impact analyst's missing view of downstream write scopes. The replay
+uses the workflow file as the run started, and the fixed release prompt, so its release passes first
+time; the delivered code is identical.
+
 ---
 
 ## Supporting runs
 
 | Run | Purpose |
 |---|---|
-| `live-greenfield-1` | the first greenfield attempt, failed at the ambiguity gate before clarification existed; kept so the success rate is honest (4 of 5 runs) |
+| `live-greenfield-1` | the first greenfield attempt, failed at the ambiguity gate before clarification existed; kept so the success rate is honest (5 of 6 runs) |
 | `demo-fault-injection` | stub agents with two injected faults: a compile failure (rolled back and retried) and a refusal (fallback agent), so retries, rollback and MTTR appear in a real run |
