@@ -65,6 +65,18 @@ def _llm(args: argparse.Namespace, cassettes: Path, run_dir: Path, agent_names: 
     return llm, config
 
 
+def _selection_recordings(args: argparse.Namespace, workspace: Path, selection: dict | None) -> list[str]:
+    """The selector's cassette directory, if it lies inside the workspace: written before the run's
+    branch exists, it must not make the tree look dirty."""
+    if not selection or args.agents != "llm":
+        return []
+    cassettes = Path(args.cassettes) if args.cassettes else DEFAULT_CASSETTES / f"select-{Path(args.requirement).stem}"
+    try:
+        return [cassettes.resolve().relative_to(workspace.resolve()).as_posix()]
+    except ValueError:
+        return []
+
+
 def _select_workflow(args: argparse.Namespace, run_id: str, run_dir: Path):
     """`orch run auto`: rules decide which workflows are eligible, the selector agent proposes one,
     a person confirms (or rejects with a comment the selector must follow)."""
@@ -223,7 +235,8 @@ def _execute(args: argparse.Namespace, workflow, run_id: str, run_dir: Path, *, 
         max_parallel=args.max_parallel,
         max_cost_usd=args.max_cost_usd,
         max_minutes=args.max_minutes,
-        git=GitWorkspace(workspace, run_id) if args.git else None,
+        git=GitWorkspace(workspace, run_id, untracked_ok=_selection_recordings(args, workspace, selection))
+        if args.git else None,
         selection=selection,
     )
     print(f"{'resuming' if resume else 'run'} {run_id}: workflow={workflow.name} workspace={workspace}", flush=True)

@@ -9,7 +9,7 @@ from .metrics import HUMAN_STATES, Portfolio, RunMetrics
 METRIC_NOTES = (
     "Computed from the hash-chained event log only (`orch verify-audit` checks it). Retries are split by "
     "cause; clarification rounds and change requests are not failures. An incident opens at a stage's first "
-    "failure (including a switch to the fallback agent) and closes at its next success; MTTR includes time a run sat stopped before a person fixed it. "
+    "failure (including a switch to the fallback agent) and closes when its work next passes its gates (a later wait for a sign-off is human wait); MTTR includes time a run sat stopped before a person fixed it. "
     "Stage success rate counts executed stages (SKIPPED ones never ran). Human decisions replayed by a "
     "resume are counted once."
 )

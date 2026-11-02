@@ -6,7 +6,9 @@ holding the (hash-verified) log. Definitions:
 - Retries are split by cause. Failure retries (agent error, gate failure, policy rejection) are
   distinct from clarification rounds, reviewer change requests and fallbacks, which are not failures.
 - An incident opens at a stage's first failure since its last success (a failure retry, a switch to
-  the fallback agent, or FAILED) and closes at that stage's next SUCCEEDED. MTTR is the mean open time; it includes time a run sat
+  the fallback agent, or FAILED) and closes when the stage's work next passes its gates: SUCCEEDED, or
+  waiting for a workflow approval (which only follows passed gates). Time a recovered stage then waits
+  for a sign-off is human wait, not repair time. MTTR is the mean open time; it includes time a run sat
   stopped before a person fixed something and resumed it. Unrecovered incidents are counted apart.
 - Latency splits wall-clock time into active work, waiting for humans, and stopped between processes.
 - Stage success rate counts executed stages only; a SKIPPED stage never ran and is reported apart.
@@ -205,7 +207,8 @@ def compute(events: list[Event]) -> RunMetrics:
                 incidents.append(open_incident)
             elif state == "FAILED" and open_incident is not None:
                 open_incident.failures += 1
-            if state == "SUCCEEDED":
+            recovered = state == "SUCCEEDED" or (state == "AWAITING_APPROVAL" and reason.startswith("workflow"))
+            if recovered:
                 if open_incident is not None:
                     open_incident.closed = at
                     open_incident = None

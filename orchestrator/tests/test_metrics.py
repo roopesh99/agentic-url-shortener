@@ -51,6 +51,23 @@ async def test_failure_retry_rollback_and_recovery_are_measured(build_engine, re
     assert m.gates == {"passed": 1, "failed": 2}
 
 
+async def test_recovery_ends_when_the_work_passes_its_gates_not_when_a_person_signs_off(build_engine, recorder):
+    """live-bugfix-2 reported an MTTR of 8.7 h: the fix passed its gates within a minute, then waited
+    hours for an approval. Waiting for a sign-off is human wait, not repair time."""
+    class SlowApprover(AutoApprover):
+        async def decide(self, request):
+            await asyncio.sleep(0.6)
+            return await super().decide(request)
+
+    engine = build_engine(wf(stage(retry={"max_attempts": 2}, approval="required",
+                                   exit_gates=[{"name": "fail_until", "args": {"pass_on": 2}}])),
+                          {"x": make_agent(recorder, delay=0.05)}, approver=SlowApprover())
+    m = await metrics_of(engine)
+    [incident] = m.incidents
+    assert incident.closed is not None and incident.seconds < 0.5, "the approval wait is not repair time"
+    assert m.human_wait_seconds >= 0.6, "it is counted as human wait instead"
+
+
 async def test_an_unrecovered_failure_and_skips(build_engine, recorder):
     m = await metrics_of(build_engine(
         wf(stage("a", exit_gates=["fail"]), stage("b", needs=["a"]), stage("c", needs=["b"])),

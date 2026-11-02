@@ -271,6 +271,32 @@ def test_existing_repository_is_used_only_clean_and_on_a_new_branch(tmp_path):
     assert git(repo, "log", "--format=%s", "main") == "init", "the person's branch is untouched"
 
 
+def test_only_new_files_in_the_selectors_recording_directory_are_exempt_from_the_clean_check(tmp_path):
+    """orch run auto records the selector's exchange in the repository before the run's branch exists."""
+    repo = tmp_path / "project"
+    (repo / "scenarios" / "cassettes" / "old").mkdir(parents=True)
+    (repo / "scenarios" / "cassettes" / "old" / "x.json").write_text("{}")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "add", "-A")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
+    recording = "scenarios/cassettes/select-req"
+    (repo / recording).mkdir(parents=True)
+    (repo / recording / "selector-1.json").write_text("{}")
+
+    with pytest.raises(WorkspaceError, match="uncommitted"):
+        GitWorkspace(repo, "r0").prepare()  # without the exemption it is dirty
+    (repo / "elsewhere.txt").write_text("not exempt")
+    with pytest.raises(WorkspaceError, match="uncommitted"):
+        GitWorkspace(repo, "r1", untracked_ok=[recording]).prepare()
+    (repo / "elsewhere.txt").unlink()
+    (repo / "scenarios" / "cassettes" / "old" / "x.json").write_text('{"changed": true}')
+    with pytest.raises(WorkspaceError, match="uncommitted"):
+        GitWorkspace(repo, "r2", untracked_ok=["scenarios/cassettes/old"]).prepare()  # modified, not new
+    git(repo, "checkout", "-q", "--", ".")
+
+    assert GitWorkspace(repo, "r3", untracked_ok=[recording]).prepare()["branch"] == "orch/r3"
+
+
 def test_discard_uncommitted_only_touches_the_given_scopes(tmp_path):
     ws = tmp_path / "ws"
     g = GitWorkspace(ws, "r1")

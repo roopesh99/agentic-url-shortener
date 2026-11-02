@@ -25,10 +25,13 @@ class WorkspaceError(RuntimeError):
 
 
 class GitWorkspace:
-    def __init__(self, path: Path, run_id: str) -> None:
+    def __init__(self, path: Path, run_id: str, *, untracked_ok: list[str] = ()) -> None:
         self.path = path.resolve()
         self.run_id = run_id
         self.branch = f"orch/{run_id}"
+        # directories the orchestrator itself wrote into before the run began (the workflow selector's
+        # recorded exchange): new files there do not make the tree dirty; nothing else is exempt
+        self.untracked_ok = [d.rstrip("/") + "/" for d in untracked_ok]
 
     def _git(self, *args: str, check: bool = True) -> str:
         proc = subprocess.run(["git", *AUTHOR, *args], cwd=self.path, capture_output=True, text=True)
@@ -48,7 +51,9 @@ class GitWorkspace:
             self._git("add", "-A")
             self._git("commit", "-q", "--allow-empty", "-m", f"orch({self.run_id}): workspace baseline")
             return {"mode": "initialized", "branch": self.branch, "base_commit": self.head()}
-        if self._git("status", "--porcelain"):
+        dirty = [line for line in self._git("status", "--porcelain").splitlines()
+                 if not (line.startswith("?? ") and any(line[3:].startswith(d) for d in self.untracked_ok))]
+        if dirty:
             raise WorkspaceError(f"{self.path} has uncommitted changes; commit or stash them before a run uses it")
         started_from = self._git("rev-parse", "--abbrev-ref", "HEAD")
         self._git("checkout", "-q", "-b", self.branch)

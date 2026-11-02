@@ -121,6 +121,8 @@ stages:
             - {name: wrong media type, method: POST, path: /api/links, json: x, headers: {Content-Type: text/plain}, expect: 415, expect_json: {error: unsupported_media_type}}
             - {name: wrong method, method: PUT, path: /api/links, expect: 405, expect_json: {error: method_not_allowed}}
             - {name: unknown path, path: /no/such/path, expect: 404, expect_json: {error: not_found}}
+            - {name: malformed escape (API), path: "/api/links/%ZZ", expect: 400, expect_headers: {Content-Type: application/json}, expect_json: {error: invalid_request}}
+            - {name: malformed escape (redirect), path: "/%ZZ", expect: 400, expect_headers: {Content-Type: application/json}, expect_json: {error: invalid_request}}
             - {name: delete, method: DELETE, path: "/api/links/{code}", headers: {X-Management-Token: "{token}"}, expect: 204}
             - {name: deleted link, path: "/{code}", expect: 404, expect_json: {error: not_found}}
     exit_gates:

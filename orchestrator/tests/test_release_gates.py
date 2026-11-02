@@ -66,7 +66,7 @@ async def test_the_packaged_service_passes_the_release_smoke_steps(service):
         args, stage = gate_args(workflow, "release", "service_smoke", "entry_gates")
         result = await ServiceSmokeGate(**args).check(GateContext(stage, service, None, {}))
         assert result.passed, result.evidence
-        assert "passed 14 HTTP step(s)" in result.evidence
+        assert "passed 16 HTTP step(s)" in result.evidence
 
 
 @pytest.mark.maven
