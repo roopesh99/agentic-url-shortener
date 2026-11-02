@@ -71,6 +71,10 @@ class MavenTestGate(Gate):
         if not (project / "pom.xml").exists():
             return self.result(False, f"no pom.xml in {project}")
         goal = self.args.get("goal", "test")
+        runs_tests = goal not in ("compile", "test-compile")
+        if runs_tests:
+            # reports from earlier builds must not count: a deleted test class would still meet the floor
+            shutil.rmtree(project / "target" / "surefire-reports", ignore_errors=True)
         proc = await asyncio.create_subprocess_exec(
             mvn, "-B", "-q", "--no-transfer-progress", goal,
             cwd=project,
@@ -90,7 +94,7 @@ class MavenTestGate(Gate):
         if minimum is not None and ran < minimum:
             return self.result(False, f"mvn {goal} passed but only {ran} tests ran; at least {minimum} required "
                                       "(existing tests must not be removed or skipped)")
-        return self.result(True, f"mvn {goal} passed{_surefire_summary(project)}")
+        return self.result(True, f"mvn {goal} passed{_surefire_summary(project) if runs_tests else ''}")
 
 
 def _failure_excerpt(log: str, limit: int = 60) -> str:

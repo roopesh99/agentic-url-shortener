@@ -83,3 +83,25 @@ async def test_maven_gate_enforces_a_minimum_test_count(tmp_path):
     assert (await MavenTestGate(project="url-shortener", min_tests=4).check(ctx)).passed
     short = await MavenTestGate(project="url-shortener", min_tests=5).check(ctx)
     assert not short.passed and "only 4 tests ran" in short.evidence
+
+
+@pytest.mark.maven
+@pytest.mark.skipif(shutil.which("mvn") is None, reason="Maven not installed")
+async def test_reports_from_earlier_builds_never_count_toward_the_floor_or_the_evidence(tmp_path):
+    """A deleted test class used to leave its report behind and still count toward min_tests; and a
+    compile step reported test counts it never ran."""
+    from orchestrator.agents.stubs import TEMPLATES
+    from orchestrator.gates.base import GateContext
+    from orchestrator.gates.builtin import MavenTestGate
+
+    shutil.copytree(TEMPLATES, tmp_path, dirs_exist_ok=True)  # 4 tests
+    stage = load_workflow(ROOT / "workflows" / "skeleton.yaml").stage("test")
+    ctx = GateContext(stage, tmp_path, None, {})
+    stale = tmp_path / "url-shortener" / "target" / "surefire-reports"
+    stale.mkdir(parents=True)
+    (stale / "com.example.shortener.DeletedTest.txt").write_text("Tests run: 50, Failures: 0")
+
+    floor = await MavenTestGate(project="url-shortener", min_tests=5).check(ctx)
+    assert not floor.passed and "only 4 tests ran" in floor.evidence
+    compiled = await MavenTestGate(project="url-shortener", goal="compile").check(ctx)
+    assert compiled.passed and compiled.evidence == "mvn compile passed"
