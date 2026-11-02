@@ -149,12 +149,18 @@ async def test_a_failing_or_unexplained_checklist_item_blocks_the_release(tmp_pa
 # --- the workflow ----------------------------------------------------------------------------
 
 def lifecycle_for_skeleton():
-    """The lifecycle workflow, with the test-count floor sized for the 4-test skeleton template."""
+    """The lifecycle workflow sized for the 4-test skeleton template: its test-count floor and overall
+    coverage (84%) are the template's; the release smoke steps exercise the real service's API, so they
+    are tested against it in test_release_gates.py instead."""
     wf = load_workflow(ROOT / "workflows" / "lifecycle.yaml")
     for stage_id in ("test", "release"):
-        for gate in wf.stage(stage_id).entry_gates + wf.stage(stage_id).exit_gates:
+        stage = wf.stage(stage_id)
+        stage.entry_gates = [g for g in stage.entry_gates if g.name != "service_smoke"]
+        for gate in stage.entry_gates + stage.exit_gates:
             if gate.name == "maven_test":
                 gate.args["min_tests"] = 4
+            if gate.name == "coverage":
+                gate.args["min_line"] = 80
     return wf
 
 

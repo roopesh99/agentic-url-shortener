@@ -118,11 +118,13 @@ def _surefire_summary(project) -> str:
 
 def builtin_gates() -> GateRegistry:
     from .api import ChecklistPassedGate, DocsCoverApiGate, OpenApiConformanceGate, OpenApiValidGate
+    from .coverage import CoverageGate
     from .regression import RegressionReproducesGate
+    from .smoke import ServiceSmokeGate
 
     registry = GateRegistry()
     for gate in (FilesExistGate, OutputsPresentGate, AmbiguitiesResolvedGate, MavenTestGate,
                  OpenApiValidGate, OpenApiConformanceGate, DocsCoverApiGate, ChecklistPassedGate,
-                 RegressionReproducesGate):
+                 RegressionReproducesGate, CoverageGate, ServiceSmokeGate):
         registry.register(gate.name, gate)
     return registry

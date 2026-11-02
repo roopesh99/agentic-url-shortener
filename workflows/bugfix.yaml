@@ -60,6 +60,8 @@ stages:
         args: { project: url-shortener, timeout_seconds: 900, min_tests: 139 }
       - name: openapi_conformance
         args: { spec: url-shortener/openapi.yaml, source: url-shortener/src/main/java }
+      - name: coverage
+        args: { project: url-shortener, min_line: 85, min_changed_line: 80, exclude: ["*Application.java"] }
     retry: { max_attempts: 3, backoff_seconds: 1 }
 
   - id: release
@@ -71,6 +73,24 @@ stages:
     entry_gates:
       - name: maven_test
         args: { project: url-shortener, timeout_seconds: 900, min_tests: 139 }
+      - name: service_smoke            # the packaged jar, started for real and exercised over HTTP
+        args:
+          project: url-shortener
+          steps:
+            - {name: management health, port: management, path: /actuator/health, expect: 200, expect_json: {status: UP}}
+            - {name: create, method: POST, path: /api/links, json: {url: "https://203.0.113.10/smoke?q=1"}, expect: 201, save: {code: code, token: managementToken}}
+            - {name: redirect, path: "/{code}", expect: 302, expect_headers: {Location: "https://203.0.113.10/smoke?q=1", Cache-Control: no-store, X-Content-Type-Options: nosniff}}
+            - {name: metadata, path: "/api/links/{code}", expect: 200, expect_json: {originalUrl: "https://203.0.113.10/smoke?q=1"}}
+            - {name: stats count the redirect, path: "/api/links/{code}/stats", headers: {X-Management-Token: "{token}"}, expect: 200, expect_json: {totalClicks: 1}}
+            - {name: wrong token, method: PATCH, path: "/api/links/{code}", headers: {X-Management-Token: wrong}, json: {expiresAt: null}, expect: 403, expect_json: {error: invalid_token}}
+            - {name: remove expiry, method: PATCH, path: "/api/links/{code}", headers: {X-Management-Token: "{token}"}, json: {expiresAt: null}, expect: 200}
+            - {name: prohibited destination, method: POST, path: /api/links, json: {url: "https://ｌｏｃａｌｈｏｓｔ/"}, expect: 400, expect_json: {error: prohibited_destination}}
+            - {name: malformed JSON, method: POST, path: /api/links, json: '{"url":', expect: 400, expect_json: {error: invalid_request}}
+            - {name: wrong media type, method: POST, path: /api/links, json: x, headers: {Content-Type: text/plain}, expect: 415, expect_json: {error: unsupported_media_type}}
+            - {name: wrong method, method: PUT, path: /api/links, expect: 405, expect_json: {error: method_not_allowed}}
+            - {name: unknown path, path: /no/such/path, expect: 404, expect_json: {error: not_found}}
+            - {name: delete, method: DELETE, path: "/api/links/{code}", headers: {X-Management-Token: "{token}"}, expect: 204}
+            - {name: deleted link, path: "/{code}", expect: 404, expect_json: {error: not_found}}
     exit_gates:
       - name: release_checklist_passed
       - name: files_exist

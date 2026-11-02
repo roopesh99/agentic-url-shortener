@@ -55,10 +55,12 @@ orch run "$WORK/wt-lifecycle/workflows/lifecycle.yaml" --requirement scenarios/l
 git -C "$WORK/wt-lifecycle" diff --quiet f404c98 -- url-shortener; check lifecycle $?
 
 echo "== bug fix: links to international and underscore host names were rejected (reproduce, then fix)"
-# The current workflow file: the release stage's gate_context was added mid-run, and the replay
-# follows the re-planned release, so its release passes first time where the live run failed once.
+# The workflow file as of the re-planned release (799f264, with gate_context): later gates would change
+# what the release agent is shown. The replay follows the re-planned release, so its release passes
+# first time where the live run failed once.
 git worktree add -q --detach "$WORK/wt-bugfix" f51b693
-orch run workflows/bugfix.yaml --requirement scenarios/bugfix-idn.md --workspace "$WORK/wt-bugfix" \
+git show 799f264:workflows/bugfix.yaml > "$WORK/bugfix.yaml"
+orch run "$WORK/bugfix.yaml" --requirement scenarios/bugfix-idn.md --workspace "$WORK/wt-bugfix" \
     "${llm[@]}" --recorded-decisions runs/samples/live-bugfix-1/approvals --run-id replay-bugfix | tail -2
 git -C "$WORK/wt-bugfix" diff --quiet e6671c9 -- url-shortener; check bugfix $?
 
