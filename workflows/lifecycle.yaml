@@ -10,6 +10,11 @@ name: lifecycle
 version: "1"
 description: Requirement -> spec -> impact -> API design -> code + test plan -> tests + docs -> release readiness
 
+selection:                           # how `orch run auto` decides this workflow fits
+  codebase: existing
+  use_when: >-
+    A change to the existing service that changes what API clients can do (a new or changed endpoint or contract), or that asks for an API definition, documentation, a changelog or release readiness: design, documentation and release stages are included.
+
 stages:
   - id: requirements
     agent: analyst

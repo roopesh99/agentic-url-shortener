@@ -10,6 +10,11 @@ name: bugfix
 version: "1"
 description: Bug report -> spec -> root cause -> failing regression test -> fix -> patch release
 
+selection:                           # how `orch run auto` decides this workflow fits
+  codebase: existing
+  use_when: >-
+    A defect in the existing service: something that should work does not, or behaves differently from what was specified or expected (a bug report, observed vs expected behaviour). The bug is reproduced with a failing test before it is fixed.
+
 stages:
   - id: requirements
     agent: analyst

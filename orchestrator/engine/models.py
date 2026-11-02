@@ -8,7 +8,7 @@ These are deliberately small and declarative. The workflow YAML is parsed into
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -72,10 +72,18 @@ class StageSpec(BaseModel):
         return [_coerce_gate(g) for g in (v or [])]
 
 
+class WorkflowSelection(BaseModel):
+    """How `orch run auto` decides whether this workflow fits a requirement."""
+
+    use_when: str                            # what kind of requirement this workflow is for
+    codebase: Literal["new", "existing"]     # eligible only when the codebase is absent / present
+
+
 class WorkflowSpec(BaseModel):
     name: str
     version: str = "1"
     description: str = ""
+    selection: WorkflowSelection | None = None  # absent: never chosen automatically (e.g. fault-demo)
     stages: list[StageSpec]
 
     def stage(self, stage_id: str) -> StageSpec:

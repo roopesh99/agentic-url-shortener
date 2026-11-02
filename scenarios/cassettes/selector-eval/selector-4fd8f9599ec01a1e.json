@@ -1,0 +1,83 @@
+{
+  "request": {
+    "agent": "selector",
+    "effort": "medium",
+    "max_tokens": 4000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "runner_up": {
+          "enum": [
+            "brownfield",
+            "bugfix",
+            "lifecycle",
+            "none"
+          ],
+          "type": "string"
+        },
+        "signals": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "workflow": {
+          "enum": [
+            "brownfield",
+            "bugfix",
+            "lifecycle"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow",
+        "confidence",
+        "rationale",
+        "signals",
+        "runner_up"
+      ],
+      "type": "object"
+    },
+    "system": "You choose the delivery workflow for a requirement in a governed software delivery pipeline. Each workflow is a fixed sequence of stages, gates and human checkpoints; choosing the wrong one means the work is governed for the wrong risks (for example, a bug fixed without first reproducing it, or an API change released without an API definition and documentation).\n\nYou are given the requirement as written, the workflows that are eligible (rules have already excluded the others, for example by whether a codebase exists), each with a description and when to use it, and facts about the workspace.\n\nChoose the workflow whose `use_when` best matches what the requirement asks for. Judge by the substance of the request, not its wording or length: a report of something that should work but does not is a defect even if it never says \"bug\"; a request that changes what clients of the API can do, or asks for API definitions, documentation or release preparation, needs the full lifecycle.\n\nReturn:\n- `workflow`: the chosen workflow's name.\n- `confidence`: high when one workflow clearly fits; medium when another is plausible; low when the requirement is unclear about what kind of change it is. A person confirms every choice; low confidence tells them to look closely.\n- `rationale`: two or three sentences a reviewer can check against the requirement.\n- `signals`: short quotations or paraphrases from the requirement that drove the choice.\n- `runner_up`: the next best workflow, or \"none\".\n\nNever choose a workflow because it is shorter or cheaper. If a reviewer rejected an earlier proposal with a comment, follow the comment.",
+    "user": "<requirement>\n# Support ticket 4412\n\nAn owner writes: \"My link was clicked 3 times today according to my own server logs, all after\n22:00 UTC, but the stats endpoint shows them under tomorrow's date, and today shows 0. It started\nafter the last release.\" We double-checked: the dailyClicks entry for the current UTC day is empty\nand the next day's entry has the clicks.\n</requirement>\n\n<eligible_workflows>\n[\n  {\n    \"description\": \"Requirement -> spec -> impact analysis on existing code -> code + test plan -> regression-safe tests\",\n    \"name\": \"brownfield\",\n    \"use_when\": \"A change to the existing service that is not a defect fix and needs no API definition, documentation or release preparation: an enhancement or internal capability, a refactor, hardening, or a broad request whose scope must first be clarified with the owner.\"\n  },\n  {\n    \"description\": \"Bug report -> spec -> root cause -> failing regression test -> fix -> patch release\",\n    \"name\": \"bugfix\",\n    \"use_when\": \"A defect in the existing service: something that should work does not, or behaves differently from what was specified or expected (a bug report, observed vs expected behaviour). The bug is reproduced with a failing test before it is fixed.\"\n  },\n  {\n    \"description\": \"Requirement -> spec -> impact -> API design -> code + test plan -> tests + docs -> release readiness\",\n    \"name\": \"lifecycle\",\n    \"use_when\": \"A change to the existing service that changes what API clients can do (a new or changed endpoint or contract), or that asks for an API definition, documentation, a changelog or release readiness: design, documentation and release stages are included.\"\n  }\n]\n</eligible_workflows>\n\n<workspace_facts>\n{\n  \"codebase\": \"existing\",\n  \"marker\": \"url-shortener/pom.xml\"\n}\n</workspace_facts>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "confidence": "high",
+      "rationale": "The existing stats service reports clicks for the wrong day: clicks after 22:00 UTC appear in tomorrow\u2019s entry while today\u2019s entry is empty. This is a reproduced defect in expected behavior, so it calls for a failing regression test before the fix.",
+      "runner_up": "brownfield",
+      "signals": [
+        "\u201cthe stats endpoint shows them under tomorrow's date, and today shows 0\u201d",
+        "\u201cthe next day's entry has the clicks\u201d",
+        "\u201cIt started after the last release.\u201d"
+      ],
+      "workflow": "bugfix"
+    },
+    "duration_ms": 2659,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_cc180e315edd4de89bde3230996c148f",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 835,
+      "output_tokens": 157
+    }
+  }
+}

@@ -29,6 +29,19 @@ def percent(value: float | None) -> str:
     return "–" if value is None else f"{value:.0%}"
 
 
+def _selection(m: RunMetrics) -> list[str]:
+    s = m.selection
+    if not s:
+        return []
+    last = s["proposals"][-1]
+    rejected = [d for d in s["decisions"] if not d["approved"]]
+    lines = [f"Workflow chosen by `orch run auto`: proposed `{last['workflow']}` ({last['confidence']} confidence, "
+             f"by {last['source']}) from {', '.join(f'`{n}`' for n in s['eligible'])}; confirmed by "
+             f"{s['decisions'][-1]['approver']}" + (f" after {len(rejected)} rejection(s)" if rejected else "")
+             + f". {last['rationale']}", ""]
+    return lines
+
+
 def render_run(m: RunMetrics) -> str:
     h = m.human_decisions
     lines = [
@@ -37,6 +50,7 @@ def render_run(m: RunMetrics) -> str:
         f"Workflow `{m.workflow}` · **{m.status}** · {m.processes} process(es) · "
         f"{m.started:%Y-%m-%d %H:%M} → {m.finished:%Y-%m-%d %H:%M} UTC",
         "",
+        *_selection(m),
         "## Reliability",
         "",
         "| Metric | Value |",

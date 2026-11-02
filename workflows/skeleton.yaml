@@ -8,6 +8,11 @@ name: skeleton
 version: "1"
 description: Requirement -> normalized spec -> code + test plan (parallel) -> verified tests
 
+selection:                           # how `orch run auto` decides this workflow fits
+  codebase: new
+  use_when: >-
+    There is no codebase yet: build a new service from a requirement.
+
 stages:
   - id: requirements
     agent: analyst

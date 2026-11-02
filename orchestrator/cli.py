@@ -35,7 +35,15 @@ def _agents(args: argparse.Namespace, workflow_name: str, run_dir: Path) -> Agen
     if args.agents == "stub":
         return stub_agents()
     from .agents.llm_agents import LLM_AGENT_NAMES, llm_agents
-    from .llm.factory import BackendSpec, LLMConfig, build_llm, describe, load_config, model_for
+    from .llm.factory import model_for
+
+    cassettes = Path(args.cassettes) if args.cassettes else DEFAULT_CASSETTES / f"{workflow_name}-{Path(args.requirement).stem}"
+    llm, config = _llm(args, cassettes, run_dir, LLM_AGENT_NAMES)
+    return llm_agents(llm, lambda agent: model_for(config, agent))
+
+
+def _llm(args: argparse.Namespace, cassettes: Path, run_dir: Path, agent_names: list[str]):
+    from .llm.factory import BackendSpec, LLMConfig, build_llm, describe, load_config
     from .llm.replay import CassetteLLM, Mode
 
     if args.llm_config:
@@ -46,16 +54,33 @@ def _agents(args: argparse.Namespace, workflow_name: str, run_dir: Path) -> Agen
                            agents={a: BackendSpec(provider="session") for a in session_agents})
 
     mode = Mode(args.llm)
-    cassettes = Path(args.cassettes) if args.cassettes else DEFAULT_CASSETTES / f"{workflow_name}-{Path(args.requirement).stem}"
     if mode is Mode.REPLAY:
         llm = CassetteLLM(cassettes, mode)  # no credentials needed; models still key the cassettes
     else:
-        inner = build_llm(config, LLM_AGENT_NAMES, session_dir=run_dir / "llm-requests",
+        inner = build_llm(config, agent_names, session_dir=run_dir / "llm-requests",
                           require_pricing=args.max_cost_usd is not None)
         llm = inner if mode is Mode.LIVE else CassetteLLM(cassettes, mode, inner)
-    print(f"agents: {describe(config, LLM_AGENT_NAMES)}; llm mode={mode.value}"
+    print(f"agents: {describe(config, agent_names)}; llm mode={mode.value}"
           + ("" if mode is Mode.LIVE else f", cassettes={cassettes}"))
-    return llm_agents(llm, lambda agent: model_for(config, agent))
+    return llm, config
+
+
+def _select_workflow(args: argparse.Namespace, run_id: str, run_dir: Path):
+    """`orch run auto`: rules decide which workflows are eligible, the selector agent proposes one,
+    a person confirms (or rejects with a comment the selector must follow)."""
+    from .llm.factory import model_for
+    from .planner.select import select
+
+    llm, model = None, ""
+    if args.agents == "llm":
+        cassettes = Path(args.cassettes) if args.cassettes else DEFAULT_CASSETTES / f"select-{Path(args.requirement).stem}"
+        llm, config = _llm(args, cassettes, run_dir, ["selector"])
+        model = model_for(config, "selector")
+    candidate, record = asyncio.run(select(
+        Path(args.requirement).read_text(encoding="utf-8"), Path(args.workspace), Path(args.workflows_dir),
+        _approver(args, run_dir), run_id, llm=llm, model=model))
+    print(f"[select] {candidate.name}: {record['proposals'][-1]['rationale']}", flush=True)
+    return candidate.path, record
 
 
 def _approver(args: argparse.Namespace, run_dir: Path):
@@ -76,8 +101,9 @@ RUN_SETTINGS = ("workflow", "requirement", "workspace", "policy", "max_parallel"
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    workflow = load_workflow(Path(args.workflow))
-    run_id = args.run_id or _new_run_id(workflow.name)
+    auto = args.workflow == "auto"
+    workflow = None if auto else load_workflow(Path(args.workflow))
+    run_id = args.run_id or _new_run_id(workflow.name if workflow else "auto")
     run_dir = Path(args.runs_dir) / run_id
     if (run_dir / "events.jsonl").exists():
         print(f"run '{run_id}' already exists at {run_dir}", file=sys.stderr)
@@ -92,8 +118,19 @@ def cmd_run(args: argparse.Namespace) -> int:
         _seed_decisions(Path(args.recorded_decisions), run_dir / "approvals")
         args.recorded_decisions = str(Path(args.recorded_decisions).resolve())
         args.approvals, args.auto_approve = "file", False
+    selection = None
+    if auto:
+        from .planner.select import SelectionRejected
+
+        try:
+            path, selection = _select_workflow(args, run_id, run_dir)
+        except SelectionRejected as exc:
+            print(f"error: {exc}; no run was started", file=sys.stderr)
+            return 1
+        args.workflow = str(Path(path).resolve())
+        workflow = load_workflow(Path(args.workflow))
     write_atomic(run_dir / "run.json", json.dumps({k: getattr(args, k) for k in RUN_SETTINGS}, indent=2))
-    return _execute(args, workflow, run_id, run_dir, resume=False)
+    return _execute(args, workflow, run_id, run_dir, resume=False, selection=selection)
 
 
 def _seed_decisions(source: Path, approvals: Path) -> None:
@@ -141,6 +178,21 @@ def cmd_replan(args: argparse.Namespace) -> int:
     return cmd_resume(args, replan_from=args.from_stage, replan_reason=args.reason)
 
 
+def cmd_eval_selector(args: argparse.Namespace) -> int:
+    """Run the workflow selector on cases whose correct workflow is known; exit 1 on any miss."""
+    import tempfile
+
+    from .llm.factory import model_for
+    from .planner.eval import evaluate, render
+
+    args.max_cost_usd, args.provider, args.model, args.session_agents = None, "anthropic", None, None
+    with tempfile.TemporaryDirectory() as tmp:
+        llm, config = _llm(args, Path(args.cassettes), Path(tmp), ["selector"])
+        results = asyncio.run(evaluate(Path(args.cases), Path(args.workflows_dir), llm, model_for(config, "selector")))
+    print(render(results))
+    return 0 if all(r["correct"] for r in results) else 1
+
+
 def cmd_stop(args: argparse.Namespace) -> int:
     run_dir = Path(args.runs_dir) / args.run_id
     if not (run_dir / "events.jsonl").exists():
@@ -153,7 +205,7 @@ def cmd_stop(args: argparse.Namespace) -> int:
 
 
 def _execute(args: argparse.Namespace, workflow, run_id: str, run_dir: Path, *, resume: bool,
-             replan_from: list[str] | None = None, replan_reason: str = "") -> int:
+             replan_from: list[str] | None = None, replan_reason: str = "", selection: dict | None = None) -> int:
     from .workspace.git import GitWorkspace
 
     workspace = Path(args.workspace)
@@ -172,6 +224,7 @@ def _execute(args: argparse.Namespace, workflow, run_id: str, run_dir: Path, *, 
         max_cost_usd=args.max_cost_usd,
         max_minutes=args.max_minutes,
         git=GitWorkspace(workspace, run_id) if args.git else None,
+        selection=selection,
     )
     print(f"{'resuming' if resume else 'run'} {run_id}: workflow={workflow.name} workspace={workspace}", flush=True)
     result = asyncio.run(engine.run(resume=resume, replan_from=replan_from, replan_reason=replan_reason))
@@ -311,7 +364,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     run = sub.add_parser("run", help="execute a workflow")
-    run.add_argument("workflow", help="workflow YAML")
+    run.add_argument("workflow", help="workflow YAML, or 'auto' to have one proposed from the requirement "
+                                      "and confirmed by a person")
+    run.add_argument("--workflows-dir", default="workflows", help="where 'auto' looks for workflows")
     run.add_argument("--requirement", required=True, help="requirement markdown file")
     run.add_argument("--workspace", help="directory agents write into (default: runs/<run-id>/workspace). "
                                           "An existing git repository is used only on a new orch/<run-id> branch")
@@ -390,6 +445,14 @@ def main(argv: list[str] | None = None) -> int:
     respond.add_argument("--summary", default="")
     respond.add_argument("--decision", action="append", default=[], help="topic::choice::rationale (repeatable)")
     respond.set_defaults(func=cmd_respond)
+
+    ev = sub.add_parser("eval-selector", help="check workflow selection against cases with known answers")
+    ev.add_argument("--cases", default="scenarios/selection/eval.yaml")
+    ev.add_argument("--workflows-dir", default="workflows")
+    ev.add_argument("--llm", choices=["live", "record", "rerecord", "replay"], default="replay")
+    ev.add_argument("--llm-config", required=True, help="YAML mapping agents to backends (the selector's backend)")
+    ev.add_argument("--cassettes", default=str(DEFAULT_CASSETTES / "selector-eval"))
+    ev.set_defaults(func=cmd_eval_selector)
 
     status = sub.add_parser("status", help="rebuild run state from its event log")
     status.add_argument("run_id")

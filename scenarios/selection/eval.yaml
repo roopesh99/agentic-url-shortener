@@ -1,0 +1,32 @@
+# Workflow-selection eval: requirements whose correct workflow is known. `accept` lists every
+# workflow a reviewer would accept; where two are defensible both are listed, so the eval grades
+# clear mistakes, not judgement calls. The first five are the recorded scenarios; the rest are short
+# synthetic requests that probe the boundaries between workflows (they are not run).
+cases:
+  - requirement: scenarios/greenfield.md
+    codebase: new
+    accept: [skeleton]
+  - requirement: scenarios/brownfield-analytics.md
+    codebase: existing
+    accept: [brownfield, lifecycle]     # adds a private endpoint but asks for no API docs or release
+  - requirement: scenarios/ambiguous-reliability.md
+    codebase: existing
+    accept: [brownfield, lifecycle]
+  - requirement: scenarios/lifecycle-expiry.md
+    codebase: existing
+    accept: [lifecycle]                 # asks for an API definition, docs and release readiness
+  - requirement: scenarios/bugfix-idn.md
+    codebase: existing
+    accept: [bugfix]
+  - requirement: scenarios/selection/refactor-link-service.md
+    codebase: existing
+    accept: [brownfield]
+  - requirement: scenarios/selection/upgrade-dependencies.md
+    codebase: existing
+    accept: [brownfield]
+  - requirement: scenarios/selection/stats-off-by-one.md
+    codebase: existing
+    accept: [bugfix]                    # a defect report that never says "bug"
+  - requirement: scenarios/selection/list-my-links.md
+    codebase: existing
+    accept: [lifecycle]                 # a new client-facing endpoint, documented for API clients

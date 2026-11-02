@@ -91,6 +91,7 @@ class RunMetrics:
     llm: dict[str, Any]
     replans: int
     intervals: list[Interval] = field(default_factory=list)
+    selection: dict[str, Any] | None = None  # how `orch run auto` chose the workflow
 
     @property
     def stage_outcomes(self) -> Counter:
@@ -292,6 +293,7 @@ def compute(events: list[Event]) -> RunMetrics:
     completed = [e for e in events if e.type == EventType.RUN_COMPLETED]
     return RunMetrics(
         run_id=events[0].run_id, workflow=events[0].payload.get("workflow", ""),
+        selection=events[0].payload.get("selection"),
         status=completed[-1].payload["status"] if completed else "INCOMPLETE",
         processes=sum(1 for e in events if e.type in start_types),
         started=started, finished=finished, wall_seconds=wall,

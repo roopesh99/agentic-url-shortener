@@ -10,6 +10,11 @@ name: brownfield
 version: "1"
 description: Requirement -> spec -> impact analysis on existing code -> code + test plan -> regression-safe tests
 
+selection:                           # how `orch run auto` decides this workflow fits
+  codebase: existing
+  use_when: >-
+    A change to the existing service that is not a defect fix and needs no API definition, documentation or release preparation: an enhancement or internal capability, a refactor, hardening, or a broad request whose scope must first be clarified with the owner.
+
 stages:
   - id: requirements
     agent: analyst

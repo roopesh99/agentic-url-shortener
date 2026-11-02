@@ -98,7 +98,9 @@ class Engine:
         max_cost_usd: float | None = None,
         max_minutes: float | None = None,
         git: GitWorkspace | None = None,
+        selection: dict | None = None,
     ) -> None:
+        self.selection = selection  # how the workflow was chosen (orch run auto), recorded in RUN_STARTED
         self.workflow = workflow
         self.agents = agents
         self.gates = gates
@@ -153,6 +155,7 @@ class Engine:
                 git=workspace_info,
                 max_cost_usd=self.max_cost_usd,
                 max_minutes=self.max_minutes,
+                **({"selection": self.selection} if self.selection else {}),
             )
 
         running: dict[asyncio.Task[None], str] = {}
