@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0]
+
+### Added
+- Added support for shortening permitted HTTP(S) destinations with Unicode internationalized domain names and the reported underscore-host form.
+
+### Changed
+- Redirects use the ASCII/Punycode host when required, while preserving existing path and query escaping behavior and the exact submitted URL in `originalUrl` metadata.
+
+### Fixed
+- Fixed URL creation failures that incorrectly reported `url must include a host` for supported Unicode IDN and underscore-host destinations.
+
+### Security
+- Destination rules check the same ASCII host used for redirects, preserving rejection of prohibited destinations entered in Unicode or equivalent Punycode form.
+
 ## [1.1.0]
 
 ### Added
