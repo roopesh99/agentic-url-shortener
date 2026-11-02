@@ -15,7 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Records a click in its own short transaction, separate from the redirect lookup, so the
  * caller can contain any failure (NFR1). The link row is locked while recording, the same lock
- * deletion takes, so a click is never committed after its link's clicks were erased (FR3).
+ * deletion and expiry changes take, so a click is never committed after its link's clicks were
+ * erased (FR3).
  */
 @Service
 public class ClickRecorder {

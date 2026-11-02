@@ -6,17 +6,21 @@ import com.example.shortener.api.LinkDtos.CreateLinkRequest;
 import com.example.shortener.api.LinkDtos.CreateLinkResponse;
 import com.example.shortener.api.LinkDtos.LinkMetadata;
 import com.example.shortener.api.LinkDtos.StatsResponse;
+import com.example.shortener.api.LinkDtos.UpdateExpiryRequest;
 import com.example.shortener.service.ApiException;
 import com.example.shortener.service.CreateRateLimiter;
 import com.example.shortener.service.ManagementTokenRateLimiter;
 import com.example.shortener.service.LinkService;
 import com.example.shortener.service.LinkService.CreatedLink;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.function.Supplier;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,11 +37,14 @@ public class LinkController {
     private final LinkService links;
     private final CreateRateLimiter rateLimiter;
     private final ManagementTokenRateLimiter tokenLimiter;
+    private final ObjectMapper json;
 
-    public LinkController(LinkService links, CreateRateLimiter rateLimiter, ManagementTokenRateLimiter tokenLimiter) {
+    public LinkController(LinkService links, CreateRateLimiter rateLimiter, ManagementTokenRateLimiter tokenLimiter,
+                          ObjectMapper json) {
         this.links = links;
         this.rateLimiter = rateLimiter;
         this.tokenLimiter = tokenLimiter;
+        this.json = json;
     }
 
     @PostMapping
@@ -63,6 +70,15 @@ public class LinkController {
                                @RequestHeader(name = TOKEN_HEADER, required = false) String token,
                                HttpServletRequest http) {
         return StatsResponse.of(withTokenThrottle(http, () -> links.stats(code, token)));
+    }
+
+    /** Sets or removes the expiry (FR1): the same token rules and wrong-token throttle as stats and delete. */
+    @PatchMapping("/{code}")
+    public LinkMetadata updateExpiry(@PathVariable String code, @RequestBody JsonNode body,
+                                     @RequestHeader(name = TOKEN_HEADER, required = false) String token,
+                                     HttpServletRequest http) {
+        UpdateExpiryRequest request = UpdateExpiryRequest.from(body, json);
+        return LinkMetadata.of(withTokenThrottle(http, () -> links.updateExpiry(code, token, request.expiresAt())));
     }
 
     @DeleteMapping("/{code}")

@@ -19,7 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Link lifecycle: create, resolve for redirect, read metadata and stats, delete into a tombstone. */
+/** Link lifecycle: create, resolve for redirect, read metadata and stats, change expiry, delete into a tombstone. */
 @Service
 public class LinkService {
 
@@ -64,10 +64,7 @@ public class LinkService {
     public CreatedLink create(String url, String alias, Instant expiresAt) {
         destinationPolicy.validate(url);
         Instant now = now();
-        Instant expiry = expiresAt == null ? null : expiresAt.truncatedTo(ChronoUnit.MICROS);
-        if (expiry != null && !expiry.isAfter(now)) {
-            throw ApiException.badRequest("invalid_expiry", "expiresAt must be in the future");
-        }
+        Instant expiry = futureExpiry(expiresAt, now);
 
         String code;
         if (alias != null) {
@@ -134,6 +131,24 @@ public class LinkService {
     }
 
     /**
+     * Sets a new expiry, or removes it when {@code expiresAt} is null. Under the link's row lock, like
+     * deletion and click recording. Checks in order: 404 unknown or deleted, the token (401/403), 410
+     * if already expired (an expired link is never revived), then the new value must be in the future
+     * (400 invalid_expiry), as at creation; there is no maximum. Nothing changes unless all pass.
+     */
+    @Transactional
+    public Link updateExpiry(String code, String managementToken, Instant expiresAt) {
+        Link link = repository.lockByCode(code).filter(l -> !l.isDeleted()).orElseThrow(ApiException::notFound);
+        authorize(link, managementToken);
+        Instant now = now();
+        if (link.isExpiredAt(now)) {
+            throw new ApiException(HttpStatus.GONE, "expired", "link has expired");
+        }
+        link.changeExpiry(futureExpiry(expiresAt, now));
+        return repository.saveAndFlush(link);
+    }
+
+    /**
      * Tombstones the link and erases its clicks in one transaction (FR3), under the link's row
      * lock so a concurrent redirect cannot commit a click in between.
      */
@@ -153,6 +168,15 @@ public class LinkService {
         if (!tokenService.matches(managementToken, link.getTokenHash())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "invalid_token", "management token does not match");
         }
+    }
+
+    /** Null stays null (no expiry); otherwise stored precision, and strictly after {@code now}. */
+    private static Instant futureExpiry(Instant expiresAt, Instant now) {
+        Instant expiry = expiresAt == null ? null : expiresAt.truncatedTo(ChronoUnit.MICROS);
+        if (expiry != null && !expiry.isAfter(now)) {
+            throw ApiException.badRequest("invalid_expiry", "expiresAt must be in the future");
+        }
+        return expiry;
     }
 
     private Link findLive(String code) {

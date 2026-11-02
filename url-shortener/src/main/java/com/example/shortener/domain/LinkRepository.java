@@ -17,8 +17,8 @@ public interface LinkRepository extends JpaRepository<Link, Long> {
 
     /**
      * Reads the link under a row lock (SELECT ... FOR UPDATE) for the rest of the transaction.
-     * Click recording and deletion both take it, so a click can never be committed after the
-     * deletion that erased the link's clicks.
+     * Click recording, deletion and expiry changes all take it, so a click can never be committed
+     * after the deletion that erased the link's clicks, and an expiry change never races a deletion.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select l from Link l where l.id = :id")

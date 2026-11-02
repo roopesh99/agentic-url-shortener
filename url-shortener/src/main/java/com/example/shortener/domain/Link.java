@@ -64,6 +64,11 @@ public class Link {
         return expiresAt != null && !now.isBefore(expiresAt);
     }
 
+    /** A new expiry, or null for none; the caller has checked the link is live and the value is valid. */
+    public void changeExpiry(Instant expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
     public void markDeleted(Instant now) {
         this.deletedAt = now;
         this.originalUrl = null;

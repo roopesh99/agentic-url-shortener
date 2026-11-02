@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Throttles management-token guessing (FR10): at most N wrong tokens per client IP in a rolling
- * 60-second window, shared by the stats and delete endpoints. Only supplied-but-wrong tokens count;
+ * 60-second window, shared by the stats, delete and expiry-change endpoints. Only supplied-but-wrong tokens count;
  * a missing token is a client bug, not a guess, and a valid token is never blocked.
  * In memory and single-node by design; reset on restart.
  */
