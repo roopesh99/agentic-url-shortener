@@ -310,6 +310,9 @@ class Engine:
                 attempt=attempt,
                 feedback=progress.agent_feedback(),
                 clarifications=list(progress.clarifications),
+                downstream_scopes={s: self.workflow.stage(s).write_scope for s in self._order
+                                   if s in downstream(self.workflow, stage.id) and self.workflow.stage(s).write_scope}
+                if stage.downstream_context else {},
             )
             result = await self._invoke_agent(stage, ctx, agent)
             if self._charge(ctx.telemetry):
@@ -697,11 +700,13 @@ class Engine:
             workflow_changed=self._workflow_sha() != started.payload.get("workflow_sha"),
             requirement_sha=_sha(self.requirement),
         )
-        if stale:
+        # Stages in the re-plan's reach that had not succeeded are simply re-run; they count as re-planned too.
+        rerun = [s for s in self._order if s in stale_scope and s in reset]
+        if stale or rerun:
             self.events.append(
                 EventType.RUN_REPLANNED, reason=replan_reason or ("requirement changed" if requirement_changed else ""),
                 requested_from=sorted(replan_from), requirement_changed=requirement_changed,
-                stale=stale, forced=sorted(self._forced), requirement_sha=_sha(self.requirement),
+                stale=stale, forced=sorted(self._forced), rerun=rerun, requirement_sha=_sha(self.requirement),
             )
             for stage_id in stale:
                 self.states[stage_id] = NodeState.SUCCEEDED

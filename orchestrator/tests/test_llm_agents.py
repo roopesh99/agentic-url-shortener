@@ -247,3 +247,30 @@ async def test_the_approved_design_reaches_every_downstream_agent_and_release_se
     assert (ws / "openapi.yaml").read_text().startswith("openapi: 3.0.3")
     assert "## 0.2.0" in (ws / "CHANGELOG.md").read_text()
     assert "| tests passing | pass |" in (ws / "docs" / "releases" / "0.2.0.md").read_text()
+
+
+async def test_the_impact_analyst_is_told_where_later_stages_write(tmp_path):
+    """In the live lifecycle run the impact plan named doc files the workflow never produces,
+    costing a change request: the analyst now sees every downstream stage's write scope."""
+    wf = load_workflow(ROOT / "workflows" / "lifecycle.yaml")
+    for s in wf.stages:
+        s.entry_gates, s.exit_gates = [], []
+    llm = ScriptedLLM({"analyst": [SPEC], "impact_analyst": [IMPACT], "architect": [DESIGN], "test_planner": [PLAN],
+                       "coder": [code([])], "tester": [code([])], "writer": [code([])], "release": [RELEASE]})
+    assert (await engine(tmp_path, llm, wf).run()).succeeded
+    prompt = llm.prompts("impact_analyst")[0]
+    assert "<downstream_write_scopes>" in prompt
+    for location in ("url-shortener/openapi.yaml", "url-shortener/docs/api.md", "url-shortener/docs/releases/**"):
+        assert location in prompt, location
+    assert "downstream_write_scopes" not in llm.prompts("analyst")[0], "only stages that opt in see it"
+
+
+async def test_downstream_context_is_opt_in_so_recorded_prompts_stay_identical(tmp_path):
+    wf = load_workflow(ROOT / "workflows" / "brownfield.yaml")
+    assert not any(s.downstream_context for s in wf.stages)
+    for s in wf.stages:
+        s.entry_gates, s.exit_gates = [], []
+    llm = ScriptedLLM({"analyst": [SPEC], "impact_analyst": [IMPACT], "test_planner": [PLAN],
+                       "coder": [code([])], "tester": [code([])]})
+    assert (await engine(tmp_path, llm, wf).run()).succeeded
+    assert "downstream_write_scopes" not in llm.prompts("impact_analyst")[0]

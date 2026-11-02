@@ -162,6 +162,11 @@ class AnalystAgent(LLMAgent):
         return AgentResult(summary=out.summary, outputs=outputs, decisions=decisions)
 
 
+DOWNSTREAM_NOTE = ("Where each later stage of this workflow may write. These locations are fixed: every file you "
+                   "list as impacted must fall within one of them, and documentation, API definition and release "
+                   "files must use exactly these locations.")
+
+
 class ImpactAgent(LLMAgent):
     name = "impact_analyst"
     prompts = ("impact",)
@@ -170,7 +175,10 @@ class ImpactAgent(LLMAgent):
     max_tokens = 32000
 
     def task(self, ctx):
-        return [self.spec_section(ctx), self.files_section(ctx)]
+        sections = [self.spec_section(ctx), self.files_section(ctx)]
+        if ctx.downstream_scopes:  # the workflow fixes where later stages write; plan within it
+            sections.append(_tag("downstream_write_scopes", DOWNSTREAM_NOTE + "\n" + _canonical(ctx.downstream_scopes)))
+        return sections
 
     def to_result(self, ctx, out: ImpactOutput):
         return AgentResult(summary=out.summary, outputs=out.model_dump(exclude={"summary", "decisions"}),

@@ -24,6 +24,7 @@ stages:
   - id: impact
     agent: impact_analyst
     needs: [requirements]
+    downstream_context: true         # plan files where later stages will actually write them
     read_scope: ["url-shortener/pom.xml", "url-shortener/src/**", "url-shortener/openapi.yaml"]
     exit_gates:
       - name: outputs_present

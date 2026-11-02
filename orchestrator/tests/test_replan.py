@@ -169,3 +169,39 @@ async def test_replanned_log_still_verifies(build_engine, recorder):
     await replanned.run(resume=True, replan_from=["spec"])
     ok, msg = EventStore.verify(replanned.events.path)
     assert ok, msg
+
+
+async def test_replanning_a_failed_stage_is_recorded_with_its_reason(build_engine, recorder):
+    """A re-plan aimed at a stage that failed re-runs it, and the audit log says so and why
+    (found in the live lifecycle run: it used to be recorded as a plain resume)."""
+    from orchestrator.engine.scheduler import FatalAgentError
+
+    def test_fails(ctx):
+        if ctx.stage.id == "test":
+            raise FatalAgentError("broken prompt")
+
+    first = build_engine(WORKFLOW, {"x": make_agent(recorder, behaviour=test_fails)})
+    assert not (await first.run()).succeeded
+    recorder.calls.clear()
+
+    replanned = build_engine(WORKFLOW, {"x": make_agent(recorder)})
+    result = await replanned.run(resume=True, replan_from=["test"], replan_reason="prompt fixed")
+
+    assert result.succeeded
+    assert [c["stage"] for c in recorder.calls] == ["test"]
+    [plan] = events(replanned, EventType.RUN_REPLANNED)
+    assert plan.payload["reason"] == "prompt fixed"
+    assert plan.payload["rerun"] == ["test"] and plan.payload["stale"] == []
+
+
+async def test_a_plain_resume_of_a_failed_run_is_not_a_replan(build_engine, recorder):
+    from orchestrator.engine.scheduler import FatalAgentError
+
+    def test_fails(ctx):
+        if ctx.stage.id == "test":
+            raise FatalAgentError("transient")
+
+    assert not (await build_engine(WORKFLOW, {"x": make_agent(recorder, behaviour=test_fails)}).run()).succeeded
+    resumed = build_engine(WORKFLOW, {"x": make_agent(recorder)})
+    assert (await resumed.run(resume=True)).succeeded
+    assert events(resumed, EventType.RUN_REPLANNED) == []
