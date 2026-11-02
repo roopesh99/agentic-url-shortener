@@ -1,0 +1,72 @@
+# Bug fix: reproduce first, then fix. The regression tests are written before any code changes and
+# must FAIL on the current code (regression_reproduces); the fix may not touch them and must make
+# the whole suite pass. Release prepares a patch release for a human sign-off.
+#
+#   requirements ─► impact ─► reproduce ─► fix ─► release
+#     (approve)    (approve)  [new tests    [full suite   [entry: full suite]
+#                              fail, rest    passes]       (approve)
+#                              pass]
+name: bugfix
+version: "1"
+description: Bug report -> spec -> root cause -> failing regression test -> fix -> patch release
+
+stages:
+  - id: requirements
+    agent: analyst
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [goal, functional, non_functional] }
+      - ambiguities_resolved
+    clarification: { max_rounds: 3 }
+    approval: required
+    max_revisions: 2
+
+  - id: impact
+    agent: impact_analyst
+    needs: [requirements]
+    description: Root cause in the code, the fix, its risks, and how to prove it
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/**"]
+    downstream_context: true
+    exit_gates:
+      - name: outputs_present
+        args: { keys: [impacted, risks, test_strategy] }
+    approval: required
+    max_revisions: 2
+
+  - id: reproduce
+    agent: reproducer
+    needs: [impact]
+    description: Regression tests that fail on the current code because of the bug
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**", "url-shortener/src/test/**"]
+    write_scope: ["url-shortener/src/test/**"]
+    exit_gates:
+      - name: regression_reproduces
+        args: { project: url-shortener, timeout_seconds: 900 }
+    retry: { max_attempts: 3, backoff_seconds: 1 }
+
+  - id: fix
+    agent: coder
+    needs: [reproduce]
+    read_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**", "url-shortener/src/test/**"]
+    write_scope: ["url-shortener/pom.xml", "url-shortener/src/main/**"]
+    exit_gates:
+      - name: maven_test
+        # 138 tests before this workflow was introduced, plus at least one regression test
+        args: { project: url-shortener, timeout_seconds: 900, min_tests: 139 }
+      - name: openapi_conformance
+        args: { spec: url-shortener/openapi.yaml, source: url-shortener/src/main/java }
+    retry: { max_attempts: 3, backoff_seconds: 1 }
+
+  - id: release
+    agent: release
+    needs: [fix]
+    read_scope: ["url-shortener/CHANGELOG.md"]
+    write_scope: ["url-shortener/CHANGELOG.md", "url-shortener/docs/releases/**"]
+    entry_gates:
+      - name: maven_test
+        args: { project: url-shortener, timeout_seconds: 900, min_tests: 139 }
+    exit_gates:
+      - name: release_checklist_passed
+      - name: files_exist
+        args: { paths: [url-shortener/CHANGELOG.md] }
+    approval: required

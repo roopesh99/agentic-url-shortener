@@ -282,7 +282,36 @@ class CoderAgent(LLMAgent):
 
     def task(self, ctx):
         return [self.spec_section(ctx), *self.impact_section(ctx), *self.design_section(ctx),
-                self.files_section(ctx), self.scope_section(ctx)]
+                *self.reproduction_section(ctx), self.files_section(ctx), self.scope_section(ctx)]
+
+    @staticmethod
+    def reproduction_section(ctx: AgentContext) -> list[str]:
+        """Bug fixes: the regression tests that fail now and must pass after the fix."""
+        repro = ctx.inputs.get("reproduce")
+        if not repro:
+            return []
+        note = ("These regression tests were written before the fix and fail on the current code; the "
+                "orchestrator verified that. Make them pass by fixing the code. You cannot change them.")
+        return [_tag("regression_tests", note + "\n" + _canonical(
+            {"summary": repro.result.summary, "files": repro.result.files_written}))]
+
+    def to_result(self, ctx, out: CodeOutput):
+        self.propose(ctx, out)
+        return AgentResult(summary=out.summary, outputs={"files": [f.path for f in out.files]},
+                           decisions=_decisions(out.decisions))
+
+
+class ReproducerAgent(LLMAgent):
+    """Bug fixes: regression tests that fail on the current code, written before the fix."""
+
+    name = "reproducer"
+    prompts = ("reproducer", "engineering_standards")
+    output_model = CodeOutput
+    effort = "high"
+
+    def task(self, ctx):
+        return [self.spec_section(ctx), *self.impact_section(ctx),
+                self.files_section(ctx, "implementation_and_existing_tests"), self.scope_section(ctx)]
 
     def to_result(self, ctx, out: CodeOutput):
         self.propose(ctx, out)
@@ -317,8 +346,8 @@ class TesterAgent(LLMAgent):
         )
 
 
-AGENT_TYPES = (AnalystAgent, ImpactAgent, ArchitectAgent, TestPlannerAgent, CoderAgent, TesterAgent,
-               WriterAgent, ReleaseAgent)
+AGENT_TYPES = (AnalystAgent, ImpactAgent, ArchitectAgent, TestPlannerAgent, CoderAgent, ReproducerAgent,
+               TesterAgent, WriterAgent, ReleaseAgent)
 LLM_AGENT_NAMES = [a.name for a in AGENT_TYPES]
 
 

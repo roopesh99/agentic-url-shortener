@@ -274,3 +274,30 @@ async def test_downstream_context_is_opt_in_so_recorded_prompts_stay_identical(t
                        "coder": [code([])], "tester": [code([])]})
     assert (await engine(tmp_path, llm, wf).run()).succeeded
     assert "downstream_write_scopes" not in llm.prompts("impact_analyst")[0]
+
+
+async def test_bugfix_regression_tests_reach_the_coder_and_only_there(tmp_path):
+    wf = load_workflow(ROOT / "workflows" / "bugfix.yaml")
+    for s in wf.stages:  # wiring only: the gates are covered in test_bugfix.py
+        s.entry_gates, s.exit_gates = [], []
+    regression = "url-shortener/src/test/java/com/example/shortener/BugReproTest.java"
+    llm = ScriptedLLM({"analyst": [SPEC], "impact_analyst": [IMPACT],
+                       "reproducer": [code([{"path": regression, "content": "class BugReproTest {}"}])],
+                       "coder": [code([])], "release": [RELEASE]})
+    assert (await engine(tmp_path, llm, wf).run()).succeeded
+
+    reproducer = llm.prompts("reproducer")[0]
+    assert "approved_impact_analysis" in reproducer and "approved_specification" in reproducer
+    coder = llm.prompts("coder")[0]
+    assert "<regression_tests>" in coder and regression in coder and "You cannot change them" in coder
+    assert "downstream_write_scopes" in llm.prompts("impact_analyst")[0]
+
+
+async def test_the_coder_sees_no_regression_section_outside_bug_fixes(tmp_path):
+    wf = load_workflow(ROOT / "workflows" / "brownfield.yaml")
+    for s in wf.stages:
+        s.entry_gates, s.exit_gates = [], []
+    llm = ScriptedLLM({"analyst": [SPEC], "impact_analyst": [IMPACT], "test_planner": [PLAN],
+                       "coder": [code([])], "tester": [code([])]})
+    assert (await engine(tmp_path, llm, wf).run()).succeeded
+    assert "regression_tests" not in llm.prompts("coder")[0]
