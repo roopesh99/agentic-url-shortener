@@ -1,0 +1,679 @@
+openapi: 3.0.3
+info:
+  title: URL Shortener API
+  version: 1.0.0-SNAPSHOT
+  description: HTTP API for creating, managing, inspecting, and redirecting short links.
+servers:
+  - url: /
+tags:
+  - name: Links
+    description: Link creation and management.
+  - name: Redirects
+    description: Public short-link redirects.
+  - name: Operations
+    description: Public service health.
+paths:
+  /api/links:
+    post:
+      tags: [Links]
+      operationId: createLink
+      summary: Create a short link
+      description: Creates a link and returns its one-time plaintext management token. Creation requests are limited per client peer address. expiresAt is optional; when provided it must be in the future. There is no maximum expiry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLinkRequest'
+            example:
+              url: https://example.com/article
+              alias: article
+              expiresAt: '2030-01-01T00:00:00Z'
+      responses:
+        '201':
+          description: Link created.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/XContentTypeOptions'
+            X-Frame-Options:
+              $ref: '#/components/headers/XFrameOptions'
+            Referrer-Policy:
+              $ref: '#/components/headers/ReferrerPolicy'
+            Content-Security-Policy:
+              $ref: '#/components/headers/ContentSecurityPolicy'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateLinkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/links/{code}:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        description: Link code or custom alias.
+        schema:
+          type: string
+    get:
+      tags: [Links]
+      operationId: getLinkMetadata
+      summary: Get public link metadata
+      description: Returns metadata for a live or expired link. Deleted and unknown links are not exposed.
+      responses:
+        '200':
+          description: Link metadata.
+          headers:
+            X-Content-Type-Options:
+              $ref: '#/components/headers/XContentTypeOptions'
+            X-Frame-Options:
+              $ref: '#/components/headers/XFrameOptions'
+            Referrer-Policy:
+              $ref: '#/components/headers/ReferrerPolicy'
+            Content-Security-Policy:
+              $ref: '#/components/headers/ContentSecurityPolicy'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkMetadata'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [Links]
+      operationId: updateLinkExpiry
+      summary: Set or remove a link expiry
+      description: |-
+        Changes only the expiry of an existing link. Supply expiresAt as an ISO-8601 instant strictly in the future to set it, or explicit null to remove it. The field is required; omission is rejected with 400 and does not change the link. A non-future instant is rejected with 400 and error code invalid_expiry. No update-only maximum expiry is imposed.
+
+        A missing management token returns 401 (missing_token); a wrong token returns 403 (invalid_token), or 429 (rate_limited) when the shared management-token failure limit is exceeded. These failures do not mutate the link. Unknown or deleted links return 404 (not_found). After token authorization, an already expired link returns 410 (expired) and cannot be revived. Successful changes return the updated public metadata. The update takes the existing link-row lock and is committed before the response; subsequent metadata reads and redirect lookups use the persisted expiry.
+      security:
+        - ManagementToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLinkExpiryRequest'
+            examples:
+              setExpiry:
+                summary: Set a future expiry
+                value:
+                  expiresAt: '2030-01-01T00:00:00Z'
+              removeExpiry:
+                summary: Remove the expiry
+                value:
+                  expiresAt: null
+      responses:
+        '200':
+          description: Expiry updated; the returned metadata contains the new instant or null when expiry was removed.
+          headers:
+            X-Content-Type-Options:
+              $ref: '#/components/headers/XContentTypeOptions'
+            X-Frame-Options:
+              $ref: '#/components/headers/XFrameOptions'
+            Referrer-Policy:
+              $ref: '#/components/headers/ReferrerPolicy'
+            Content-Security-Policy:
+              $ref: '#/components/headers/ContentSecurityPolicy'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkMetadata'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '410':
+          $ref: '#/components/responses/Expired'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [Links]
+      operationId: deleteLink
+      summary: Delete a link
+      description: Deletes a link into a tombstone. A valid management token is required. Expiry does not prevent deletion.
+      parameters:
+        - $ref: '#/components/parameters/OptionalManagementToken'
+      responses:
+        '204':
+          description: Link deleted; no response body.
+          headers:
+            X-Content-Type-Options:
+              $ref: '#/components/headers/XContentTypeOptions'
+            X-Frame-Options:
+              $ref: '#/components/headers/XFrameOptions'
+            Referrer-Policy:
+              $ref: '#/components/headers/ReferrerPolicy'
+            Content-Security-Policy:
+              $ref: '#/components/headers/ContentSecurityPolicy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/links/{code}/stats:
+    get:
+      tags: [Links]
+      operationId: getLinkStats
+      summary: Get private link statistics
+      description: Returns lifetime clicks, daily click counts for the current UTC day and previous 29 days, and the last click time. Expired links retain stats; deleted links do not. Wrong management tokens share the management-token throttle with deletion and expiry updates.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: Link code or custom alias.
+          schema:
+            type: string
+        - $ref: '#/components/parameters/OptionalManagementToken'
+      responses:
+        '200':
+          description: Link statistics.
+          headers:
+            X-Content-Type-Options:
+              $ref: '#/components/headers/XContentTypeOptions'
+            X-Frame-Options:
+              $ref: '#/components/headers/XFrameOptions'
+            Referrer-Policy:
+              $ref: '#/components/headers/ReferrerPolicy'
+            Content-Security-Policy:
+              $ref: '#/components/headers/ContentSecurityPolicy'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /{code}:
+    get:
+      tags: [Redirects]
+      operationId: redirectToDestination
+      summary: Redirect to the original URL
+      description: Resolves an active short link, records a click best-effort, and responds with a non-cacheable 302 redirect. Unknown or deleted codes return 404; expired links return 410. Click-recording failures do not prevent the redirect.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: Short code; the route matches 3–32 ASCII letters, digits, underscores, or hyphens.
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{3,32}$'
+      responses:
+        '302':
+          description: Redirect to the link destination.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/XContentTypeOptions'
+            X-Frame-Options:
+              $ref: '#/components/headers/XFrameOptions'
+            Referrer-Policy:
+              $ref: '#/components/headers/ReferrerPolicy'
+            Content-Security-Policy:
+              $ref: '#/components/headers/ContentSecurityPolicy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '410':
+          $ref: '#/components/responses/Expired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/RedirectUnavailable'
+  /health:
+    get:
+      tags: [Operations]
+      operationId: getHealth
+      summary: Check public service health
+      description: Returns UP when the service can reach its database, otherwise DOWN with HTTP 503.
+      responses:
+        '200':
+          description: Database is reachable.
+          headers:
+            X-Content-Type-Options:
+              $ref: '#/components/headers/XContentTypeOptions'
+            X-Frame-Options:
+              $ref: '#/components/headers/XFrameOptions'
+            Referrer-Policy:
+              $ref: '#/components/headers/ReferrerPolicy'
+            Content-Security-Policy:
+              $ref: '#/components/headers/ContentSecurityPolicy'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: UP
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Database is unavailable.
+          headers:
+            X-Content-Type-Options:
+              $ref: '#/components/headers/XContentTypeOptions'
+            X-Frame-Options:
+              $ref: '#/components/headers/XFrameOptions'
+            Referrer-Policy:
+              $ref: '#/components/headers/ReferrerPolicy'
+            Content-Security-Policy:
+              $ref: '#/components/headers/ContentSecurityPolicy'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: DOWN
+components:
+  securitySchemes:
+    ManagementToken:
+      type: apiKey
+      in: header
+      name: X-Management-Token
+      description: Per-link secret returned only in the link-creation response. Required to update expiry.
+  parameters:
+    OptionalManagementToken:
+      name: X-Management-Token
+      in: header
+      required: false
+      description: Management token for the link. Omission produces 401 missing_token; an incorrect token produces 403 invalid_token unless the shared wrong-token limit is exceeded.
+      schema:
+        type: string
+  headers:
+    Location:
+      description: Relative link metadata URI on creation, or absolute destination URI on redirect.
+      schema:
+        type: string
+    CacheControl:
+      description: Redirect responses are not cacheable.
+      schema:
+        type: string
+        example: no-store
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: string
+        pattern: '^[0-9]+$'
+    XContentTypeOptions:
+      description: Security header present on every response.
+      schema:
+        type: string
+        example: nosniff
+    XFrameOptions:
+      description: Security header present on every response.
+      schema:
+        type: string
+        example: DENY
+    ReferrerPolicy:
+      description: Security header present on every response.
+      schema:
+        type: string
+        example: no-referrer
+    ContentSecurityPolicy:
+      description: Security header present on every response.
+      schema:
+        type: string
+        example: "default-src 'none'; frame-ancestors 'none'"
+  schemas:
+    CreateLinkRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          description: Destination URL. Only http and https destinations are accepted, and the service rejects prohibited local or private destinations.
+          maxLength: 2048
+        alias:
+          type: string
+          nullable: true
+          description: Optional custom code; 3–32 letters, digits, underscores, or hyphens, subject to reserved-name and uniqueness checks.
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional expiry instant. When supplied, it must be in the future. No maximum expiry is imposed.
+    CreateLinkResponse:
+      type: object
+      required: [code, shortPath, managementToken]
+      properties:
+        code:
+          type: string
+        shortPath:
+          type: string
+          example: /abc12345
+        managementToken:
+          type: string
+          description: Plaintext management token; returned only at creation.
+    UpdateLinkExpiryRequest:
+      type: object
+      required: [expiresAt]
+      description: expiresAt is required. A future instant sets expiry; explicit null removes it. Omission is rejected.
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Future ISO-8601 instant to set, or null to remove expiry. Values at or before the current time are rejected with invalid_expiry.
+    LinkMetadata:
+      type: object
+      required: [code, alias, originalUrl, createdAt, expiresAt]
+      properties:
+        code:
+          type: string
+        alias:
+          type: string
+          nullable: true
+          description: The code when it is a custom alias; otherwise null.
+        originalUrl:
+          type: string
+          description: Original destination URL.
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Expiry instant, or null when the link has no expiry.
+    StatsResponse:
+      type: object
+      required: [totalClicks, dailyClicks, lastClickedAt]
+      properties:
+        totalClicks:
+          type: integer
+          format: int64
+        dailyClicks:
+          type: array
+          description: Click counts for 30 UTC calendar days, oldest first, including zero-count days.
+          items:
+            $ref: '#/components/schemas/DailyClicksResponse'
+        lastClickedAt:
+          type: string
+          format: date-time
+          nullable: true
+    DailyClicksResponse:
+      type: object
+      required: [date, clicks]
+      properties:
+        date:
+          type: string
+          format: date
+        clicks:
+          type: integer
+          format: int64
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN]
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Stable machine-readable error code.
+        message:
+          type: string
+          description: Human-readable error message.
+  responses:
+    BadRequest:
+      description: Bad request. Error codes include invalid_request, invalid_url, prohibited_destination, invalid_expiry, invalid_alias, and reserved_alias, depending on the operation and failure.
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing management token (missing_token).
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Incorrect management token (invalid_token).
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Unknown or deleted link (not_found), or no matching resource.
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    MethodNotAllowed:
+      description: Method is not allowed for this resource (method_not_allowed).
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Expired:
+      description: Link has expired (expired).
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PayloadTooLarge:
+      description: Request body exceeds the configured API body limit (payload_too_large).
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnsupportedMediaType:
+      description: Unsupported request media type (unsupported_media_type); use application/json.
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Requested alias is already in use (alias_taken).
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Too many requests or wrong management-token attempts (rate_limited). Retry-After gives the number of seconds to wait.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Unexpected internal error (internal_error).
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: Service cannot complete the request (service_unavailable or code_collision).
+      headers:
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RedirectUnavailable:
+      description: Link store could not serve a redirect (service_unavailable). Retry after the indicated delay.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
