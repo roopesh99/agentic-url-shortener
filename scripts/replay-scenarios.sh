@@ -73,9 +73,15 @@ git worktree add -q --detach "$WORK/wt-auto" b0409fe
 mkdir -p "$WORK/wf-auto" && git archive b0409fe workflows | tar -x -C "$WORK/wf-auto"
 orch run auto --requirement scenarios/bugfix-html-error.md --workspace "$WORK/wt-auto" \
     --workflows-dir "$WORK/wf-auto/workflows" "${llm[@]}" \
-    --recorded-decisions runs/samples/live-bugfix-2/approvals --run-id replay-auto | tail -1
+    --recorded-decisions runs/samples/live-bugfix-2/approvals --run-id replay-auto | tail -1 \
+    || echo "  (failed at its first gate, as the live run did)"
 git show a9a858e:workflows/bugfix.yaml > "$WORK/wf-auto/workflows/bugfix.yaml"
-orch replan replay-auto --from requirements --reason "replay of the live re-plan" | tail -2
+if ! orch replan replay-auto --from requirements --reason "replay of the live re-plan" > "$WORK/auto.log" 2>&1; then
+    tail -20 "$WORK/auto.log"
+    grep '"passed":false\|"AGENT_ERROR"' "$WORK/runs/replay-auto/events.jsonl" | cut -c1-400 || true
+    exit 1
+fi
+tail -2 "$WORK/auto.log"
 git -C "$WORK/wt-auto" diff --quiet dc311a5 -- url-shortener; check auto $?
 
 for r in replay-greenfield replay-brownfield replay-ambiguous replay-lifecycle replay-bugfix replay-auto; do echo "  $r: $(orch verify-audit $r)"; done
