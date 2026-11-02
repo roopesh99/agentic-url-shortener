@@ -101,7 +101,8 @@ public class LinkService {
         if (link.isExpiredAt(now())) {
             throw new ApiException(HttpStatus.GONE, "expired", "link has expired");
         }
-        return new Redirect(link.getId(), link.getOriginalUrl());
+        // the stored URL is kept exactly as entered; only an internationalized host is sent in ASCII form
+        return new Redirect(link.getId(), DestinationUrls.redirectTarget(link.getOriginalUrl()));
     }
 
     /**

@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
 /**
  * Decides which destination URLs may be shortened (NFR2): http/https only, at most 2048
  * characters, and never a host that is, or resolves to, a loopback, private, link-local,
- * unique-local, multicast or unspecified address. DNS is checked once, at creation, and fails
+ * unique-local, multicast or unspecified address, whether the host is written in ASCII or as an
+ * internationalized name (checked in its ASCII form). DNS is checked once, at creation, and fails
  * closed. The service never fetches destinations, so later DNS changes are an accepted limitation.
  */
 @Component
@@ -44,11 +45,12 @@ public class DestinationPolicy {
         if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
             throw invalid("only http and https URLs are allowed");
         }
-        String host = uri.getHost();
+        String host = DestinationUrls.host(uri);
         if (host == null || host.isBlank()) {
             throw invalid("url must include a host");
         }
-        host = stripBrackets(host).toLowerCase(Locale.ROOT);
+        // Checked in the ASCII form visitors are redirected to, so no spelling of a host can bypass the rules
+        host = DestinationUrls.toAscii(stripBrackets(host)).toLowerCase(Locale.ROOT);
         if (host.equals("localhost") || host.endsWith(".localhost")) {
             throw prohibited();
         }
