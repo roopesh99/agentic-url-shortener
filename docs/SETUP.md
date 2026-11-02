@@ -19,16 +19,16 @@ python3 -m venv .venv
 # or only what you use: .venv/bin/pip install -e '.[openai]'  /  '.[anthropic]'
 ```
 
-## 1. Reproduce the five scenarios offline (no key, $0)
+## 1. Reproduce the seven scenarios offline (no key, $0)
 
 ```bash
 scripts/replay-scenarios.sh
 ```
 
-Replays greenfield, brownfield, ambiguous, the full lifecycle and the bug fix from the recorded LLM exchanges (`scenarios/cassettes/`)
+Replays greenfield, brownfield, ambiguous, the full lifecycle, the bug fix and the two `orch run auto` runs from the recorded LLM exchanges (`scenarios/cassettes/`)
 and the recorded human decisions (`runs/samples/*/approvals/`), each from the repository state it
 originally started from, runs the real Maven gates, and checks that the generated `url-shortener`
-is identical to the committed result. Expected output ends with five `✓` lines and five
+is identical to the committed result. Expected output ends with seven `✓` lines and seven
 `events verified` lines.
 
 ## 2. Run the service
@@ -47,7 +47,7 @@ curl -s localhost:8080/api/links/demo/stats -H "X-Management-Token: <token>"
 curl -s -X PATCH localhost:8080/api/links/demo -H "X-Management-Token: <token>" \
      -H 'Content-Type: application/json' -d '{"expiresAt":"2030-01-01T00:00:00Z"}'   # or null to remove
 curl -s 127.0.0.1:8081/actuator/metrics/shortener.redirects
-mvn test                                                           # 150 tests
+mvn test                                                           # 158 tests
 ```
 
 ## 3. Run the orchestrator
@@ -140,9 +140,9 @@ assistant answers with `orch respond <request.json> --files-from <dir> --summary
 ## 4. Tests
 
 ```bash
-.venv/bin/pytest                    # orchestrator: 204 tests, incl. real Maven builds (~50 s)
+.venv/bin/pytest                    # orchestrator: 212 tests, incl. real Maven builds and real servers (~3 min)
 .venv/bin/pytest -m "not maven"     # without the Maven builds (~6 s)
-cd url-shortener && mvn test        # service: 150 tests
+cd url-shortener && mvn test        # service: 158 tests
 ```
 
 See [TESTING.md](TESTING.md).

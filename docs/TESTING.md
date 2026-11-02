@@ -4,9 +4,9 @@ Three layers, plus checks on the tests themselves.
 
 | Layer | What | Count | Run |
 |---|---|---|---|
-| Orchestrator | unit and integration tests of the engine, governance and observability | 204 | `.venv/bin/pytest` |
-| Generated service | unit, MockMvc integration, real-listener, concurrency and restart tests | 150 (23 classes) | `cd url-shortener && mvn test` |
-| End to end | the five scenarios replayed offline through the real CLI, gates and Maven | 5 runs | `scripts/replay-scenarios.sh` |
+| Orchestrator | unit and integration tests of the engine, governance and observability | 212 | `.venv/bin/pytest` |
+| Generated service | unit, MockMvc integration, real-listener, concurrency and restart tests | 158 (23 classes) | `cd url-shortener && mvn test` |
+| End to end | the seven scenarios replayed offline through the real CLI, gates and Maven | 7 runs | `scripts/replay-scenarios.sh` |
 
 ## Principles
 
@@ -20,7 +20,7 @@ Three layers, plus checks on the tests themselves.
 - **Real where it matters.** Real Maven builds as gates, real sockets for network bindings, a real V1
   database upgraded in place, a real application restart.
 
-## Orchestrator (204 tests)
+## Orchestrator (212 tests)
 
 | File | Covers |
 |---|---|
@@ -34,22 +34,23 @@ Three layers, plus checks on the tests themselves.
 | `test_llm_agents.py` (15) | agents through the real engine: feedback loop, read scope, oversized context, telemetry, impact plan reaching coder and planner, approved design reaching every downstream agent, opt-in downstream write scopes, regression tests reaching only the bug-fix coder, opt-in gate results for release |
 | `test_hybrid.py` (7) | session backend, routing, file approvals, cost safe-stop, hybrid run with a real build |
 | `test_clarification.py` (10) | pause and readable answers file, incomplete answers refused, non-human never answers, bounded rounds, seeding recorded decisions |
-| `test_resilience.py` (22) | rollback, conflict-safe revert, fallback, stop and time budget, resume, tamper refusal, git ownership, content-bound approvals, change requests, extra round per revision, workflow hash |
+| `test_resilience.py` (23) | rollback, conflict-safe revert, fallback, stop and time budget, resume, tamper refusal, git ownership, content-bound approvals, change requests, extra round per revision, workflow hash |
 | `test_replan.py` (11) | lineage reuse vs re-run, branch precision, approvals on reuse vs new content, requirement change detection, re-planning a failed stage is recorded with its reason |
 | `test_selection.py` (9) | catalog and codebase eligibility, rule proposal without a model call, schema limited to eligible names, rejection with a comment followed, rejection without one starts nothing, selection in `RUN_STARTED` and the report, the recorded eval replayed (9 of 9), `orch run auto` end to end |
 | `test_bugfix.py` (6) | real Maven: a new failing test reproduces; a passing one does not; a failing existing test is not a reproduction; a test that does not compile is not one even with stale failing reports; the fix cannot write tests |
 | `test_lifecycle.py` (10) | OpenAPI validation, two-way conformance against real Spring mappings (class prefixes, regex path variables, the error controller), docs coverage, release checklist, an entry gate blocking implementation without a valid design, the 8-stage lifecycle end to end with real Maven |
-| `test_metrics.py` (10) | every metric against runs with known faults; human-wait overlap; resume de-duplication; tampered-log refusal |
-| `test_envfile.py` (4) · `test_skeleton_e2e.py` (5) | credentials never printed; skeleton through real gates; Maven gate fails a failing test and enforces the test-count floor |
+| `test_release_gates.py` (5) | coverage thresholds and per-changed-file rule with excludes; the packaged service passes the workflows' smoke steps; a failing step fails with evidence and the server is always stopped |
+| `test_metrics.py` (11) | every metric against runs with known faults; recovery ends when gates pass, not at sign-off; human-wait overlap; resume de-duplication; tampered-log refusal |
+| `test_envfile.py` (4) · `test_skeleton_e2e.py` (6) | credentials never printed; skeleton through real gates; Maven gate fails a failing test and enforces the test-count floor |
 
-## Generated service (150 tests)
+## Generated service (158 tests)
 
 | Area | Classes |
 |---|---|
 | Create, aliases, validation | `LinkCreationTest`, `DestinationPolicyTest` (25 prohibited/allowed destinations incl. IPv6, DNS fail-closed; internationalized and underscore hosts, checked in ASCII form), `LinkServiceTest` |
 | Redirect, expiry, metadata, deletion | `LinkLifecycleTest` (UTC expiry boundaries on a controlled clock, tombstones, token hashing) |
 | Expiry changes | `LinkExpiryUpdateTest` (set, remove, missing vs `null`, malformed, token, never revive, non-future, deleted, far future, the OpenAPI contract); PATCH in `ManagementTokenRateLimitTest`; expiry change vs click recording and vs deletion in `ClickDeletionRaceTest` |
-| Analytics | `LinkStatsTest` (30-day UTC window, privacy probe), `ClickDeletionRaceTest`, `ClickFailureIsolationTest` |
+| Analytics | `LinkStatsTest` (30-day UTC window, privacy probe), `ClickDeletionRaceTest` (each race proven from H2's lock view, plus 3 guard tests), `ClickFailureIsolationTest` |
 | Hardening | `ErrorContractAndHeadersTest`, `ManagementTokenRateLimitTest`, `BodyLimitTest`, `RateLimitTest` |
 | Reliability and operations | `RedirectOutageAndMetricsTest`, `ManagementServerTest` (real sockets; unreachable from a non-loopback address), `HealthTest`, `RedirectLatencyTest` (p99 ~2.5 ms against < 50 ms) |
 | Persistence | `PersistenceRestartTest`, `ClickPersistenceAndUpgradeTest` (a real V1 database upgraded in place) |
@@ -77,6 +78,9 @@ the plan the test planner produced (`runs/samples/<run>/artifacts/test_plan.v1.j
 | Orchestrator: entry gates ignored | the entry-gate tests fail |
 | Orchestrator: old Surefire reports not cleared before a reproduction | the stale-report test fails |
 | Orchestrator: codebase eligibility ignored; reviewer's comment dropped | 5 and 1 selection tests fail |
+| Orchestrator: coverage per-file check skipped; smoke server left running; stale reports counted; old MTTR rule | a test fails for each |
+| Service: Tomcat valve not installed | the 4 regression tests fail |
+| Service race harness: release without proof; any blocked session accepted; unproven interleaving committed | 3, 1 and 2 tests fail |
 | Orchestrator: re-plans of failed stages not recorded (the bug found in the lifecycle run) | the new re-plan test fails |
 
 ## End-to-end evidence

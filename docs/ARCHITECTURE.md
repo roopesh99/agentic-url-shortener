@@ -4,8 +4,8 @@ Two systems live in this repository:
 
 | System | What it is | Where |
 |---|---|---|
-| **Orchestrator** | A governed, agentic SDLC engine (Python, ~5.1k lines): it turns a requirement into reviewed, tested code through a dependency graph of stages, with gates, policy, human checkpoints, rollback, resume, re-planning and an audit trail. | `orchestrator/` |
-| **URL shortener** | The service the orchestrator built and then changed four times (Java 17, Spring Boot 3.4, ~1.7k lines + ~2.5k lines of tests), with its OpenAPI definition and docs. | `url-shortener/` |
+| **Orchestrator** | A governed, agentic SDLC engine (Python, ~5.4k lines): it turns a requirement into reviewed, tested code through a dependency graph of stages, with gates, policy, human checkpoints, rollback, resume, re-planning and an audit trail. | `orchestrator/` |
+| **URL shortener** | The service the orchestrator built and then changed six times (Java 17, Spring Boot 3.4, ~1.8k lines + ~2.7k lines of tests), with its OpenAPI definition and docs. | `url-shortener/` |
 
 The principle throughout: **agents propose, the orchestrator verifies, humans decide.** No agent writes a
 file, judges its own output, or approves anything.
@@ -32,7 +32,7 @@ flowchart LR
         CAS["Cassettes<br/>record / replay"]
     end
     subgraph Governance
-        GATES["Gates<br/>mvn compile/test, ambiguity, test-count floor,<br/>OpenAPI valid, API conformance,<br/>docs coverage, release checklist,<br/>regression reproduces"]
+        GATES["Gates<br/>mvn compile/test, ambiguity, test-count floor,<br/>OpenAPI valid, API conformance,<br/>docs coverage, release checklist,<br/>regression reproduces, coverage,<br/>real-server smoke"]
         POL["Policy engine<br/>policies/default.yaml"]
         APP["Human checkpoints<br/>approvals · clarifications<br/>change requests"]
     end
@@ -62,7 +62,7 @@ flowchart LR
 | Event store | Append-only, hash-chained log: the single source of truth. State, metrics and resume are rebuilt from it; any edit, deletion or reordering is detected. | `engine/events.py` |
 | Agents | One structured-output LLM call per attempt; output validated against a Pydantic model; files proposed through a scoped context. Deterministic stubs implement the same contract. | `agents/` |
 | LLM backends | A provider-neutral contract (`LLMClient`), a registry (Anthropic, OpenAI, session), per-agent routing from config, and cassettes for offline replay. | `llm/` |
-| Gates | Checks the orchestrator runs itself (never the agent's word): Maven compile/test with a test-count floor, ambiguity resolution, structural output checks, OpenAPI validity, two-way API conformance (documented = implemented), documentation coverage of the API, release checklist, and for bug fixes that new tests fail on the current code while every other test passes. | `gates/builtin.py`, `gates/api.py`, `gates/regression.py` |
+| Gates | Checks the orchestrator runs itself (never the agent's word): Maven compile/test with a test-count floor, ambiguity resolution, structural output checks, OpenAPI validity, two-way API conformance (documented = implemented), documentation coverage of the API, release checklist, for bug fixes that new tests fail on the current code while every other test passes, JaCoCo coverage overall and per changed file, and a smoke test that builds, starts and calls the packaged service. | `gates/builtin.py`, `gates/api.py`, `gates/regression.py`, `gates/coverage.py`, `gates/smoke.py` |
 | Policy engine | Rules over every proposed change set (secrets, dangerous code, PII in logs, dependency allowlist, high-impact paths, diff size), each mapped to a risk tier and an action. Policy-as-code; its hash is recorded on every run. | `policy/`, `policies/default.yaml` |
 | Human checkpoints | Approvals (workflow-declared or policy-required), clarification rounds for open questions, change requests from commented rejections. Persisted and bound to content hashes. | `approvals/service.py` |
 | Workspace | Change sets (the only path agent output reaches disk), file-level revert, workspace escape and symlink protection, git checkpoint per accepted stage. | `workspace/` |
@@ -121,7 +121,7 @@ flowchart LR
 | `design` | `url-shortener/openapi.yaml`, `docs/design.md` | a human approves the contract before code is written; the validator rejects a malformed one |
 | `implement` | code | entry: build only against a valid approved contract; exit: the code implements exactly what is documented, both ways |
 | `docs` | `README.md`, `docs/api.md` | every documented path appears in the documentation |
-| `release` | `CHANGELOG.md`, `docs/releases/<version>.md` | entry: release only from a build that is green *now*; exit: a failing checklist item blocks the release; a person signs off |
+| `release` | `CHANGELOG.md`, `docs/releases/<version>.md` | entry: release only from a build that is green *now*, and only if the packaged jar starts and answers 16 HTTP checks; exit: a failing checklist item blocks the release; a person signs off |
 
 ### Stage lifecycle
 
@@ -282,7 +282,8 @@ Cross-cutting: destination policy (http/https, ≤2048 chars, no loopback/privat
 multicast targets, DNS fail-closed; internationalized hosts are checked, and redirected to, in their
 UTS #46 ASCII form), per-IP create limit (20/min, Bucket4j), failed-token limit (10 per
 rolling minute, shared by stats, delete and expiry changes), 16 KiB API body limit, security headers on
-every response, one JSON error schema. The API is defined in `url-shortener/openapi.yaml` and documented
+every response, one JSON error schema, including errors Tomcat produces before the application (a
+replaced error-report valve). The API is defined in `url-shortener/openapi.yaml` and documented
 in `url-shortener/README.md` and `url-shortener/docs/api.md`.
 
 ## 8b. Choosing the workflow (`orch run auto`)

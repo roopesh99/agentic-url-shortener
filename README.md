@@ -2,8 +2,9 @@
 
 A governed agentic SDLC orchestrator (Python) that turns a requirement into a
 reviewed, tested service, and the URL shortener (Java 17 / Spring Boot) it built
-and then changed four times: greenfield, brownfield, from a deliberately vague request, through the
-full lifecycle (API design, documentation, release readiness), and a bug fix reproduced before it was fixed.
+and then changed six times: greenfield, brownfield, from a deliberately vague request, through the
+full lifecycle (API design, documentation, release readiness), two bug fixes reproduced before they were
+fixed, and a test-quality improvement, the last two with the workflow chosen by `orch run auto`.
 
 **Agents propose, the orchestrator verifies, humans decide.** Explicit stage DAGs with
 gates, parallel paths and joins; a policy engine; approvals, clarifications and change
@@ -19,7 +20,7 @@ re-planning; a hash-chained audit log; reliability metrics computed from it.
 | [docs/SETUP.md](docs/SETUP.md) · [docs/TESTING.md](docs/TESTING.md) | running everything; testing approach |
 | [runs/samples/REPORT.md](runs/samples/REPORT.md) | metrics across the recorded runs |
 
-Reproduce all five scenarios offline (no API key, $0), checking the generated code
+Reproduce all seven scenarios offline (no API key, $0), checking the generated code
 against the committed result:
 
 ```bash
@@ -113,7 +114,7 @@ verification), so every number can be recomputed from the audit trail:
 | Run / stage success rate | final status per run; executed stages that succeeded (skipped stages never ran) |
 | Retries | split by cause: failure (agent error, gate, policy) vs clarification, change request, fallback |
 | Rollbacks | reverted change sets, and stages ending `ROLLED_BACK` |
-| Incidents, MTTR | opens at a stage's first failure (incl. a fallback), closes at its next success; mean time open, including time stopped before a person fixed it |
+| Incidents, MTTR | opens at a stage's first failure (incl. a fallback), closes when its work next passes its gates (a later wait for a sign-off is human wait); mean time open, including time stopped before a person fixed it |
 | Latency | end to end, split into active, waiting for humans (parallel waits counted once), stopped between processes; per-stage agent and gate time |
 | Human decisions | approvals, rejections, change requests, clarification answers; decisions replayed by a resume counted once |
 
@@ -164,7 +165,7 @@ Every evaluation (`POLICY_EVALUATED`) and the policy file's sha256 are in the au
 |---|---|
 | `orchestrator/engine/` | contracts (`models.py`), state machine, hash-chained event store, DAG loader, scheduler |
 | `orchestrator/agents/` | agent contract + scoped workspace (write allowlist = autonomy boundary), stub agents |
-| `orchestrator/gates/` | gate contract + built-ins (`maven_test`, `ambiguities_resolved`, `openapi_valid`, `openapi_conformance`, `docs_cover_api`, `release_checklist_passed`, `regression_reproduces`, …) |
+| `orchestrator/gates/` | gate contract + built-ins (`maven_test`, `ambiguities_resolved`, `openapi_valid`, `openapi_conformance`, `docs_cover_api`, `release_checklist_passed`, `regression_reproduces`, `coverage`, `service_smoke`, …) |
 | `orchestrator/approvals/` | human approval checkpoints (CLI, auto) |
 | `orchestrator/llm/` | provider-neutral contract, provider registry + config, providers, session backend, cassettes, strict-schema generation |
 | `config/` | LLM backend configurations (which provider serves which agent) |

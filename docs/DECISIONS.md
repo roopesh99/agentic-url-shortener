@@ -84,6 +84,11 @@ Short records of the decisions that shaped the system: the context, the choice, 
 **Decision.** Eligibility is a rule over facts (does the codebase exist), not a model judgement. Among the eligible workflows a selector agent proposes one, through a schema whose enum holds only their names, with confidence, rationale, the signals it relied on and a runner-up. A person confirms; a commented rejection is a bounded change request. The selection is recorded in `RUN_STARTED`.
 **Consequences.** The model cannot pick an ineligible or invented workflow, and low confidence is visible to the person confirming. Workflows are chosen, not composed: a requirement that needs a new shape of process still needs a new workflow file. The eval (9 cases, 9 correct) is small and written by the same author as the `use_when` texts, so it guards against regressions rather than proving accuracy.
 
+### D20. Coverage and a real-server smoke test as release gates, without touching the service's build
+**Context.** Gates checked that tests pass, not how much they exercise, and every test ran in-process.
+**Decision.** A coverage gate runs JaCoCo by its plugin coordinates (85% of lines overall, 80% in each production file the change touched, explicit excludes); a smoke gate builds the jar, starts it on free ports with a temporary data directory, runs declarative HTTP steps from the workflow, and always stops it.
+**Consequences.** Weakly tested changes and a packaged service that does not start or answer correctly block a release. The smoke gate found a real defect on its first use (HTML errors from Tomcat). The smoke steps are specific to this service and live in the workflow files; a second service would bring its own.
+
 ## URL shortener
 
 | # | Decision | Why |

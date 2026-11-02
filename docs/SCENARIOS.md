@@ -2,7 +2,8 @@
 
 The three the assignment asks for (greenfield, brownfield, ambiguous), plus a fourth that runs the
 full lifecycle: requirements, impact, **design, implementation, testing, documentation and release
-readiness**, and a fifth that fixes a real bug, **reproducing it with a failing test before any fix**. Each scenario ran live through the orchestrator (analyst, impact analyst and test planner on OpenAI
+readiness**, a fifth that fixes a real bug, **reproducing it with a failing test before any fix**, and two runs
+whose workflow was **chosen by `orch run auto`** (§6, §7). Each scenario ran live through the orchestrator (analyst, impact analyst and test planner on OpenAI
 `gpt-6-luna`; coder and tester served by a Claude Code session; every human decision by the product
 owner). Each one replays offline and reproduces its committed code exactly
 (`scripts/replay-scenarios.sh`). Full reports: `runs/samples/<run>/report.md`.
@@ -202,11 +203,62 @@ on the converted host). Checking the host as written, or redirecting to the URL 
 right (its first attempt chose 1.1.1); "documentation updated: pass" on weak grounds (the docs never
 described host rules, so none went stale).
 
+## 6. Auto-selected bug fix: some errors were HTML, not JSON
+
+**Found by a gate, routed by the selector.** The new release smoke gate starts the packaged jar and
+calls it over HTTP; its first probe found that a malformed percent-escape (`GET /api/links/%ZZ`) got
+Tomcat's HTML error page instead of the JSON error schema: the server rejects such a request before
+the application sees it, so no in-process test could. `scenarios/bugfix-html-error.md` reports it.
+
+**Orchestration, as it happened** (`live-bugfix-2`).
+1. `orch run auto`: rules excluded `skeleton` (the codebase exists); the selector proposed **bugfix**
+   (high confidence, runner-up brownfield); the owner confirmed. The selection is in `RUN_STARTED`.
+2. The analyst's spec (3 functional requirements, none non-functional) **failed the bug-fix workflow's
+   first gate**, which required non-functional requirements: a rule copied from the lifecycle. The rule
+   was corrected (`a9a858e`) and the run re-planned from requirements, the reason recorded.
+3. Impact: the right mechanism (Tomcat's error-report valve), limited to `/api/**` by inspecting the
+   path, which it named as its own top risk. The owner's **change request** removed the path check:
+   every route is documented API, so `/%ZZ` must be JSON too. Revision approved.
+4. Reproduce (OpenAI): the model worked out that the bug needs **raw HTTP to a real socket** (clients
+   refuse to send `%ZZ`); policy paused on the edit to `ManagementServerTest`; 4 new tests failed with
+   `text/html` where JSON was expected, every other test passed.
+5. Fix: the host's error-report valve replaced with one writing `ErrorBodies` JSON, status and headers
+   kept (405 still has `Allow`). The **coverage** gate (91.7%; the valve 83.3%) and, at release, the
+   **real-server smoke** gate passed in a live run for the first time. Release 1.2.1 passed its
+   checklist first time (it now sees gate results) and was signed off.
+
+**Found and fixed after it:** MTTR counted the wait for an approval as repair time (8.7 h reported,
+37 s real); `orch run auto` on a repository refused to start because its own recording made the tree
+dirty; the smoke steps now include the malformed escapes. Replay reproduces the failure and re-plan too.
+
+## 7. Auto-selected test improvement: race tests that prove their race
+
+**The weakness.** `ClickDeletionRaceTest` held a lock and slept 300 ms, trusting that the second
+operation started meanwhile; on a slow machine it could pass without exercising the race.
+`scenarios/harden-race-tests.md` asks that every race prove its interleaving, test code only.
+
+**Orchestration, as it happened** (`live-brownfield-2`).
+1. `orch run auto`: the selector proposed **brownfield** (runner-up bugfix, since a test that cannot fail
+   is arguably a test defect); confirmed. It started despite its recording being untracked (the fix).
+2. The analyst made it strict: "observing that it has not completed is not sufficient proof"; failures
+   must fail within a bound, never hang or pass. The impact analyst chose H2's own lock view
+   (`INFORMATION_SCHEMA.SESSIONS.BLOCKER_ID`) and rollback of any unproven interleaving.
+3. Implement proposed **no change** (test-only), and the compile gate confirmed production unchanged.
+4. Tester (Claude Code session): a probe showed H2 reports the blocked statement **with its bound
+   parameter**, so each race now proves the second operation is BLOCKED by the first one's session on
+   **that link's row**. The first attempt's diagnostic exposed a matcher bug (H2 prints `BIGINT` ids as
+   `CAST(n AS BIGINT)`), fixed before submitting. 3 guard tests show the proof can fail. All 6 methods
+   and all 11 outcome assertions kept (checked mechanically); 6 fixed sleeps removed.
+
+**Validation.** 9/9 race tests pass on three consecutive runs; mutation checks: releasing without
+proof fails 3 tests, accepting any blocked session fails 1, committing an unproven interleaving fails
+2. 158 tests in all.
+
 ---
 
 ## Supporting runs
 
 | Run | Purpose |
 |---|---|
-| `live-greenfield-1` | the first greenfield attempt, failed at the ambiguity gate before clarification existed; kept so the success rate is honest (6 of 7 runs) |
+| `live-greenfield-1` | the first greenfield attempt, failed at the ambiguity gate before clarification existed; kept so the success rate is honest (8 of 9 runs) |
 | `demo-fault-injection` | stub agents with two injected faults: a compile failure (rolled back and retried) and a refusal (fallback agent), so retries, rollback and MTTR appear in a real run |

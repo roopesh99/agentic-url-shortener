@@ -19,7 +19,9 @@
 | Code drifts from the approved API definition | Conformance gate fails the implementation (documented but not built, or built but not documented) | `test_lifecycle.py`, `live-lifecycle-1` |
 | A "fix" without proof of the bug | The reproduce stage must produce a test that fails on the current code, with every other test passing, before the fix stage may start; the fix cannot change tests | `test_bugfix.py`, `live-bugfix-1` |
 | A requirement routed to the wrong workflow | Rules decide eligibility; the selector can only name eligible workflows; a person confirms every choice and can redirect it with a comment | `test_selection.py`, `orch eval-selector` (9 of 9) |
-| Release prepared from a stale or broken build | Release entry gate re-runs the full suite; a failing checklist item blocks the release | `live-lifecycle-1` (blocked once, rolled back) |
+| Release prepared from a stale or broken build | Release entry gate re-runs the full suite and smoke-tests the packaged jar; a failing checklist item blocks the release | `live-lifecycle-1` (blocked once, rolled back), `live-bugfix-2` |
+| A change merged with weak tests | Coverage gate: 85% overall, 80% per changed production file | `test_release_gates.py` |
+| Tests deleted, but their old reports still count | Test gates clear old reports first | `test_skeleton_e2e.py` |
 
 ## Trade-offs
 
@@ -57,6 +59,7 @@
 - DNS re-pointing after creation is not re-checked (the service never fetches destinations).
 - No authentication beyond management tokens; link-code probing is not rate-limited (accepted; observable via the 404 metric).
 - The latency check is in-process (MockMvc), not a load test; a database outage is tested by injection.
+- Race tests rely on H2's session view (`INFORMATION_SCHEMA.SESSIONS`); a different database would need its own lock-wait observation.
 - Lost clicks are possible when recording fails (owner decision: redirect reliability first).
 
 ## Lessons from building it (things that went wrong and were fixed)
@@ -70,4 +73,8 @@
 - **The model drifted from an explicit instruction.** In the lifecycle run, asked to "keep the technical plan unchanged" and only move files, the impact analyst dropped two tests; a second change request restored them. Human review of plan revisions is not optional.
 - **A prompt bug blocked a release.** The release prompt let the agent list its own review and the pending sign-off as failing items. The checklist gate did its job; the fix was the prompt.
 - **An agent judged from claims, not evidence.** The bug-fix release agent failed a check the orchestrator had already verified, because it saw agents' summaries and not gate results. It now gets the gate results from the audit log.
+- **Metrics can mislead while looking precise.** MTTR counted the wait for an approval as repair time (8.7 h for a 37 s fix); an incident now closes when the work passes its gates.
+- **A guard can be fooled by leftovers.** The oldest gate counted stale test reports, so deleting a test class would still have met the test-count floor.
+- **Tests can pass without testing.** The race tests slept and hoped; they now prove each wait from the database, and three guard tests prove the proof can fail.
+- **An intermittent replay stop was seen once** (the auto scenario's re-plan step, 1 of 4 runs); not reproduced since. The script now prints the failing gate if it recurs.
 - **A record is off by one.** The brownfield evidence commit message (`0f4090f`) says five approvals; the metrics show four (spec, impact plan, V2 migration, edits to two existing tests).

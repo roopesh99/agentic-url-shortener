@@ -2,19 +2,20 @@
 
 ## What was built
 
-1. **A governed agentic SDLC orchestrator** (`orchestrator/`, Python, ~5.1k lines, 204 tests). It takes
+1. **A governed agentic SDLC orchestrator** (`orchestrator/`, Python, ~5.4k lines, 212 tests). It takes
    a requirement through an explicit dependency graph of stages covering the full lifecycle
    (requirements, impact analysis, API design, implementation, test planning, testing, documentation,
    release readiness) and a reproduce-then-fix path for bugs, with entry/exit gates, parallel paths and joins, a policy engine, human
    approvals, clarifications and change requests, bounded retries, rollback, fallback, safe-stop,
    resume, lineage-based re-planning, a hash-chained audit log and reliability metrics.
-2. **A URL shortener** (`url-shortener/`, Java 17 / Spring Boot 3.4, 150 tests), produced by the
-   orchestrator in five runs: built from a requirement, extended with click analytics, hardened from a
+2. **A URL shortener** (`url-shortener/`, Java 17 / Spring Boot 3.4, 158 tests), produced by the
+   orchestrator in seven runs: built from a requirement, extended with click analytics, hardened from a
    deliberately vague request, given owner-editable expiry through the full lifecycle (which also
-   produced its OpenAPI definition, README, API reference, changelog and release records), and fixed
-   for a real bug, reproduced by a failing test before the fix.
+   produced its OpenAPI definition, README, API reference, changelog and release records), fixed for
+   two real bugs, each reproduced by a failing test before the fix, and given race tests that prove
+   their race. The last two runs' workflows were chosen by `orch run auto`.
 
-Everything is reproducible offline: `scripts/replay-scenarios.sh` replays all five scenarios from their
+Everything is reproducible offline: `scripts/replay-scenarios.sh` replays all seven scenarios from their
 recorded LLM exchanges and human decisions and checks that the generated code matches the committed
 code exactly (it does).
 
@@ -34,6 +35,7 @@ The work followed a walking skeleton, then layers, each committed separately (`g
 | 5 | lineage-based re-planning | the last orchestration capability |
 | 6 | metrics and reports from the log | measure what was built |
 | 7 | documentation, offline replay of the scenarios | deliverables |
+| Release gates | JaCoCo coverage (overall and per changed file), a real-server smoke test of the packaged jar; then two `orch run auto` runs, and fixes they exposed | the original plan's coverage gate had never been built; tests ran only in-process |
 | Selection | `orch run auto`: rule-based eligibility, selector agent, human confirmation; `orch eval-selector` | the audit found the workflow was always named by a person |
 | Bug fix | reproduce-then-fix workflow, `regression_reproduces` gate, reproducer agent; release sees gate results | the audit found bug fixes in scope but undemonstrated |
 | Lifecycle | design, documentation and release stages; OpenAPI, conformance, docs-coverage and checklist gates; entry gates in use; fixes the run exposed | an audit against the assignment found the lifecycle stages missing |
@@ -46,22 +48,22 @@ The work followed a walking skeleton, then layers, each committed separately (`g
 | 2. Task decomposition | `orch run auto` proposes the workflow (stage graph) from the requirement and the codebase, a person confirms; declarative stage DAGs with dependencies, scopes, gates (`workflows/`); work broken down further inside stages (impact plan: files, risks, tests; test plan: cases traced to requirements) | 4-, 5-, 5- and 8-stage workflows, two fork/join points in the lifecycle; selection eval 9 of 9 |
 | 3. Codebase reasoning (brownfield) | impact-analyst stage reading the code; plan approved before changes; bug fixes reproduced before they are fixed | impacted files, API/data changes, races and risks named before coding; a real bug's root cause found from a user report |
 | 4. Workflow orchestration | engine with explicit DAG, entry/exit gates, parallel paths, context and lineage, approvals, retries, fallback, rollback, safe-stop, policy, audit, metrics, re-planning; the lifecycle workflow covers requirements → design → implementation → testing → documentation → release readiness | [ARCHITECTURE.md](ARCHITECTURE.md); `test_scheduler`, `test_resilience`, `test_replan`, `test_lifecycle`; `live-lifecycle-1` |
-| 5. Engineering output | layered service; Flyway migrations; an OpenAPI 3.0.3 definition of every endpoint, checked against the code both ways; README and API reference; changelog; 150 tests | `url-shortener/`, `url-shortener/openapi.yaml`, `url-shortener/docs/` |
-| 6. Validation and risk control | gates the orchestrator runs, policy tiers, test-count floor, protected tests, a failing regression test required before a fix, mutation checks | [TESTING.md](TESTING.md), [RISKS.md](RISKS.md) |
-| 7. Controlled autonomy | read/write scopes, propose-only agents, bounded rounds/retries/revisions, budgets, human checkpoints | every live run: 22 approval decisions, 31 answers, all recorded under the person's identity |
+| 5. Engineering output | layered service; Flyway migrations; an OpenAPI 3.0.3 definition of every endpoint, checked against the code both ways; README and API reference; changelog; 158 tests | `url-shortener/`, `url-shortener/openapi.yaml`, `url-shortener/docs/` |
+| 6. Validation and risk control | gates the orchestrator runs, policy tiers, test-count floor, protected tests, a failing regression test required before a fix, coverage of changed files, a smoke test of the packaged service, mutation checks | [TESTING.md](TESTING.md), [RISKS.md](RISKS.md) |
+| 7. Controlled autonomy | read/write scopes, propose-only agents, bounded rounds/retries/revisions, budgets, human checkpoints | every live run: 30 approval decisions, 31 answers, all recorded under the person's identity |
 | 8. Final summary | this document | |
 
 ## Results (from `orch report --all`, `runs/samples/REPORT.md`)
 
 | Metric | Value |
 |---|---|
-| Runs succeeded | 6 of 7 (86%) — the failure is the first greenfield attempt, before clarification existed |
-| Stage success rate (executed stages) | 84% |
+| Runs succeeded | 8 of 9 (89%) — the failure is the first greenfield attempt, before clarification existed |
+| Stage success rate (executed stages) | 85% |
 | Failure retries / rollbacks | 1 / 3 (the fault-injection demo; the lifecycle and bug-fix runs' release stages, each blocked once by its checklist gate and rolled back) |
-| Incidents (unrecovered) / MTTR | 6 (1) / 13.2 min |
-| Human decisions | 22 approval decisions (3 rejected, all with a change request), 31 answers in 11 rounds |
-| Active work vs waiting for humans | 1.3 h vs 39.3 h |
-| Live LLM calls / output tokens | 34 / 282,263 (cost not computed: no pricing configured for the OpenAI model) |
+| Incidents (unrecovered) / MTTR | 9 (1) / 5.2 min (an incident closes when the work next passes its gates) |
+| Human decisions | 30 approval decisions (4 rejected, all with a comment), 31 answers in 11 rounds |
+| Active work vs waiting for humans | 1.6 h vs 48.8 h |
+| Live LLM calls / output tokens | 42 / 324,336 (cost not computed: no pricing configured for the OpenAI model) |
 
 Per scenario: [SCENARIOS.md](SCENARIOS.md).
 
@@ -107,6 +109,11 @@ Per scenario: [SCENARIOS.md](SCENARIOS.md).
   readiness from agents' summaries, not the orchestrator's gate results, and its checklist assumed
   the full lifecycle. Two of its judgements were accepted at sign-off though weak: version 1.2.0
   (1.1.1 is arguably right) and "documentation updated" (no docs needed changing, but it did not know).
+- **The last two runs exposed five more gaps, all fixed:** a bug-fix spec rule copied from the lifecycle;
+  MTTR counting approval waits as repair time; `orch run auto` blocked by its own recording; the Maven
+  gate counting stale test reports (a deleted test class still met the floor); a compile step reporting
+  test counts it never ran. The coverage gate's first run also flagged its own false positive (a
+  bootstrap `main` class), now an explicit exclude.
 - **Mistakes caught along the way** are listed in [RISKS.md](RISKS.md#lessons-from-building-it-things-that-went-wrong-and-were-fixed),
   including a commit message that says five approvals where the metrics show four.
 - Further limitations: [RISKS.md](RISKS.md#known-limitations).
