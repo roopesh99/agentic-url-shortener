@@ -91,6 +91,11 @@ Per scenario: [SCENARIOS.md](SCENARIOS.md).
 
 ## Limitations and honest notes
 
+- **Scope not run live: a refactor.** The assignment's brownfield scope lists enhancements, refactors and
+  bug fixes. Enhancements (3 runs) and bug fixes (2 runs) ran live; a behaviour-preserving refactor was
+  only shown in workflow selection (`scenarios/selection/refactor-link-service.md`, routed to brownfield
+  in the eval). The brownfield workflow would govern it with the full existing suite as its guard, but
+  no refactor run is recorded.
 - **Who produced what.** The analyst, impact analyst and test planner ran on OpenAI (`gpt-6-luna`); the
   coder and tester stages were served by a Claude Code session through the same prompts, context,
   schemas, policy and gates, recorded as `claude-code-session`. That assistant verified its code before

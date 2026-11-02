@@ -38,6 +38,7 @@
 ## Known limitations
 
 **Orchestrator**
+- A refactor (in the assignment's brownfield scope) was not run live; it is shown only in workflow selection.
 - Single process and node; the event log is a local file; no external anchor for the hash chain.
 - `orch stop` does not interrupt a model call or Maven build already in progress.
 - Re-planning happens between processes, not while stages are in flight; a re-run does not delete files that only the previous version created.

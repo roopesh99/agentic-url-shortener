@@ -10,6 +10,10 @@ Two systems live in this repository:
 The principle throughout: **agents propose, the orchestrator verifies, humans decide.** No agent writes a
 file, judges its own output, or approves anything.
 
+Contents: components (§1) · orchestration model, stage lifecycle and **control flow** (§2) · context and
+lineage (§3) · governance (§4) · reliability (§5) · data model (§6) · agents and LLM backends (§7) · the URL
+shortener (§8) · workflow selection (§8b) · **key decisions** (§9) · extension points (§10).
+
 ---
 
 ## 1. Components
@@ -151,7 +155,7 @@ stateDiagram-v2
     STALE --> READY: inputs changed
 ```
 
-### One attempt, in order
+### Control flow: one attempt, in order
 
 ```mermaid
 sequenceDiagram
@@ -308,7 +312,35 @@ every decision are recorded in the hash-chained `RUN_STARTED` event and shown in
 `orch eval-selector` checks the selector against requirements with known answers
 (`scenarios/selection/eval.yaml`).
 
-## 9. Extension points
+## 9. Key decisions
+
+Each is recorded with its context, choice and consequences in [DECISIONS.md](DECISIONS.md); the service's
+own design decisions are S1–S9 there.
+
+| # | Decision | Why it matters |
+|---|---|---|
+| D1 | A small custom engine, not LangGraph/Airflow/Temporal | governance must be visible and owned; single-node |
+| D2 | The event log is the source of truth, hash-chained | resume, replay, metrics and audit from one mechanism |
+| D3 | Agents propose; only the orchestrator writes | rejected changes never touch disk; exact rollback |
+| D4 | Agents never judge their own output | gates run by the orchestrator; approvals after gates |
+| D5 | One structured call per agent turn | every turn governed and replayable; agents do not explore |
+| D6 | Providers are configuration | switched Claude to OpenAI without touching agents |
+| D7 | Record/replay keyed by the full request | offline, deterministic, free reproduction |
+| D8 | Human decisions bound to content hashes | a decision never applies to different content |
+| D9 | Ambiguity stops the pipeline; humans answer, bounded | no invented scope; runs always terminate |
+| D10 | A commented rejection is a change request | review can steer, not only veto |
+| D11 | Policy as code with risk tiers | low risk flows, high risk waits for a person |
+| D12 | Least privilege both ways (read and write scopes) | secrets and unrelated code never reach a prompt |
+| D13 | File-level rollback, git checkpoints, isolated workspace | a person's branch is never modified |
+| D14 | Re-planning by lineage | a change propagates only as far as it reaches |
+| D15 | Hybrid backends, labelled honestly | cost; the audit says who produced what |
+| D16 | Metrics only from the log | every number recomputable by a reviewer |
+| D17 | API definition gated, approved and checked against the code | design-to-code traceability enforced |
+| D18 | Bugs reproduced before they are fixed, enforced | every fix has a test known to have failed |
+| D19 | A model proposes the workflow; rules bound it, a person confirms | wrong workflow = wrong risks governed |
+| D20 | Coverage and real-server smoke tests as release gates | the packaged service must start and answer |
+
+## 10. Extension points
 
 | To add | Do |
 |---|---|
