@@ -38,6 +38,34 @@ class LinkLifecycleTest extends IntegrationTest {
     }
 
     @Test
+    void TC_FR3_01_mullerIdnRedirectUsesPunycodeHost() throws Exception {
+        assertRedirect("https://müller.de/angebote", "https://xn--mller-kva.de/angebote");
+    }
+
+    @Test
+    void TC_FR3_01_japaneseIdnRedirectUsesPunycodeHost() throws Exception {
+        assertRedirect("https://例え.jp/", "https://xn--r8jz45g.jp/");
+    }
+
+    @Test
+    void TC_FR3_01_underscoreHostRedirectsToTheSameHost() throws Exception {
+        assertRedirect("https://my_site.example.com/page", "https://my_site.example.com/page");
+    }
+
+    @Test
+    void TC_FR3_01_unicodeAndPunycodeFormsRedirectToTheSameAsciiHost() throws Exception {
+        assertRedirect("https://müller.de/angebote", "https://xn--mller-kva.de/angebote");
+        assertRedirect("https://xn--mller-kva.de/angebote", "https://xn--mller-kva.de/angebote");
+    }
+
+    @Test
+    void TC_FR4_01_redirectEncodesOnlyNonAsciiPathAndQueryCharacters() throws Exception {
+        String submitted = "https://MiXeD.example.com:8443/straße?q=雪&lang=日#Section";
+        String location = "https://MiXeD.example.com:8443/stra%C3%9Fe?q=%E9%9B%AA&lang=%E6%97%A5#Section";
+        assertRedirect(submitted, location);
+    }
+
+    @Test
     void TC_FR3_02_expiredLinkReturns410WithoutLocation() throws Exception {
         String code = create("https://example.com/tc-fr3-02", null, "2030-01-01T00:00:10Z").get("code").asText();
         clock.advance(Duration.ofSeconds(11));
@@ -177,6 +205,14 @@ class LinkLifecycleTest extends IntegrationTest {
                 .stream().map(Object::toString).toList());
         assertThat(metadata).doesNotContain(token).doesNotContain(stored.getTokenHash());
         assertThat(redirectHeaders).doesNotContain(token);
+    }
+
+    private void assertRedirect(String url, String expectedLocation) throws Exception {
+        String code = create(url).get("code").asText();
+        mvc.perform(get("/" + code))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", expectedLocation))
+                .andExpect(header().string("Cache-Control", containsString("no-store")));
     }
 
     private org.springframework.test.web.servlet.ResultActions deleteWith(String code, String token) throws Exception {

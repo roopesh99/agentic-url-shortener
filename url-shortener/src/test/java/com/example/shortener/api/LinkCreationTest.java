@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,6 +40,36 @@ class LinkCreationTest extends IntegrationTest {
 
         // a different-case spelling is a distinct alias, not a conflict
         create("https://example.com/tc-fr1-02b", alias.toLowerCase(), null);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "https://müller.de/angebote",
+            "https://例え.jp/",
+            "https://my_site.example.com/page",
+            "https://xn--mller-kva.de/angebote"
+    })
+    void TC_FR1_01_reportedHostFormsCreateLinksAndMetadataKeepsTheExactInput(String url) throws Exception {
+        JsonNode created = create(url);
+        String code = created.get("code").asText();
+
+        mvc.perform(get("/api/links/" + code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.originalUrl").value(url));
+    }
+
+    @Test
+    void TC_FR6_01_unicodeAndPunycodePrivateDestinationsAreRejectedByTheCreationFlow() throws Exception {
+        resolver.answers.put("private.xn--mller-kva.de", List.of("10.1.2.3"));
+        long before = repository.count();
+
+        for (String url : List.of("https://private.müller.de/", "https://private.xn--mller-kva.de/")) {
+            postLink(Map.of("url", url))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("prohibited_destination"));
+        }
+
+        assertThat(repository.count()).isEqualTo(before);
     }
 
     @ParameterizedTest
@@ -113,6 +144,6 @@ class LinkCreationTest extends IntegrationTest {
     void TC_NFR2_01_missingUrlOrBodyIsRejected() throws Exception {
         postLink(Map.of("alias", uniqueAlias("nourl"))).andExpect(status().isBadRequest());
         mvc.perform(post("/api/links")
-                .contentType("application/json").content("{\"url\":")).andExpect(status().isBadRequest());
+                .contentType("application/json").content("{\"url\":" )).andExpect(status().isBadRequest());
     }
 }

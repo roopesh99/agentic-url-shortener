@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.example.shortener.support.StubHostResolver;
@@ -80,6 +81,40 @@ class DestinationPolicyTest {
         for (String url : List.of("http://example.com", "https://example.com/path?q=1#frag", "HTTPS://Example.COM/x",
                 "https://dual.example/", "http://93.184.216.34/", "http://[2606:2800:220:1:248:1893:25c8:1946]/", longest)) {
             assertThatCode(() -> policy.validate(url)).as(url).doesNotThrowAnyException();
+        }
+    }
+
+    @Test
+    void TC_FR1_01_browserCompatibleHostsAreResolvedAsAsciiAndOriginalUrlsAreRetained() throws Exception {
+        List<String> resolvedHosts = new ArrayList<>();
+        InetAddress publicAddress = InetAddress.getByAddress(new byte[] {(byte) 93, (byte) 184, (byte) 216, 34});
+        DestinationPolicy checkingPolicy = new DestinationPolicy(host -> {
+            resolvedHosts.add(host);
+            return new InetAddress[] {publicAddress};
+        });
+        List<String> urls = List.of(
+                "https://müller.de/angebote",
+                "https://例え.jp/",
+                "https://my_site.example.com/page",
+                "https://xn--mller-kva.de/angebote");
+
+        for (String url : urls) {
+            assertThat(checkingPolicy.validate(url)).as("the submitted URL is retained").isEqualTo(url);
+        }
+
+        assertThat(resolvedHosts).containsExactly(
+                "xn--mller-kva.de", "xn--r8jz45g.jp", "my_site.example.com", "xn--mller-kva.de");
+    }
+
+    @Test
+    void TC_FR6_01_unicodeAndPunycodeLocalOrPrivateDestinationsRemainProhibited() {
+        resolver.answers.put("private.xn--mller-kva.de", List.of("10.1.2.3"));
+        for (String url : List.of(
+                "https://müller.localhost/", "https://xn--mller-kva.localhost/",
+                "https://private.müller.de/", "https://private.xn--mller-kva.de/")) {
+            assertThatThrownBy(() -> policy.validate(url)).as(url)
+                    .isInstanceOfSatisfying(ApiException.class,
+                            e -> assertThat(e.getError()).isEqualTo("prohibited_destination"));
         }
     }
 
