@@ -1,0 +1,249 @@
+{
+  "request": {
+    "agent": "analyst",
+    "effort": "high",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ambiguities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "enum": [
+                  "assumption",
+                  "unresolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "resolution",
+              "source",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "non_functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "goal",
+        "functional",
+        "non_functional",
+        "ambiguities",
+        "acceptance_criteria"
+      ],
+      "type": "object"
+    },
+    "system": "You are the requirements analyst in a governed software delivery pipeline. You turn a product owner's requirement into a normalized engineering specification that the architect, coders and testers downstream will build from. You do not write code.\n\nYour output is checked by automated gates and then reviewed by a human before any design or code work starts, so precision matters more than polish.\n\nHow to work:\n- Restate the goal in one or two sentences an engineer could act on.\n- List functional and non-functional requirements as atomic, testable statements. Keep the requirement's own ids (FR1, NFR2, ...) when it provides them; otherwise assign them. Do not invent scope the requirement does not ask for.\n- Surface every ambiguity: anything an engineer would have to guess about (formats, limits, error behaviour, status codes, security posture). Include the requirement's own \"open points\" and any you find yourself.\n- For each ambiguity, decide whether a safe, conventional default exists.\n  - If it does, set `source` to \"assumption\", put the default in `resolution`, and explain in `rationale` why it is the conventional and low-risk choice. These become recorded decisions a human will review.\n  - If the answer is a genuine product decision (who may see data, business rules, legal or compliance posture, anything where a wrong guess would be costly to reverse), set `source` to \"unresolved\" and `resolution` to null. This stops the pipeline until a human answers, which is the intended behaviour. Do not guess on these to keep things moving.\n- Write acceptance criteria as observable behaviours (request \u2192 expected response), covering the main path and the important failure paths.\n- `summary`: one line, e.g. counts of requirements and how many ambiguities were resolved vs. left open.",
+    "user": "<requirement>\n# Requirement: Let link owners change a link's expiry (full lifecycle)\n\n> Input to the orchestrator for the full-lifecycle workflow (design, documentation and release\n> readiness included). The service in `url-shortener/` exists and is in use.\n\n## Goal\nOwners sometimes set an expiry that turns out to be too short, or forget to set one. Let the owner\nof a link change its expiry after creation.\n\n## Functional requirements\n- FR1 The owner of a link can set a new expiry, or remove the expiry, for that link.\n- FR2 Only the link's owner (holder of its management token) can do this.\n- FR3 The change takes effect immediately for redirects and is visible in the link's metadata.\n\n## Non-functional requirements\n- NFR1 Existing endpoints and their behaviour do not change.\n- NFR2 The service's API is described by a machine-readable definition, and the service is documented\n  for operators and API clients.\n- NFR3 The release is prepared with a changelog and a readiness review before it ships.\n\n## Known open points (for the Analyst to resolve or flag)\n- Whether an already expired link can be brought back to life by extending its expiry.\n- Whether there is a maximum expiry.\n</requirement>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "acceptance_criteria": [
+        "Given a link owner supplies a valid new expiry using the management token for that link, when the update succeeds, then the success response is returned and a subsequent metadata read shows the new expiry.",
+        "Given a link owner supplies an explicit null expiry using the management token for that link, when the update succeeds, then a subsequent metadata read shows that the link has no expiry.",
+        "Given a successful expiry update, when a redirect is requested afterward, then the service applies the updated expiry using its existing behavior for expired links.",
+        "Given a link has a future expiry and its owner extends it before it expires, when a redirect is requested after the old expiry but before the new expiry, then the redirect is allowed under the updated expiry.",
+        "Given an expiry value in the past is submitted, when the owner\u2019s update succeeds, then subsequent redirects treat the link as expired.",
+        "Given a request has no valid management token for the link, when it attempts to change or remove the expiry, then the request is rejected and the stored expiry remains unchanged.",
+        "Given a request contains a malformed expiry value, when it is submitted, then the request is rejected and the stored expiry remains unchanged.",
+        "Given the new operation is implemented, when the API definition and documentation are reviewed, then the machine-readable definition and both operator and API-client documentation describe the operation consistently.",
+        "Before the release ships, the release includes a changelog entry and has a completed readiness review.",
+        "The expected outcome for extending an already expired link and the applicable maximum-expiry policy remain blocked pending resolution of the two unresolved product decisions."
+      ],
+      "ambiguities": [
+        {
+          "question": "What API operation, method, route, and success response should be used?",
+          "rationale": "An additive partial update is a conventional, low-impact way to change one field while preserving existing endpoint behavior.",
+          "resolution": "Add an operation for changing expiry without altering existing endpoint behavior, following the service\u2019s existing API conventions. If there is no applicable convention, use a partial-update operation (PATCH) and return 200 with the updated link metadata.",
+          "source": "assumption"
+        },
+        {
+          "question": "What wire format and timezone rules apply to expiry values?",
+          "rationale": "Reusing an established representation avoids inconsistent client behavior; RFC 3339 with an explicit offset is a widely used, unambiguous default.",
+          "resolution": "Use the existing API\u2019s expiry representation. If it has no defined representation, accept an RFC 3339 date-time with an explicit timezone offset and treat it as an instant.",
+          "source": "assumption"
+        },
+        {
+          "question": "How is expiry removal distinguished from leaving expiry unchanged?",
+          "rationale": "This is a conventional partial-update distinction and permits removal without making omission destructive.",
+          "resolution": "For a partial-update request, an omitted expiry field leaves the value unchanged; an explicit null expiry clears it.",
+          "source": "assumption"
+        },
+        {
+          "question": "Can extending the expiry bring an already expired link back to life?",
+          "rationale": "This is an explicitly listed product-policy question. Choosing either behavior changes whether previously expired links become usable again.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "Is there a maximum expiry, and if so, what is it?",
+          "rationale": "This is an explicitly listed product-policy question. A limit could affect customer commitments and operational or security policy, so a default should not be guessed.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "Are expiry values in the past accepted, and when exactly is a link considered expired?",
+          "rationale": "An owner-controlled expiry is conventionally an absolute time boundary; a past boundary naturally makes the link expired immediately.",
+          "resolution": "Accept any syntactically valid expiry value, including one in the past; a link is expired when the current time is greater than or equal to its expiry.",
+          "source": "assumption"
+        },
+        {
+          "question": "How is the management token presented to the operation, and what authorization-failure responses are returned?",
+          "rationale": "Reusing the established mechanism minimizes compatibility and security risk; 401 and 403 are conventional defaults when no precedent exists.",
+          "resolution": "Reuse the service\u2019s existing management-token mechanism and authorization-failure response conventions. If no applicable convention exists, use 401 for a missing or invalid token and 403 for a token that does not authorize changes to the link.",
+          "source": "assumption"
+        },
+        {
+          "question": "What response is returned for malformed or invalid expiry input?",
+          "rationale": "Rejecting invalid input without a partial change is safe and conventional; following existing error conventions keeps the new operation consistent.",
+          "resolution": "Reject the request without changing the link, using the service\u2019s existing validation-error convention. If none exists, return 400.",
+          "source": "assumption"
+        },
+        {
+          "question": "Which machine-readable definition and documentation formats should be used?",
+          "rationale": "Following repository conventions is the lowest-risk choice; OpenAPI 3.1 and Markdown are broadly supported defaults.",
+          "resolution": "Use the formats already used by the service. If no machine-readable API format is established, use OpenAPI 3.1; if no documentation format is established, use Markdown.",
+          "source": "assumption"
+        },
+        {
+          "question": "What operational point counts as \u2018immediately\u2019 for redirect and metadata visibility?",
+          "rationale": "This gives the stated immediate-effect requirement a testable boundary while allowing the update operation itself to complete normally.",
+          "resolution": "Once the update operation reports success, subsequent redirect decisions and metadata reads must use the new expiry; there must be no intentional propagation or cache delay.",
+          "source": "assumption"
+        }
+      ],
+      "functional": [
+        {
+          "id": "FR1a",
+          "text": "The owner of a link can set a new expiry for that link."
+        },
+        {
+          "id": "FR1b",
+          "text": "The owner of a link can remove that link\u2019s expiry."
+        },
+        {
+          "id": "FR2",
+          "text": "Only the holder of the link\u2019s management token can change or remove its expiry."
+        },
+        {
+          "id": "FR3a",
+          "text": "After an expiry change succeeds, subsequent redirects use the updated expiry immediately."
+        },
+        {
+          "id": "FR3b",
+          "text": "After an expiry change succeeds, the updated expiry, or absence of an expiry, is visible in the link\u2019s metadata."
+        }
+      ],
+      "goal": "Allow a link owner, authenticated with that link\u2019s management token, to set or remove its expiry after creation. The updated expiry must be reflected in metadata and govern subsequent redirects immediately, without changing existing endpoint behavior.",
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Existing endpoints and their behavior remain unchanged."
+        },
+        {
+          "id": "NFR2a",
+          "text": "The machine-readable API definition describes the expiry-change operation and its request, response, and authorization contract."
+        },
+        {
+          "id": "NFR2b",
+          "text": "Documentation for operators and API clients describes the expiry-change operation."
+        },
+        {
+          "id": "NFR3a",
+          "text": "A changelog entry for the release is prepared before the release ships."
+        },
+        {
+          "id": "NFR3b",
+          "text": "A readiness review is completed before the release ships."
+        }
+      ],
+      "summary": "5 functional requirements, 5 non-functional requirements; 8 ambiguities resolved by assumption and 2 remain unresolved."
+    },
+    "duration_ms": 61629,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_6b8101837551438e84c7d3ec407cf9c4",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 815,
+      "output_tokens": 7549
+    }
+  }
+}

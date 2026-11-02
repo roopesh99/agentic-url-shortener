@@ -1,0 +1,19 @@
+{
+  "run_id": "live-lifecycle-1",
+  "stage": "impact",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Add an authenticated PATCH operation to change or clear a link’s expiry, preserving existing endpoint contracts and requiring no schema migration.",
+  "gate_evidence": [
+    "outputs_present: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "Route identifier and base path: Expose PATCH at /api/links/{code}, using the existing link resource path and the service’s existing short-code identifier. (agent)",
+    "Request field presence: Use a presence-aware request DTO with a required expiresAt property whose value may be an Instant or null. (agent)",
+    "Mutation and validation order: Use the existing code-based row lock, return 404 for tombstones, authorize, reject already expired links, then validate and update. (agent)",
+    "Expiry limit and storage: Use creation’s future-only validation and existing nullable expires_at column without adding a maximum or migration. (agent)",
+    "Success representation: Return HTTP 200 with the existing public LinkMetadata shape and no management token. (agent)",
+    "Documentation and release artifacts: Create OpenAPI, client, operator, changelog, and release-readiness artifacts under url-shortener/docs and url-shortener/CHANGELOG.md. (agent)"
+  ],
+  "artifact_sha": "3ecd9b99d610366261f1c00dc4fc84ef3ff95539a589619421cbccfefba7d4a6"
+}

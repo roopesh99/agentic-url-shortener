@@ -1,0 +1,11 @@
+{
+  "run_id": "live-lifecycle-1",
+  "stage": "requirements",
+  "round": 2,
+  "questions": [
+    {
+      "question": "What should happen if an owner sets an expiry at or before the current time on a link that has not yet expired?",
+      "why": "This could either be rejected or immediately expire the link. Immediate expiry may be irreversible because an already expired link cannot be changed, so the behavior requires a product decision."
+    }
+  ]
+}

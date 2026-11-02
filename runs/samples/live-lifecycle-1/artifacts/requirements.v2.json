@@ -1,0 +1,191 @@
+{
+  "name": "requirements",
+  "version": 2,
+  "sha": "783d12c2b83f99c361cf1f059deccc98bcf01b0eab7fec89b7fbddd2db6c1141",
+  "produced_by": "requirements/analyst#2",
+  "inputs": [],
+  "result": {
+    "summary": "9 functional and 5 non-functional requirements; 9 ambiguities (8 recorded assumptions, 1 unresolved).",
+    "outputs": {
+      "goal": "Allow a link owner to set or remove an active link’s expiry after creation. The change must immediately affect redirects and link metadata, while preserving existing endpoint behavior and preparing the API, documentation, changelog, and release review.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "An owner can set a new expiry for a link that has not already expired."
+        },
+        {
+          "id": "FR2",
+          "text": "Only the holder of the link’s management token can change that link’s expiry."
+        },
+        {
+          "id": "FR3",
+          "text": "A successful expiry change takes effect immediately for subsequent redirects."
+        },
+        {
+          "id": "FR4",
+          "text": "An owner can remove the expiry from a link that has not already expired."
+        },
+        {
+          "id": "FR5",
+          "text": "After a successful change, the link’s metadata reflects the new expiry or the absence of an expiry."
+        },
+        {
+          "id": "FR6",
+          "text": "Changing the expiry of an already expired link is rejected with HTTP 410 and error code `expired`; the link remains unchanged and cannot be brought back to life."
+        },
+        {
+          "id": "FR7",
+          "text": "A deleted link cannot be changed; an attempt returns HTTP 404, consistent with current behavior."
+        },
+        {
+          "id": "FR8",
+          "text": "The expiry update imposes no maximum expiry, consistent with link creation."
+        },
+        {
+          "id": "FR9",
+          "text": "Expose expiry changes through a new management operation using PATCH on the link-management resource. The operation accepts an expiry value to set or null to remove the expiry; an omitted expiry field leaves it unchanged. On success, return HTTP 200 with the updated link metadata."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Existing endpoints and their behavior remain unchanged."
+        },
+        {
+          "id": "NFR2",
+          "text": "The service API, including the new expiry-management operation and its request and response behavior, is described by a machine-readable definition."
+        },
+        {
+          "id": "NFR3",
+          "text": "The release includes a changelog entry for the expiry-management capability."
+        },
+        {
+          "id": "NFR4",
+          "text": "Documentation for API clients and operators describes the expiry-management capability and its relevant outcomes."
+        },
+        {
+          "id": "NFR5",
+          "text": "A release-readiness review is completed before the release ships."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "Can extending the expiry bring an already expired link back to life?",
+          "resolution": "No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that has already expired is rejected with 410 and error code expired (as redirects to expired links already respond), and the link is left unchanged. Deleted links cannot be changed either (404, as today).",
+          "source": "assumption",
+          "rationale": "Decided by a human: this is binding. FR6 and FR7 specify the resulting rejection behavior."
+        },
+        {
+          "question": "Is there a maximum expiry, and if so, what is it?",
+          "resolution": "No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would be inconsistent, and adding one to creation would change existing behaviour (NFR1).",
+          "source": "assumption",
+          "rationale": "Decided by a human: this is binding. FR8 specifies that the update imposes no maximum."
+        },
+        {
+          "question": "What should happen if an owner sets an expiry at or before the current time on a link that has not yet expired?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "This could either be rejected or immediately expire the link. Immediate expiry may be irreversible because an already expired link cannot be changed, so the behavior requires a product decision."
+        },
+        {
+          "question": "Which HTTP method, route, and success response should the expiry-management operation use?",
+          "resolution": "Use PATCH on the link-management resource, following existing route conventions, and return HTTP 200 with updated link metadata.",
+          "source": "assumption",
+          "rationale": "PATCH is a conventional choice for a partial resource update; following existing route conventions and returning the updated representation keeps the interface consistent and makes the result directly observable."
+        },
+        {
+          "question": "How is a new expiry represented, and how is expiry removal distinguished from an omitted update?",
+          "resolution": "Use the same expiry value type, format, and time semantics as link creation. In the PATCH request, null removes the expiry and an omitted expiry field leaves it unchanged.",
+          "source": "assumption",
+          "rationale": "Reusing creation’s established representation avoids introducing a second client-facing expiry format; null and omission conventionally distinguish clearing a value from leaving it unchanged in a partial update."
+        },
+        {
+          "question": "What should happen for malformed or unsupported expiry values?",
+          "resolution": "Return HTTP 400 using the service’s existing error response format and leave the link unchanged.",
+          "source": "assumption",
+          "rationale": "A client-error response for invalid request data is conventional, and leaving stored state unchanged avoids partial or surprising updates."
+        },
+        {
+          "question": "What status and error response should a request with a missing, invalid, or non-owning management token receive?",
+          "resolution": "Use the existing management-token operations’ authentication and authorization status/error behavior; do not change the link.",
+          "source": "assumption",
+          "rationale": "Reusing the service’s existing token-handling contract is the lowest-risk way to enforce FR2 without introducing inconsistent or potentially more revealing authorization behavior."
+        },
+        {
+          "question": "Which machine-readable API-definition format and documentation location should be used?",
+          "resolution": "Use an OpenAPI 3.x definition and the service’s existing documentation locations and conventions.",
+          "source": "assumption",
+          "rationale": "OpenAPI 3.x is a widely supported machine-readable API standard; using established documentation locations avoids adding a parallel documentation system."
+        },
+        {
+          "question": "What evidence or format satisfies the changelog and release-readiness review requirements?",
+          "resolution": "Follow the service’s existing changelog convention and record completion of the readiness review using its existing release process before shipping.",
+          "source": "assumption",
+          "rationale": "Using the established release process keeps evidence consistent with other releases while making completion observable without imposing a new review framework."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given an active link and its valid management token, when the owner submits a valid later expiry, the operation returns HTTP 200 with the updated metadata; a metadata read shows the new expiry, and subsequent redirects apply the new expiry immediately.",
+        "Given an active link and its valid management token, when the owner submits null for expiry, the operation returns HTTP 200; metadata shows no expiry using the service’s existing representation, and redirects are not rejected solely because of an expiry.",
+        "Given an active link, when an expiry update omits the expiry field, the operation leaves the existing expiry unchanged.",
+        "Given an active link, when an update request has a malformed or unsupported expiry value, the operation returns HTTP 400 in the existing error format and leaves the link unchanged.",
+        "Given a link, when an update request does not present its valid management token, the request is rejected using the existing management-token error contract and the link is unchanged.",
+        "Given an already expired link, when an owner attempts to set or remove its expiry, the operation returns HTTP 410 with error code `expired` and leaves the link unchanged.",
+        "Given a deleted link, when an owner attempts to change its expiry, the operation returns HTTP 404 and the link remains deleted.",
+        "Given an active link, when its owner sets a valid expiry later than its current expiry, the update is accepted without a product-imposed maximum expiry.",
+        "Before release, the machine-readable API definition and the operator and API-client documentation describe the new operation and its request and response behavior.",
+        "Before release, a changelog entry is present and a readiness review is recorded as complete.",
+        "The behavior for setting an expiry at or before the current time on a link that has not yet expired is not considered accepted until the unresolved product decision is answered."
+      ],
+      "clarifications": [
+        {
+          "question": "Can extending the expiry bring an already expired link back to life?",
+          "answer": "No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that has already expired is rejected with 410 and error code expired (as redirects to expired links already respond), and the link is left unchanged. Deleted links cannot be changed either (404, as today)."
+        },
+        {
+          "question": "Is there a maximum expiry, and if so, what is it?",
+          "answer": "No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would be inconsistent, and adding one to creation would change existing behaviour (NFR1)."
+        }
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Which HTTP method, route, and success response should the expiry-management operation use?",
+        "choice": "Use PATCH on the link-management resource, following existing route conventions, and return HTTP 200 with updated link metadata.",
+        "rationale": "PATCH is a conventional choice for a partial resource update; following existing route conventions and returning the updated representation keeps the interface consistent and makes the result directly observable.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How is a new expiry represented, and how is expiry removal distinguished from an omitted update?",
+        "choice": "Use the same expiry value type, format, and time semantics as link creation. In the PATCH request, null removes the expiry and an omitted expiry field leaves it unchanged.",
+        "rationale": "Reusing creation’s established representation avoids introducing a second client-facing expiry format; null and omission conventionally distinguish clearing a value from leaving it unchanged in a partial update.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What should happen for malformed or unsupported expiry values?",
+        "choice": "Return HTTP 400 using the service’s existing error response format and leave the link unchanged.",
+        "rationale": "A client-error response for invalid request data is conventional, and leaving stored state unchanged avoids partial or surprising updates.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What status and error response should a request with a missing, invalid, or non-owning management token receive?",
+        "choice": "Use the existing management-token operations’ authentication and authorization status/error behavior; do not change the link.",
+        "rationale": "Reusing the service’s existing token-handling contract is the lowest-risk way to enforce FR2 without introducing inconsistent or potentially more revealing authorization behavior.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Which machine-readable API-definition format and documentation location should be used?",
+        "choice": "Use an OpenAPI 3.x definition and the service’s existing documentation locations and conventions.",
+        "rationale": "OpenAPI 3.x is a widely supported machine-readable API standard; using established documentation locations avoids adding a parallel documentation system.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What evidence or format satisfies the changelog and release-readiness review requirements?",
+        "choice": "Follow the service’s existing changelog convention and record completion of the readiness review using its existing release process before shipping.",
+        "rationale": "Using the established release process keeps evidence consistent with other releases while making completion observable without imposing a new review framework.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

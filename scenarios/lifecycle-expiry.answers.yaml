@@ -1,0 +1,17 @@
+# Answers to the analyst's open questions for scenarios/lifecycle-expiry.md.
+# Question 1 decided by the product owner (roopeshkotte): expired links are not revived; question 2 is
+# Claude Code's suggestion, accepted on submission. Round 2: past expiries rejected (accepted). 2026-11-01.
+# Submit: orch answer live-lifecycle-1 requirements-clarify-1-002758 --from scenarios/lifecycle-expiry.answers.yaml
+
+- question: Can extending the expiry bring an already expired link back to life?
+  answer: No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that
+    has already expired is rejected with 410 and error code expired (as redirects to expired links already respond),
+    and the link is left unchanged. Deleted links cannot be changed either (404, as today).
+- question: Is there a maximum expiry, and if so, what is it?
+  answer: No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would
+    be inconsistent, and adding one to creation would change existing behaviour (NFR1).
+- question: What should happen if an owner sets an expiry at or before the current time on a link that has not yet
+    expired?
+  answer: Reject it with 400 and error code invalid_expiry (expiresAt must be in the future), exactly as link creation
+    does, and leave the link unchanged. An owner who wants a link gone deletes it. This keeps one expiry rule everywhere
+    and prevents an irreversible accidental expiry.

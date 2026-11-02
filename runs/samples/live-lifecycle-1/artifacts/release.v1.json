@@ -1,0 +1,150 @@
+{
+  "name": "release",
+  "version": 1,
+  "sha": "a151d8d180b3db2f6202d706571b723a2ee02a250448d768946003c713273ff6",
+  "produced_by": "release/release#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "64ea04428caceeed33830006759600b08196bb9ce2e8d5dd03dff5882b258c4f"
+    },
+    {
+      "name": "impact",
+      "version": 3,
+      "sha": "441efb8e9f37b5abf46e42d29924c79e3f0bc30357c870e74abecb7fc0e09f24"
+    },
+    {
+      "name": "design",
+      "version": 1,
+      "sha": "b2e94e2ab7549046719d782945027a0961098db970fa0946858a361850ca1985"
+    },
+    {
+      "name": "implement",
+      "version": 1,
+      "sha": "540a8fc6cd930de45cd05e4c285e9d4e8add9d83ac7c1137b977c3dd649decc3"
+    },
+    {
+      "name": "test_plan",
+      "version": 1,
+      "sha": "418cf19a76e98457cfa14d51b63921b9445580139d4d0e892a6b1a80f94d8097"
+    },
+    {
+      "name": "docs",
+      "version": 1,
+      "sha": "b6538aa698993503e4419ea24bf46aca9db13bb248c2015cbd4d011d74afa453"
+    },
+    {
+      "name": "test",
+      "version": 1,
+      "sha": "2aeafb91915039a826f406fcbde37ccfe668f7d442cc8638b39c9dc9d27f8c20"
+    }
+  ],
+  "result": {
+    "summary": "Prepared the 1.1.0 release record for the backward-compatible link-expiry update feature; release is not ready to ship until the release-readiness review is recorded complete.",
+    "outputs": {
+      "version": "1.1.0",
+      "checklist": [
+        {
+          "item": "Requirements approved",
+          "status": "pass",
+          "evidence": "The supplied approved specification defines 7 functional and 3 non-functional requirements; requirements@v3 records those requirements."
+        },
+        {
+          "item": "Open questions resolved",
+          "status": "pass",
+          "evidence": "requirements@v3 records 9 assumptions and 0 unresolved questions; binding clarifications cover revival, expiry limits, and invalid expiry values."
+        },
+        {
+          "item": "Design approved",
+          "status": "pass",
+          "evidence": "Accepted design@v1 specifies the additive PATCH operation, existing row locking, authentication, validation, and no migration."
+        },
+        {
+          "item": "API definition valid and implemented",
+          "status": "pass",
+          "evidence": "The design lists url-shortener/openapi.yaml; implementation adds PATCH /api/links/{code}. The test plan specifies OpenAPI parsing checks, and the accepted stages passed their exit gates."
+        },
+        {
+          "item": "Tests passing",
+          "status": "pass",
+          "evidence": "The orchestrator reran the full test suite on the current workspace immediately before this stage and it passed. test@v1 reports 18 new tests and a suite floor of 121 tests."
+        },
+        {
+          "item": "Documentation updated",
+          "status": "pass",
+          "evidence": "docs@v1 lists updates to url-shortener/README.md and url-shortener/docs/api.md for the operation and its behavior."
+        },
+        {
+          "item": "Backward compatibility",
+          "status": "pass",
+          "evidence": "The operation is additive; design and implementation preserve existing routes. test@v1 reports existing tests were not changed or removed, and the full suite passed."
+        },
+        {
+          "item": "Security and privacy requirements addressed",
+          "status": "pass",
+          "evidence": "The implementation reuses X-Management-Token verification and the shared wrong-token throttle; failed authentication leaves the link unchanged. No new data store or personal-data field is introduced."
+        },
+        {
+          "item": "Migrations reviewed",
+          "status": "pass",
+          "evidence": "Design and impact decisions state there is no schema migration; updates use the existing nullable expires_at column."
+        },
+        {
+          "item": "Rollback possible",
+          "status": "pass",
+          "evidence": "No schema migration is introduced, and the expiry uses the existing nullable column and existing redirect behavior. The previous application version can be restored without a database rollback."
+        },
+        {
+          "item": "Changelog prepared",
+          "status": "pass",
+          "evidence": "This release record supplies the complete CHANGELOG.md content for 1.1.0; no earlier release entries were provided."
+        },
+        {
+          "item": "Release-readiness review recorded complete",
+          "status": "fail",
+          "evidence": "No completed release-readiness review artifact is shown. The impact stage identifies a release-record location, but does not record that the review is complete. Human sign-off is required before shipment."
+        }
+      ],
+      "risks": [
+        {
+          "risk": "The release-readiness review is not evidenced as complete, so shipping now would not satisfy the approved pre-shipment requirement.",
+          "mitigation": "Complete and record the review in the repository's established release format, including verification, compatibility, and documentation readiness, before shipment."
+        },
+        {
+          "risk": "The approved specification uses the placeholder path form /links/{linkId}, while the service's documented and implemented route is /api/links/{code}.",
+          "mitigation": "Confirm the service base path and existing code parameter convention in the release review; ensure the OpenAPI definition and client documentation consistently identify the implemented route."
+        },
+        {
+          "risk": "Clearing or changing an expiry is persisted in the existing field; reverting the application does not restore a previous expiry value.",
+          "mitigation": "No database rollback is needed for application rollback. If restoring a prior expiry is required, obtain the previous value from an operational record or have the owner set it again."
+        }
+      ],
+      "rollback_plan": "If the release causes problems, redeploy the previous application version. No database migration or schema rollback is required: the feature uses the existing nullable expires_at column, which the previous version already understands. Expiry updates already written will remain in that column and be interpreted by the previous application. If a specific pre-update expiry must be restored, recover it from an operational record or have the owner set it again; a cleared expiry cannot be reconstructed from this change alone."
+    },
+    "files_written": [
+      "url-shortener/CHANGELOG.md",
+      "url-shortener/docs/releases/1.1.0.md"
+    ],
+    "decisions": [
+      {
+        "topic": "Release version",
+        "choice": "1.1.0",
+        "rationale": "The current project version is recorded as 1.0.0-SNAPSHOT, and this is a new backward-compatible feature, so the next semantic version is a minor bump.",
+        "source": "agent"
+      },
+      {
+        "topic": "Changelog baseline",
+        "choice": "Create a new CHANGELOG.md with the 1.1.0 entry and no prior entries.",
+        "rationale": "No existing release files or earlier changelog entries were supplied; the entry describes the feature in user-facing terms.",
+        "source": "agent"
+      },
+      {
+        "topic": "Release authorization",
+        "choice": "Do not mark the release ready to ship until the release-readiness review is recorded complete.",
+        "rationale": "The specification requires that review before shipment, and no completed review artifact is shown.",
+        "source": "agent"
+      }
+    ]
+  }
+}

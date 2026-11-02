@@ -1,0 +1,22 @@
+{
+  "run_id": "live-lifecycle-1",
+  "stage": "release",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Release-readiness checks pass; the change is ready for the workflow’s human release sign-off.",
+  "gate_evidence": [
+    "release_checklist_passed: PASS",
+    "files_exist: PASS"
+  ],
+  "files_changed": [
+    "url-shortener/CHANGELOG.md",
+    "url-shortener/docs/releases/1.1.0.md"
+  ],
+  "decisions": [
+    "Release version: Use 1.1.0. (agent)",
+    "API route: Document and release `PATCH /api/links/{code}`. (agent)",
+    "Persistence and migration: Use the existing nullable `expires_at` column without a migration. (agent)",
+    "Expiry rules: Do not impose a maximum expiry; reject changes to already expired links and reject non-future expiries on active links. (agent)",
+    "Rollback behavior: Roll back application code without reverting persisted expiry values. (agent)"
+  ],
+  "artifact_sha": "7af5474c6d9cdbf68e653acc23641460472a7536f60a4c2b6b2f32d93d7c907b"
+}

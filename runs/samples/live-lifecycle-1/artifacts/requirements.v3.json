@@ -1,0 +1,179 @@
+{
+  "name": "requirements",
+  "version": 3,
+  "sha": "64ea04428caceeed33830006759600b08196bb9ce2e8d5dd03dff5882b258c4f",
+  "produced_by": "requirements/analyst#3",
+  "inputs": [],
+  "result": {
+    "summary": "7 functional and 3 non-functional requirements; 9 ambiguities recorded (9 assumptions, 0 unresolved).",
+    "outputs": {
+      "goal": "Add an owner-authenticated way to set or remove a link's expiry after creation. Successful changes must immediately affect redirects and be reflected in link metadata, with existing endpoints retaining their behavior.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "The owner of an existing link can set a new expiry or remove its expiry."
+        },
+        {
+          "id": "FR2",
+          "text": "Only a holder of the link's management token can change that link's expiry."
+        },
+        {
+          "id": "FR3",
+          "text": "After a successful change, subsequent redirects use the new expiry immediately, and the link's metadata reports the new expiry or that no expiry is set."
+        },
+        {
+          "id": "FR4",
+          "text": "A change to the expiry of an already expired link is rejected with HTTP 410 and error code `expired`; the link remains unchanged and cannot be brought back to life by changing its expiry."
+        },
+        {
+          "id": "FR5",
+          "text": "For a link that has not expired, an expiry at or before the current time is rejected with HTTP 400 and error code `invalid_expiry`; the link remains unchanged."
+        },
+        {
+          "id": "FR6",
+          "text": "A deleted link cannot be changed; an expiry-change request for it is rejected with HTTP 404, consistent with current behavior."
+        },
+        {
+          "id": "FR7",
+          "text": "Expiry changes have no maximum expiry limit; future expiry values are subject to the same validation rules as link creation."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Existing endpoints and their behavior remain unchanged; the expiry-change capability is additive."
+        },
+        {
+          "id": "NFR2",
+          "text": "The service API is described by a machine-readable definition, and documentation for operators and API clients describes the expiry-change capability."
+        },
+        {
+          "id": "NFR3",
+          "text": "A changelog entry and a recorded release-readiness review are prepared before the release ships."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "Can extending the expiry bring an already expired link back to life?",
+          "resolution": "No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that has already expired is rejected with 410 and error code expired (as redirects to expired links already respond), and the link is left unchanged. Deleted links cannot be changed either (404, as today).",
+          "source": "assumption",
+          "rationale": "Decided by a human: This is the binding decision and defines the required behavior for expired and deleted links."
+        },
+        {
+          "question": "Is there a maximum expiry, and if so, what is it?",
+          "resolution": "No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would be inconsistent, and adding one to creation would change existing behaviour (NFR1).",
+          "source": "assumption",
+          "rationale": "Decided by a human: This is the binding decision; expiry updates must not introduce a limit absent from creation."
+        },
+        {
+          "question": "What should happen if an owner sets an expiry at or before the current time on a link that has not yet expired?",
+          "resolution": "Reject it with 400 and error code invalid_expiry (expiresAt must be in the future), exactly as link creation does, and leave the link unchanged. An owner who wants a link gone deletes it. This keeps one expiry rule everywhere and prevents an irreversible accidental expiry.",
+          "source": "assumption",
+          "rationale": "Decided by a human: This is the binding decision for validation, error response, and mutation behavior."
+        },
+        {
+          "question": "What HTTP method and route should expose the expiry-change operation?",
+          "resolution": "Add an additive `PATCH /links/{linkId}` operation, retaining any existing API base path or version prefix used by the service.",
+          "source": "assumption",
+          "rationale": "PATCH is a conventional method for changing part of a resource and provides an additive contract without changing existing endpoint behavior; retaining the service's base path and versioning avoids introducing a competing API convention."
+        },
+        {
+          "question": "How should a request distinguish setting an expiry, removing it, and omitting an expiry value?",
+          "resolution": "Use the `expiresAt` field and the same timestamp format and parsing rules as link creation. A future timestamp sets the expiry; `null` removes it; an omitted `expiresAt` field is rejected with HTTP 400 and leaves the link unchanged.",
+          "source": "assumption",
+          "rationale": "Reusing the creation field and parser keeps the API consistent; `null` is a conventional explicit representation for clearing a nullable value, while rejecting omission avoids treating an incomplete expiry-change request as a successful no-op."
+        },
+        {
+          "question": "What success response should an expiry-change request return?",
+          "resolution": "Return HTTP 200 with the updated link metadata, including the new expiry or the absence of an expiry.",
+          "source": "assumption",
+          "rationale": "A 200 response with the updated representation is a conventional response for a successful resource update and directly makes the required metadata visible to the client."
+        },
+        {
+          "question": "How should the management token be sent, and what response should be used for a missing or invalid token?",
+          "resolution": "Use the service's existing management-token authentication mechanism and its existing authentication-failure response; do not mutate the link when authentication fails.",
+          "source": "assumption",
+          "rationale": "Reusing established authentication handling is the lowest-risk way to enforce the stated token-holder restriction without changing existing security or API conventions."
+        },
+        {
+          "question": "What format and location should be used for the machine-readable API definition and operator and API-client documentation?",
+          "resolution": "Use an OpenAPI 3.x definition and place it and the operator and API-client documentation in the service's established documentation locations and formats.",
+          "source": "assumption",
+          "rationale": "OpenAPI 3.x is a widely supported machine-readable API standard, while using the repository's existing documentation conventions minimizes duplication and inconsistency."
+        },
+        {
+          "question": "What form should the changelog entry and release-readiness review take?",
+          "resolution": "Use the repository's established changelog and release-review formats; record completion of the review before shipment, including the change's verification, compatibility, and documentation readiness.",
+          "source": "assumption",
+          "rationale": "Following existing release conventions is the conventional, low-risk approach and makes the required pre-release artifacts auditable without introducing a new process."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given an active link and a valid management token, when the owner submits a future `expiresAt`, the request returns HTTP 200 with metadata showing that expiry; subsequent redirects use the updated expiry immediately.",
+        "Given an active link and a valid management token, when the owner submits `expiresAt: null`, the request returns HTTP 200 with metadata showing no expiry, and subsequent redirects are no longer limited by the removed expiry.",
+        "Given a request with an omitted `expiresAt`, when the service processes it, the request is rejected with HTTP 400 and the link remains unchanged.",
+        "Given a request without a valid management token, when the service processes it, the service returns its established authentication-failure response and leaves the link unchanged.",
+        "Given an already expired link, when an authorized owner attempts to set or remove its expiry, the service returns HTTP 410 with error code `expired` and leaves the link unchanged.",
+        "Given a link that has not expired, when an authorized owner submits an expiry at or before the current time, the service returns HTTP 400 with error code `invalid_expiry` and leaves the link unchanged.",
+        "Given a deleted link, when an authorized owner attempts to change its expiry, the service returns HTTP 404 and makes no change.",
+        "Given an authorized owner submits a valid future expiry far beyond any commonly expected near-term period, when the request is processed, the service accepts it subject to the same validation rules as link creation; no update-only maximum is applied.",
+        "Given the new capability is released, when existing endpoints are exercised, their behavior remains unchanged.",
+        "Before shipment, the machine-readable API definition and operator and API-client documentation describe the operation, authentication, request values, and relevant success and error behavior.",
+        "Before shipment, a changelog entry is prepared and a release-readiness review is recorded as complete."
+      ],
+      "clarifications": [
+        {
+          "question": "Can extending the expiry bring an already expired link back to life?",
+          "answer": "No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that has already expired is rejected with 410 and error code expired (as redirects to expired links already respond), and the link is left unchanged. Deleted links cannot be changed either (404, as today)."
+        },
+        {
+          "question": "Is there a maximum expiry, and if so, what is it?",
+          "answer": "No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would be inconsistent, and adding one to creation would change existing behaviour (NFR1)."
+        },
+        {
+          "question": "What should happen if an owner sets an expiry at or before the current time on a link that has not yet expired?",
+          "answer": "Reject it with 400 and error code invalid_expiry (expiresAt must be in the future), exactly as link creation does, and leave the link unchanged. An owner who wants a link gone deletes it. This keeps one expiry rule everywhere and prevents an irreversible accidental expiry."
+        }
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "What HTTP method and route should expose the expiry-change operation?",
+        "choice": "Add an additive `PATCH /links/{linkId}` operation, retaining any existing API base path or version prefix used by the service.",
+        "rationale": "PATCH is a conventional method for changing part of a resource and provides an additive contract without changing existing endpoint behavior; retaining the service's base path and versioning avoids introducing a competing API convention.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How should a request distinguish setting an expiry, removing it, and omitting an expiry value?",
+        "choice": "Use the `expiresAt` field and the same timestamp format and parsing rules as link creation. A future timestamp sets the expiry; `null` removes it; an omitted `expiresAt` field is rejected with HTTP 400 and leaves the link unchanged.",
+        "rationale": "Reusing the creation field and parser keeps the API consistent; `null` is a conventional explicit representation for clearing a nullable value, while rejecting omission avoids treating an incomplete expiry-change request as a successful no-op.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What success response should an expiry-change request return?",
+        "choice": "Return HTTP 200 with the updated link metadata, including the new expiry or the absence of an expiry.",
+        "rationale": "A 200 response with the updated representation is a conventional response for a successful resource update and directly makes the required metadata visible to the client.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How should the management token be sent, and what response should be used for a missing or invalid token?",
+        "choice": "Use the service's existing management-token authentication mechanism and its existing authentication-failure response; do not mutate the link when authentication fails.",
+        "rationale": "Reusing established authentication handling is the lowest-risk way to enforce the stated token-holder restriction without changing existing security or API conventions.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What format and location should be used for the machine-readable API definition and operator and API-client documentation?",
+        "choice": "Use an OpenAPI 3.x definition and place it and the operator and API-client documentation in the service's established documentation locations and formats.",
+        "rationale": "OpenAPI 3.x is a widely supported machine-readable API standard, while using the repository's existing documentation conventions minimizes duplication and inconsistency.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What form should the changelog entry and release-readiness review take?",
+        "choice": "Use the repository's established changelog and release-review formats; record completion of the review before shipment, including the change's verification, compatibility, and documentation readiness.",
+        "rationale": "Following existing release conventions is the conventional, low-risk approach and makes the required pre-release artifacts auditable without introducing a new process.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

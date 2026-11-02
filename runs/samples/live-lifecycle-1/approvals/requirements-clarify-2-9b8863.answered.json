@@ -1,0 +1,10 @@
+{
+  "answers": [
+    {
+      "question": "What should happen if an owner sets an expiry at or before the current time on a link that has not yet expired?",
+      "answer": "Reject it with 400 and error code invalid_expiry (expiresAt must be in the future), exactly as link creation does, and leave the link unchanged. An owner who wants a link gone deletes it. This keeps one expiry rule everywhere and prevents an irreversible accidental expiry."
+    }
+  ],
+  "answered_by": "roopeshkotte",
+  "source": "human"
+}

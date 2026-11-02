@@ -1,0 +1,182 @@
+{
+  "name": "requirements",
+  "version": 1,
+  "sha": "2f59ed4ecc00132fbc27d7a832f90bbdd035fb4e8cc154c7e391bbee810179c1",
+  "produced_by": "requirements/analyst#1",
+  "inputs": [],
+  "result": {
+    "summary": "5 functional requirements, 5 non-functional requirements; 8 ambiguities resolved by assumption and 2 remain unresolved.",
+    "outputs": {
+      "goal": "Allow a link owner, authenticated with that link’s management token, to set or remove its expiry after creation. The updated expiry must be reflected in metadata and govern subsequent redirects immediately, without changing existing endpoint behavior.",
+      "functional": [
+        {
+          "id": "FR1a",
+          "text": "The owner of a link can set a new expiry for that link."
+        },
+        {
+          "id": "FR1b",
+          "text": "The owner of a link can remove that link’s expiry."
+        },
+        {
+          "id": "FR2",
+          "text": "Only the holder of the link’s management token can change or remove its expiry."
+        },
+        {
+          "id": "FR3a",
+          "text": "After an expiry change succeeds, subsequent redirects use the updated expiry immediately."
+        },
+        {
+          "id": "FR3b",
+          "text": "After an expiry change succeeds, the updated expiry, or absence of an expiry, is visible in the link’s metadata."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Existing endpoints and their behavior remain unchanged."
+        },
+        {
+          "id": "NFR2a",
+          "text": "The machine-readable API definition describes the expiry-change operation and its request, response, and authorization contract."
+        },
+        {
+          "id": "NFR2b",
+          "text": "Documentation for operators and API clients describes the expiry-change operation."
+        },
+        {
+          "id": "NFR3a",
+          "text": "A changelog entry for the release is prepared before the release ships."
+        },
+        {
+          "id": "NFR3b",
+          "text": "A readiness review is completed before the release ships."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "What API operation, method, route, and success response should be used?",
+          "resolution": "Add an operation for changing expiry without altering existing endpoint behavior, following the service’s existing API conventions. If there is no applicable convention, use a partial-update operation (PATCH) and return 200 with the updated link metadata.",
+          "source": "assumption",
+          "rationale": "An additive partial update is a conventional, low-impact way to change one field while preserving existing endpoint behavior."
+        },
+        {
+          "question": "What wire format and timezone rules apply to expiry values?",
+          "resolution": "Use the existing API’s expiry representation. If it has no defined representation, accept an RFC 3339 date-time with an explicit timezone offset and treat it as an instant.",
+          "source": "assumption",
+          "rationale": "Reusing an established representation avoids inconsistent client behavior; RFC 3339 with an explicit offset is a widely used, unambiguous default."
+        },
+        {
+          "question": "How is expiry removal distinguished from leaving expiry unchanged?",
+          "resolution": "For a partial-update request, an omitted expiry field leaves the value unchanged; an explicit null expiry clears it.",
+          "source": "assumption",
+          "rationale": "This is a conventional partial-update distinction and permits removal without making omission destructive."
+        },
+        {
+          "question": "Can extending the expiry bring an already expired link back to life?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "This is an explicitly listed product-policy question. Choosing either behavior changes whether previously expired links become usable again."
+        },
+        {
+          "question": "Is there a maximum expiry, and if so, what is it?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "This is an explicitly listed product-policy question. A limit could affect customer commitments and operational or security policy, so a default should not be guessed."
+        },
+        {
+          "question": "Are expiry values in the past accepted, and when exactly is a link considered expired?",
+          "resolution": "Accept any syntactically valid expiry value, including one in the past; a link is expired when the current time is greater than or equal to its expiry.",
+          "source": "assumption",
+          "rationale": "An owner-controlled expiry is conventionally an absolute time boundary; a past boundary naturally makes the link expired immediately."
+        },
+        {
+          "question": "How is the management token presented to the operation, and what authorization-failure responses are returned?",
+          "resolution": "Reuse the service’s existing management-token mechanism and authorization-failure response conventions. If no applicable convention exists, use 401 for a missing or invalid token and 403 for a token that does not authorize changes to the link.",
+          "source": "assumption",
+          "rationale": "Reusing the established mechanism minimizes compatibility and security risk; 401 and 403 are conventional defaults when no precedent exists."
+        },
+        {
+          "question": "What response is returned for malformed or invalid expiry input?",
+          "resolution": "Reject the request without changing the link, using the service’s existing validation-error convention. If none exists, return 400.",
+          "source": "assumption",
+          "rationale": "Rejecting invalid input without a partial change is safe and conventional; following existing error conventions keeps the new operation consistent."
+        },
+        {
+          "question": "Which machine-readable definition and documentation formats should be used?",
+          "resolution": "Use the formats already used by the service. If no machine-readable API format is established, use OpenAPI 3.1; if no documentation format is established, use Markdown.",
+          "source": "assumption",
+          "rationale": "Following repository conventions is the lowest-risk choice; OpenAPI 3.1 and Markdown are broadly supported defaults."
+        },
+        {
+          "question": "What operational point counts as ‘immediately’ for redirect and metadata visibility?",
+          "resolution": "Once the update operation reports success, subsequent redirect decisions and metadata reads must use the new expiry; there must be no intentional propagation or cache delay.",
+          "source": "assumption",
+          "rationale": "This gives the stated immediate-effect requirement a testable boundary while allowing the update operation itself to complete normally."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given a link owner supplies a valid new expiry using the management token for that link, when the update succeeds, then the success response is returned and a subsequent metadata read shows the new expiry.",
+        "Given a link owner supplies an explicit null expiry using the management token for that link, when the update succeeds, then a subsequent metadata read shows that the link has no expiry.",
+        "Given a successful expiry update, when a redirect is requested afterward, then the service applies the updated expiry using its existing behavior for expired links.",
+        "Given a link has a future expiry and its owner extends it before it expires, when a redirect is requested after the old expiry but before the new expiry, then the redirect is allowed under the updated expiry.",
+        "Given an expiry value in the past is submitted, when the owner’s update succeeds, then subsequent redirects treat the link as expired.",
+        "Given a request has no valid management token for the link, when it attempts to change or remove the expiry, then the request is rejected and the stored expiry remains unchanged.",
+        "Given a request contains a malformed expiry value, when it is submitted, then the request is rejected and the stored expiry remains unchanged.",
+        "Given the new operation is implemented, when the API definition and documentation are reviewed, then the machine-readable definition and both operator and API-client documentation describe the operation consistently.",
+        "Before the release ships, the release includes a changelog entry and has a completed readiness review.",
+        "The expected outcome for extending an already expired link and the applicable maximum-expiry policy remain blocked pending resolution of the two unresolved product decisions."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "What API operation, method, route, and success response should be used?",
+        "choice": "Add an operation for changing expiry without altering existing endpoint behavior, following the service’s existing API conventions. If there is no applicable convention, use a partial-update operation (PATCH) and return 200 with the updated link metadata.",
+        "rationale": "An additive partial update is a conventional, low-impact way to change one field while preserving existing endpoint behavior.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What wire format and timezone rules apply to expiry values?",
+        "choice": "Use the existing API’s expiry representation. If it has no defined representation, accept an RFC 3339 date-time with an explicit timezone offset and treat it as an instant.",
+        "rationale": "Reusing an established representation avoids inconsistent client behavior; RFC 3339 with an explicit offset is a widely used, unambiguous default.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How is expiry removal distinguished from leaving expiry unchanged?",
+        "choice": "For a partial-update request, an omitted expiry field leaves the value unchanged; an explicit null expiry clears it.",
+        "rationale": "This is a conventional partial-update distinction and permits removal without making omission destructive.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Are expiry values in the past accepted, and when exactly is a link considered expired?",
+        "choice": "Accept any syntactically valid expiry value, including one in the past; a link is expired when the current time is greater than or equal to its expiry.",
+        "rationale": "An owner-controlled expiry is conventionally an absolute time boundary; a past boundary naturally makes the link expired immediately.",
+        "source": "assumption"
+      },
+      {
+        "topic": "How is the management token presented to the operation, and what authorization-failure responses are returned?",
+        "choice": "Reuse the service’s existing management-token mechanism and authorization-failure response conventions. If no applicable convention exists, use 401 for a missing or invalid token and 403 for a token that does not authorize changes to the link.",
+        "rationale": "Reusing the established mechanism minimizes compatibility and security risk; 401 and 403 are conventional defaults when no precedent exists.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What response is returned for malformed or invalid expiry input?",
+        "choice": "Reject the request without changing the link, using the service’s existing validation-error convention. If none exists, return 400.",
+        "rationale": "Rejecting invalid input without a partial change is safe and conventional; following existing error conventions keeps the new operation consistent.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Which machine-readable definition and documentation formats should be used?",
+        "choice": "Use the formats already used by the service. If no machine-readable API format is established, use OpenAPI 3.1; if no documentation format is established, use Markdown.",
+        "rationale": "Following repository conventions is the lowest-risk choice; OpenAPI 3.1 and Markdown are broadly supported defaults.",
+        "source": "assumption"
+      },
+      {
+        "topic": "What operational point counts as ‘immediately’ for redirect and metadata visibility?",
+        "choice": "Once the update operation reports success, subsequent redirect decisions and metadata reads must use the new expiry; there must be no intentional propagation or cache delay.",
+        "rationale": "This gives the stated immediate-effect requirement a testable boundary while allowing the update operation itself to complete normally.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

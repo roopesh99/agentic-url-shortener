@@ -1,0 +1,66 @@
+{
+  "name": "implement",
+  "version": 1,
+  "sha": "540a8fc6cd930de45cd05e4c285e9d4e8add9d83ac7c1137b977c3dd649decc3",
+  "produced_by": "implement/coder#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "64ea04428caceeed33830006759600b08196bb9ce2e8d5dd03dff5882b258c4f"
+    },
+    {
+      "name": "impact",
+      "version": 3,
+      "sha": "441efb8e9f37b5abf46e42d29924c79e3f0bc30357c870e74abecb7fc0e09f24"
+    },
+    {
+      "name": "design",
+      "version": 1,
+      "sha": "b2e94e2ab7549046719d782945027a0961098db970fa0946858a361850ca1985"
+    }
+  ],
+  "result": {
+    "summary": "Add PATCH /api/links/{code} to set or remove a link's expiry under the existing row lock, with the existing token rules and wrong-token throttle; creation's expiry rule is shared, no schema change.",
+    "outputs": {
+      "files": [
+        "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+        "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+        "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+        "url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java",
+        "url-shortener/src/main/java/com/example/shortener/service/ClickRecorder.java",
+        "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+        "url-shortener/src/main/java/com/example/shortener/service/ManagementTokenRateLimiter.java"
+      ]
+    },
+    "files_written": [
+      "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+      "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+      "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+      "url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java",
+      "url-shortener/src/main/java/com/example/shortener/service/ClickRecorder.java",
+      "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+      "url-shortener/src/main/java/com/example/shortener/service/ManagementTokenRateLimiter.java"
+    ],
+    "decisions": [
+      {
+        "topic": "Request parsing",
+        "choice": "Parse the PATCH body as a JSON tree: a missing expiresAt is 400 invalid_request, explicit null removes the expiry, a value is converted with the application's ObjectMapper",
+        "rationale": "Field presence must survive parsing so an incomplete request never clears an expiry, and using the same mapper keeps instant parsing identical to creation",
+        "source": "agent"
+      },
+      {
+        "topic": "Check order",
+        "choice": "Under lockByCode: 404 unknown or deleted, then token (401/403, counted by the throttle), then 410 if already expired, then 400 invalid_expiry unless the new value is in the future",
+        "rationale": "Matches the approved design and the owner's rule that an expired link is never revived; nothing is written unless every check passes",
+        "source": "agent"
+      },
+      {
+        "topic": "Shared expiry rule",
+        "choice": "Extract futureExpiry() used by both create and updateExpiry (microsecond truncation, strictly after now, no maximum)",
+        "rationale": "One rule for expiry everywhere, as decided in clarification round 2",
+        "source": "agent"
+      }
+    ]
+  }
+}

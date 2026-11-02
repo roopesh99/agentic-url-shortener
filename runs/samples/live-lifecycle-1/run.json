@@ -1,0 +1,21 @@
+{
+  "workflow": "/Users/roopeshkotte/IdeaProjects/agentic-url-shortener/workflows/lifecycle.yaml",
+  "requirement": "/Users/roopeshkotte/IdeaProjects/agentic-url-shortener/scenarios/lifecycle-expiry.md",
+  "workspace": "/Users/roopeshkotte/IdeaProjects/agentic-url-shortener",
+  "policy": "/Users/roopeshkotte/IdeaProjects/agentic-url-shortener/policies/default.yaml",
+  "max_parallel": 4,
+  "agents": "llm",
+  "llm": "record",
+  "cassettes": null,
+  "llm_config": "/Users/roopeshkotte/IdeaProjects/agentic-url-shortener/config/llm.openai-hybrid.yaml",
+  "provider": "anthropic",
+  "model": null,
+  "session_agents": null,
+  "approvals": "file",
+  "auto_approve": false,
+  "answers": null,
+  "recorded_decisions": null,
+  "max_cost_usd": null,
+  "max_minutes": null,
+  "git": true
+}

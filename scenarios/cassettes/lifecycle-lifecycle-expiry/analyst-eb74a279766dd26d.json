@@ -1,0 +1,260 @@
+{
+  "request": {
+    "agent": "analyst",
+    "effort": "high",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ambiguities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "enum": [
+                  "assumption",
+                  "unresolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "resolution",
+              "source",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "non_functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "goal",
+        "functional",
+        "non_functional",
+        "ambiguities",
+        "acceptance_criteria"
+      ],
+      "type": "object"
+    },
+    "system": "You are the requirements analyst in a governed software delivery pipeline. You turn a product owner's requirement into a normalized engineering specification that the architect, coders and testers downstream will build from. You do not write code.\n\nYour output is checked by automated gates and then reviewed by a human before any design or code work starts, so precision matters more than polish.\n\nHow to work:\n- Restate the goal in one or two sentences an engineer could act on.\n- List functional and non-functional requirements as atomic, testable statements. Keep the requirement's own ids (FR1, NFR2, ...) when it provides them; otherwise assign them. Do not invent scope the requirement does not ask for.\n- Surface every ambiguity: anything an engineer would have to guess about (formats, limits, error behaviour, status codes, security posture). Include the requirement's own \"open points\" and any you find yourself.\n- For each ambiguity, decide whether a safe, conventional default exists.\n  - If it does, set `source` to \"assumption\", put the default in `resolution`, and explain in `rationale` why it is the conventional and low-risk choice. These become recorded decisions a human will review.\n  - If the answer is a genuine product decision (who may see data, business rules, legal or compliance posture, anything where a wrong guess would be costly to reverse), set `source` to \"unresolved\" and `resolution` to null. This stops the pipeline until a human answers, which is the intended behaviour. Do not guess on these to keep things moving.\n- Write acceptance criteria as observable behaviours (request \u2192 expected response), covering the main path and the important failure paths.\n- `summary`: one line, e.g. counts of requirements and how many ambiguities were resolved vs. left open.",
+    "user": "<requirement>\n# Requirement: Let link owners change a link's expiry (full lifecycle)\n\n> Input to the orchestrator for the full-lifecycle workflow (design, documentation and release\n> readiness included). The service in `url-shortener/` exists and is in use.\n\n## Goal\nOwners sometimes set an expiry that turns out to be too short, or forget to set one. Let the owner\nof a link change its expiry after creation.\n\n## Functional requirements\n- FR1 The owner of a link can set a new expiry, or remove the expiry, for that link.\n- FR2 Only the link's owner (holder of its management token) can do this.\n- FR3 The change takes effect immediately for redirects and is visible in the link's metadata.\n\n## Non-functional requirements\n- NFR1 Existing endpoints and their behaviour do not change.\n- NFR2 The service's API is described by a machine-readable definition, and the service is documented\n  for operators and API clients.\n- NFR3 The release is prepared with a changelog and a readiness review before it ships.\n\n## Known open points (for the Analyst to resolve or flag)\n- Whether an already expired link can be brought back to life by extending its expiry.\n- Whether there is a maximum expiry.\n</requirement>\n\n<clarifications>\nA human answered your earlier open questions. These answers are binding decisions. For each, keep the original question wording, set `resolution` to the answer, set `source` to \"assumption\" and start `rationale` with \"Decided by a human:\". Make the requirements and acceptance criteria consistent with every answer. Raise a new open question only if an answer itself leaves something genuinely undecided.\n\n[\n  {\n    \"answer\": \"No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that has already expired is rejected with 410 and error code expired (as redirects to expired links already respond), and the link is left unchanged. Deleted links cannot be changed either (404, as today).\",\n    \"question\": \"Can extending the expiry bring an already expired link back to life?\"\n  },\n  {\n    \"answer\": \"No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would be inconsistent, and adding one to creation would change existing behaviour (NFR1).\",\n    \"question\": \"Is there a maximum expiry, and if so, what is it?\"\n  }\n]\n</clarifications>\n\n<previous_attempt_feedback>\nAttempt 1 was not accepted. Fix the causes below.\n\n2 open question(s) were answered by a human (see <clarifications>); treat each answer as a binding decision.\n</previous_attempt_feedback>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "acceptance_criteria": [
+        "Given an active link and its valid management token, when the owner submits a valid later expiry, the operation returns HTTP 200 with the updated metadata; a metadata read shows the new expiry, and subsequent redirects apply the new expiry immediately.",
+        "Given an active link and its valid management token, when the owner submits null for expiry, the operation returns HTTP 200; metadata shows no expiry using the service\u2019s existing representation, and redirects are not rejected solely because of an expiry.",
+        "Given an active link, when an expiry update omits the expiry field, the operation leaves the existing expiry unchanged.",
+        "Given an active link, when an update request has a malformed or unsupported expiry value, the operation returns HTTP 400 in the existing error format and leaves the link unchanged.",
+        "Given a link, when an update request does not present its valid management token, the request is rejected using the existing management-token error contract and the link is unchanged.",
+        "Given an already expired link, when an owner attempts to set or remove its expiry, the operation returns HTTP 410 with error code `expired` and leaves the link unchanged.",
+        "Given a deleted link, when an owner attempts to change its expiry, the operation returns HTTP 404 and the link remains deleted.",
+        "Given an active link, when its owner sets a valid expiry later than its current expiry, the update is accepted without a product-imposed maximum expiry.",
+        "Before release, the machine-readable API definition and the operator and API-client documentation describe the new operation and its request and response behavior.",
+        "Before release, a changelog entry is present and a readiness review is recorded as complete.",
+        "The behavior for setting an expiry at or before the current time on a link that has not yet expired is not considered accepted until the unresolved product decision is answered."
+      ],
+      "ambiguities": [
+        {
+          "question": "Can extending the expiry bring an already expired link back to life?",
+          "rationale": "Decided by a human: this is binding. FR6 and FR7 specify the resulting rejection behavior.",
+          "resolution": "No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that has already expired is rejected with 410 and error code expired (as redirects to expired links already respond), and the link is left unchanged. Deleted links cannot be changed either (404, as today).",
+          "source": "assumption"
+        },
+        {
+          "question": "Is there a maximum expiry, and if so, what is it?",
+          "rationale": "Decided by a human: this is binding. FR8 specifies that the update imposes no maximum.",
+          "resolution": "No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would be inconsistent, and adding one to creation would change existing behaviour (NFR1).",
+          "source": "assumption"
+        },
+        {
+          "question": "What should happen if an owner sets an expiry at or before the current time on a link that has not yet expired?",
+          "rationale": "This could either be rejected or immediately expire the link. Immediate expiry may be irreversible because an already expired link cannot be changed, so the behavior requires a product decision.",
+          "resolution": null,
+          "source": "unresolved"
+        },
+        {
+          "question": "Which HTTP method, route, and success response should the expiry-management operation use?",
+          "rationale": "PATCH is a conventional choice for a partial resource update; following existing route conventions and returning the updated representation keeps the interface consistent and makes the result directly observable.",
+          "resolution": "Use PATCH on the link-management resource, following existing route conventions, and return HTTP 200 with updated link metadata.",
+          "source": "assumption"
+        },
+        {
+          "question": "How is a new expiry represented, and how is expiry removal distinguished from an omitted update?",
+          "rationale": "Reusing creation\u2019s established representation avoids introducing a second client-facing expiry format; null and omission conventionally distinguish clearing a value from leaving it unchanged in a partial update.",
+          "resolution": "Use the same expiry value type, format, and time semantics as link creation. In the PATCH request, null removes the expiry and an omitted expiry field leaves it unchanged.",
+          "source": "assumption"
+        },
+        {
+          "question": "What should happen for malformed or unsupported expiry values?",
+          "rationale": "A client-error response for invalid request data is conventional, and leaving stored state unchanged avoids partial or surprising updates.",
+          "resolution": "Return HTTP 400 using the service\u2019s existing error response format and leave the link unchanged.",
+          "source": "assumption"
+        },
+        {
+          "question": "What status and error response should a request with a missing, invalid, or non-owning management token receive?",
+          "rationale": "Reusing the service\u2019s existing token-handling contract is the lowest-risk way to enforce FR2 without introducing inconsistent or potentially more revealing authorization behavior.",
+          "resolution": "Use the existing management-token operations\u2019 authentication and authorization status/error behavior; do not change the link.",
+          "source": "assumption"
+        },
+        {
+          "question": "Which machine-readable API-definition format and documentation location should be used?",
+          "rationale": "OpenAPI 3.x is a widely supported machine-readable API standard; using established documentation locations avoids adding a parallel documentation system.",
+          "resolution": "Use an OpenAPI 3.x definition and the service\u2019s existing documentation locations and conventions.",
+          "source": "assumption"
+        },
+        {
+          "question": "What evidence or format satisfies the changelog and release-readiness review requirements?",
+          "rationale": "Using the established release process keeps evidence consistent with other releases while making completion observable without imposing a new review framework.",
+          "resolution": "Follow the service\u2019s existing changelog convention and record completion of the readiness review using its existing release process before shipping.",
+          "source": "assumption"
+        }
+      ],
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "An owner can set a new expiry for a link that has not already expired."
+        },
+        {
+          "id": "FR2",
+          "text": "Only the holder of the link\u2019s management token can change that link\u2019s expiry."
+        },
+        {
+          "id": "FR3",
+          "text": "A successful expiry change takes effect immediately for subsequent redirects."
+        },
+        {
+          "id": "FR4",
+          "text": "An owner can remove the expiry from a link that has not already expired."
+        },
+        {
+          "id": "FR5",
+          "text": "After a successful change, the link\u2019s metadata reflects the new expiry or the absence of an expiry."
+        },
+        {
+          "id": "FR6",
+          "text": "Changing the expiry of an already expired link is rejected with HTTP 410 and error code `expired`; the link remains unchanged and cannot be brought back to life."
+        },
+        {
+          "id": "FR7",
+          "text": "A deleted link cannot be changed; an attempt returns HTTP 404, consistent with current behavior."
+        },
+        {
+          "id": "FR8",
+          "text": "The expiry update imposes no maximum expiry, consistent with link creation."
+        },
+        {
+          "id": "FR9",
+          "text": "Expose expiry changes through a new management operation using PATCH on the link-management resource. The operation accepts an expiry value to set or null to remove the expiry; an omitted expiry field leaves it unchanged. On success, return HTTP 200 with the updated link metadata."
+        }
+      ],
+      "goal": "Allow a link owner to set or remove an active link\u2019s expiry after creation. The change must immediately affect redirects and link metadata, while preserving existing endpoint behavior and preparing the API, documentation, changelog, and release review.",
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Existing endpoints and their behavior remain unchanged."
+        },
+        {
+          "id": "NFR2",
+          "text": "The service API, including the new expiry-management operation and its request and response behavior, is described by a machine-readable definition."
+        },
+        {
+          "id": "NFR3",
+          "text": "The release includes a changelog entry for the expiry-management capability."
+        },
+        {
+          "id": "NFR4",
+          "text": "Documentation for API clients and operators describes the expiry-management capability and its relevant outcomes."
+        },
+        {
+          "id": "NFR5",
+          "text": "A release-readiness review is completed before the release ships."
+        }
+      ],
+      "summary": "9 functional and 5 non-functional requirements; 9 ambiguities (8 recorded assumptions, 1 unresolved)."
+    },
+    "duration_ms": 73254,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_d4930302478546f1b97a4b0060930878",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 1110,
+      "output_tokens": 9201
+    }
+  }
+}

@@ -1,0 +1,10 @@
+# Open questions from stage 'requirements' (run live-lifecycle-1, round 2).
+# These are product decisions the agent would not guess. Fill in every `answer`,
+# then submit:  orch answer live-lifecycle-1 requirements-clarify-2-9b8863
+# Your answers become binding human decisions in the audit log.
+
+- question: What should happen if an owner sets an expiry at or before the current time on a link that
+    has not yet expired?
+  why: This could either be rejected or immediately expire the link. Immediate expiry may be irreversible
+    because an already expired link cannot be changed, so the behavior requires a product decision.
+  answer: ''

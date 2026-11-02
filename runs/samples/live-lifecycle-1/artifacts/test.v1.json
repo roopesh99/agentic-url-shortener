@@ -1,0 +1,75 @@
+{
+  "name": "test",
+  "version": 1,
+  "sha": "2aeafb91915039a826f406fcbde37ccfe668f7d442cc8638b39c9dc9d27f8c20",
+  "produced_by": "test/tester#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "64ea04428caceeed33830006759600b08196bb9ce2e8d5dd03dff5882b258c4f"
+    },
+    {
+      "name": "impact",
+      "version": 3,
+      "sha": "441efb8e9f37b5abf46e42d29924c79e3f0bc30357c870e74abecb7fc0e09f24"
+    },
+    {
+      "name": "design",
+      "version": 1,
+      "sha": "b2e94e2ab7549046719d782945027a0961098db970fa0946858a361850ca1985"
+    },
+    {
+      "name": "implement",
+      "version": 1,
+      "sha": "540a8fc6cd930de45cd05e4c285e9d4e8add9d83ac7c1137b977c3dd649decc3"
+    },
+    {
+      "name": "test_plan",
+      "version": 1,
+      "sha": "418cf19a76e98457cfa14d51b63921b9445580139d4d0e892a6b1a80f94d8097"
+    }
+  ],
+  "result": {
+    "summary": "18 new tests: LinkExpiryUpdateTest (13: FR1-FR7, NFR2-01), the PATCH case added to ManagementTokenRateLimitTest, and four expiry races added to ClickDeletionRaceTest; no existing test changed or removed.",
+    "outputs": {
+      "files": [
+        "url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/LinkExpiryUpdateTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/ManagementTokenRateLimitTest.java"
+      ],
+      "implementation_defects": []
+    },
+    "files_written": [
+      "url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/LinkExpiryUpdateTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/ManagementTokenRateLimitTest.java"
+    ],
+    "decisions": [
+      {
+        "topic": "Existing tests extended, not changed",
+        "choice": "ManagementTokenRateLimitTest and ClickDeletionRaceTest only gain new test methods, helpers and imports; every existing method is byte-identical",
+        "rationale": "The approved impact plan requires both extensions; keeping existing methods untouched preserves their protection",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-NFR2-02 and TC-NFR3-01 not implemented as Java tests",
+        "choice": "The README/API docs are written by the parallel docs stage and the changelog and release record by the later release stage, so neither exists when this suite runs; they are enforced by the docs_cover_api, release_checklist_passed and files_exist gates instead",
+        "rationale": "A Java test for an artifact produced after the test stage would fail by construction",
+        "source": "agent"
+      },
+      {
+        "topic": "TC-NFR1-01 and TC-NFR1-02 covered by the existing suite",
+        "choice": "The test gate runs every existing test, including RedirectLatencyTest, with a floor of 121 tests",
+        "rationale": "Compatibility is the existing tests still passing unchanged",
+        "source": "agent"
+      },
+      {
+        "topic": "Mutation checks",
+        "choice": "Removing the expired check, reading a missing field as null, bypassing the throttle on PATCH, and dropping the row lock each make a new test fail",
+        "rationale": "A green suite is evidence only if it can fail",
+        "source": "agent"
+      }
+    ]
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "name": "test_plan",
+  "version": 1,
+  "sha": "418cf19a76e98457cfa14d51b63921b9445580139d4d0e892a6b1a80f94d8097",
+  "produced_by": "test_plan/test_planner#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "64ea04428caceeed33830006759600b08196bb9ce2e8d5dd03dff5882b258c4f"
+    },
+    {
+      "name": "impact",
+      "version": 3,
+      "sha": "441efb8e9f37b5abf46e42d29924c79e3f0bc30357c870e74abecb7fc0e09f24"
+    },
+    {
+      "name": "design",
+      "version": 1,
+      "sha": "b2e94e2ab7549046719d782945027a0961098db970fa0946858a361850ca1985"
+    }
+  ],
+  "result": {
+    "summary": "19 cases covering FR1–FR7 and NFR1–NFR3, including endpoint success and failure paths, shared throttling, concurrency, compatibility, and release artifacts.",
+    "outputs": {
+      "test_cases": [
+        {
+          "id": "TC-FR1-01",
+          "covers": "FR1",
+          "level": "integration",
+          "check": "PATCH an active link with a valid management token and future expiresAt; assert HTTP 200 and that the response metadata contains the requested expiry."
+        },
+        {
+          "id": "TC-FR1-02",
+          "covers": "FR1",
+          "level": "integration",
+          "check": "PATCH an active link with expiresAt explicitly set to null; assert HTTP 200 and response metadata contains expiresAt: null."
+        },
+        {
+          "id": "TC-FR1-03",
+          "covers": "FR1",
+          "level": "integration",
+          "check": "PATCH an active link with expiresAt omitted; assert HTTP 400 and verify the persisted expiry is unchanged."
+        },
+        {
+          "id": "TC-FR1-04",
+          "covers": "FR1",
+          "level": "integration",
+          "check": "PATCH an active link with malformed JSON or a malformed expiresAt value; assert HTTP 400 and verify the persisted expiry is unchanged."
+        },
+        {
+          "id": "TC-FR2-01",
+          "covers": "FR2",
+          "level": "integration",
+          "check": "PATCH an active link without X-Management-Token; assert the established HTTP 401 missing_token response and verify the expiry is unchanged."
+        },
+        {
+          "id": "TC-FR2-02",
+          "covers": "FR2",
+          "level": "integration",
+          "check": "PATCH an active link with an incorrect management token; assert the established HTTP 403 invalid_token response and verify the expiry is unchanged."
+        },
+        {
+          "id": "TC-FR2-03",
+          "covers": "FR2",
+          "level": "integration",
+          "check": "Send wrong-token PATCH requests until the shared management-token failure limit is exceeded; assert the limit produces HTTP 429 rate_limited and that PATCH failures count toward the same limit as the existing management operations."
+        },
+        {
+          "id": "TC-FR3-01",
+          "covers": "FR3",
+          "level": "integration",
+          "check": "Set a future expiry and verify metadata reflects it and a redirect returns HTTP 410 after the controlled clock passes that expiry; then clear a still-active link's expiry and verify a redirect succeeds after the link's former expiry time."
+        },
+        {
+          "id": "TC-FR3-02",
+          "covers": "FR3",
+          "level": "integration",
+          "check": "Run expiry update concurrently with click recording through the redirect path; assert the update's expiry is persisted, the redirect remains served, and click recording preserves its expected count and link-state invariants."
+        },
+        {
+          "id": "TC-FR3-03",
+          "covers": "FR3",
+          "level": "integration",
+          "check": "Race an expiry update against deletion; assert serialization leaves the link deleted, does not resurrect it, and produces either a completed update followed by deletion or a not-found update after deletion."
+        },
+        {
+          "id": "TC-FR4-01",
+          "covers": "FR4",
+          "level": "integration",
+          "check": "For an already expired link, attempt both setting a future expiry and clearing the expiry; assert each request returns HTTP 410 expired, persisted expiry remains unchanged, and redirects remain expired."
+        },
+        {
+          "id": "TC-FR5-01",
+          "covers": "FR5",
+          "level": "integration",
+          "check": "On a link that has not expired, submit an expiry equal to the controlled current time and one before it; assert each returns HTTP 400 invalid_expiry and leaves the persisted expiry unchanged."
+        },
+        {
+          "id": "TC-FR6-01",
+          "covers": "FR6",
+          "level": "integration",
+          "check": "PATCH a deleted link and an unknown link with a valid token; assert HTTP 404 not_found for each and verify the deleted link remains a tombstone."
+        },
+        {
+          "id": "TC-FR7-01",
+          "covers": "FR7",
+          "level": "integration",
+          "check": "Set a valid expiry far beyond commonly expected near-term dates; assert HTTP 200 and that the returned and persisted expiry equal the requested value, with no update-only maximum applied."
+        },
+        {
+          "id": "TC-NFR1-01",
+          "covers": "NFR1",
+          "level": "integration",
+          "check": "Run the existing create, metadata, stats, delete, redirect, health, error-contract, and click-failure-isolation tests; assert their established response contracts, state changes, and redirect behavior remain unchanged."
+        },
+        {
+          "id": "TC-NFR1-02",
+          "covers": "NFR1",
+          "level": "integration",
+          "check": "Run the existing RedirectLatencyTest with the new endpoint tests; assert it continues to meet its established latency expectation and that redirect resolution does not acquire a new lock or perform additional expiry-update work."
+        },
+        {
+          "id": "TC-NFR2-01",
+          "covers": "NFR2",
+          "level": "unit",
+          "check": "Parse url-shortener/openapi.yaml as OpenAPI 3.x and assert it defines PATCH /api/links/{code}, the management-token header, required expiresAt with nullable support, the success metadata response, and the documented relevant error responses."
+        },
+        {
+          "id": "TC-NFR2-02",
+          "covers": "NFR2",
+          "level": "unit",
+          "check": "Check url-shortener/README.md and url-shortener/docs/api.md for the expiry-change operation, authentication, future timestamp and explicit-null request values, omission behavior, and relevant success and error behavior."
+        },
+        {
+          "id": "TC-NFR3-01",
+          "covers": "NFR3",
+          "level": "unit",
+          "check": "Verify url-shortener/CHANGELOG.md contains an entry for this change and url-shortener/docs/releases/1.0.0-SNAPSHOT.md records the release-readiness review as complete, with verification, compatibility, and documentation readiness addressed."
+        }
+      ]
+    },
+    "files_written": [
+      "docs/test-plan.md"
+    ],
+    "decisions": [
+      {
+        "topic": "Documentation and release-artifact verification",
+        "choice": "Use automated file-content and OpenAPI parsing checks for artifact presence and key contract statements, with a human review before shipment.",
+        "rationale": "Automated checks can catch missing or structurally incomplete artifacts, but cannot establish that operator/client guidance is sufficiently clear or that a release review was genuinely completed.",
+        "source": "agent"
+      },
+      {
+        "topic": "Redirect latency verification",
+        "choice": "Run the established RedirectLatencyTest as the closest automated regression check.",
+        "rationale": "The specification provides no numeric latency target or percentile acceptance threshold for this change; the existing test can detect regressions against the service's current expectation but cannot prove an unspecified target.",
+        "source": "agent"
+      },
+      {
+        "topic": "Concurrency expectations",
+        "choice": "Assert persisted-state and click/tombstone invariants rather than requiring a particular winner in races.",
+        "rationale": "The approved design serializes operations on the link row, but does not require which concurrent operation acquires the lock first.",
+        "source": "agent"
+      }
+    ]
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "name": "release",
+  "version": 2,
+  "sha": "7af5474c6d9cdbf68e653acc23641460472a7536f60a4c2b6b2f32d93d7c907b",
+  "produced_by": "release/release#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "64ea04428caceeed33830006759600b08196bb9ce2e8d5dd03dff5882b258c4f"
+    },
+    {
+      "name": "impact",
+      "version": 3,
+      "sha": "441efb8e9f37b5abf46e42d29924c79e3f0bc30357c870e74abecb7fc0e09f24"
+    },
+    {
+      "name": "design",
+      "version": 1,
+      "sha": "b2e94e2ab7549046719d782945027a0961098db970fa0946858a361850ca1985"
+    },
+    {
+      "name": "implement",
+      "version": 1,
+      "sha": "540a8fc6cd930de45cd05e4c285e9d4e8add9d83ac7c1137b977c3dd649decc3"
+    },
+    {
+      "name": "test_plan",
+      "version": 1,
+      "sha": "418cf19a76e98457cfa14d51b63921b9445580139d4d0e892a6b1a80f94d8097"
+    },
+    {
+      "name": "docs",
+      "version": 1,
+      "sha": "b6538aa698993503e4419ea24bf46aca9db13bb248c2015cbd4d011d74afa453"
+    },
+    {
+      "name": "test",
+      "version": 1,
+      "sha": "2aeafb91915039a826f406fcbde37ccfe668f7d442cc8638b39c9dc9d27f8c20"
+    }
+  ],
+  "result": {
+    "summary": "Release-readiness checks pass; the change is ready for the workflow’s human release sign-off.",
+    "outputs": {
+      "version": "1.1.0",
+      "checklist": [
+        {
+          "item": "Requirements approved",
+          "status": "pass",
+          "evidence": "The approved specification defines 7 functional and 3 non-functional requirements."
+        },
+        {
+          "item": "Open questions resolved",
+          "status": "pass",
+          "evidence": "The requirements artifact records 9 resolved assumptions and 0 unresolved ambiguities, including decisions on expired links, maximum expiry, and invalid expiry values."
+        },
+        {
+          "item": "Design approved",
+          "status": "pass",
+          "evidence": "Accepted design@v1 specifies the additive PATCH operation, token verification, row locking, expiry behavior, and no schema change."
+        },
+        {
+          "item": "API definition valid and implemented",
+          "status": "pass",
+          "evidence": "The accepted design and documentation stages include `url-shortener/openapi.yaml`; implementation adds `PATCH /api/links/{code}`, and the accepted test summary includes API-definition coverage."
+        },
+        {
+          "item": "Tests passing",
+          "status": "pass",
+          "evidence": "The orchestrator reran the full test suite on the current workspace immediately before this stage and it passed. The accepted test artifact reports 18 new tests, with the suite’s established floor of 121 tests."
+        },
+        {
+          "item": "Documentation updated",
+          "status": "pass",
+          "evidence": "The accepted docs artifact lists updates to `url-shortener/README.md` and `url-shortener/docs/api.md`; the OpenAPI definition documents the operation and its contract."
+        },
+        {
+          "item": "Backward compatibility",
+          "status": "pass",
+          "evidence": "The change is additive, reuses the existing nullable `expires_at` field, and adds no redirect-path work. The test artifact states existing tests were not changed or removed; the full suite passed."
+        },
+        {
+          "item": "Security and privacy requirements addressed",
+          "status": "pass",
+          "evidence": "Implementation reuses management-token verification and the shared wrong-token throttle. The recorded check order rejects unauthorized requests before mutation; no new personal data is introduced."
+        },
+        {
+          "item": "Migrations reviewed",
+          "status": "n/a",
+          "evidence": "The accepted design and impact decisions state that the existing nullable `expires_at` column supports this change and no schema or database migration is needed."
+        },
+        {
+          "item": "Rollback possible",
+          "status": "pass",
+          "evidence": "The change adds an endpoint without a schema migration or alternate state store; the existing expiry column remains usable by the prior application version."
+        }
+      ],
+      "risks": [
+        {
+          "risk": "The specification uses the placeholder route `/links/{linkId}`, while the approved API definition and implementation use `/api/links/{code}`.",
+          "mitigation": "The requirements retain the service’s existing base path, and the documentation records the naming discrepancy. Keep the OpenAPI definition as the client-facing reference and verify clients use the implemented route."
+        },
+        {
+          "risk": "Expiry updates persist in the existing column. Rolling back application code will not restore the prior expiry values, and this change does not introduce expiry-change history.",
+          "mitigation": "Treat persisted user-selected expiries as valid state during rollback. If a particular value must be restored, use an operational source of truth or backup and restore it deliberately rather than reverting the database wholesale."
+        },
+        {
+          "risk": "No numeric redirect-latency target was specified, so the existing latency regression test cannot establish an unstated performance threshold.",
+          "mitigation": "The change avoids modifying redirect resolution, and the established `RedirectLatencyTest` is included in the full passing suite. Define and monitor a numeric target separately if one is required."
+        }
+      ],
+      "rollback_plan": "If release issues require rollback, redeploy the previous application version. No database migration or schema rollback is required; the previous version continues to use the existing `expires_at` column. The PATCH route will no longer be available, but expiry values already written remain persisted and continue to be interpreted by the existing redirect behavior. Do not automatically revert those values; restore a particular prior expiry only when required, using an operational source of truth or backup."
+    },
+    "files_written": [
+      "url-shortener/CHANGELOG.md",
+      "url-shortener/docs/releases/1.1.0.md"
+    ],
+    "decisions": [
+      {
+        "topic": "Release version",
+        "choice": "Use 1.1.0.",
+        "rationale": "This is a new backward-compatible feature, so the release policy calls for a minor version bump. The impact artifact references the current 1.0.0-SNAPSHOT project version for its release-record path; that is not the shipping version for this feature release.",
+        "source": "agent"
+      },
+      {
+        "topic": "API route",
+        "choice": "Document and release `PATCH /api/links/{code}`.",
+        "rationale": "This retains the service’s existing `/api/links` base path and code parameter convention. The accepted API definition, implementation, and documentation use this concrete route.",
+        "source": "agent"
+      },
+      {
+        "topic": "Persistence and migration",
+        "choice": "Use the existing nullable `expires_at` column without a migration.",
+        "rationale": "The column supports both setting and clearing expiry; reusing it avoids schema changes and preserves compatibility.",
+        "source": "agent"
+      },
+      {
+        "topic": "Expiry rules",
+        "choice": "Do not impose a maximum expiry; reject changes to already expired links and reject non-future expiries on active links.",
+        "rationale": "These are the binding human decisions in the approved specification and match the shared creation/update validation rule.",
+        "source": "agent"
+      },
+      {
+        "topic": "Rollback behavior",
+        "choice": "Roll back application code without reverting persisted expiry values.",
+        "rationale": "The existing schema remains compatible, while reverting user-selected values without an audit history could discard legitimate state.",
+        "source": "agent"
+      }
+    ]
+  }
+}

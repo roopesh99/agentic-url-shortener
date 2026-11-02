@@ -1,0 +1,19 @@
+{
+  "run_id": "live-lifecycle-1",
+  "stage": "impact",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Add token-authenticated expiry updates at PATCH /api/links/{code}, with atomic validation, immediate persisted effect, documentation, and release-readiness artifacts.",
+  "gate_evidence": [
+    "outputs_present: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "Endpoint and resource naming: Add PATCH /api/links/{code}, retaining the current /api/links base path and its existing code path-parameter convention. (agent)",
+    "Omitted versus null expiry: Use an update request DTO that tracks whether expiresAt was present separately from its nullable timestamp value. (agent)",
+    "Locking and update transaction: Reuse lockByCode and perform authorization, expiry validation, and mutation within one short transaction. (agent)",
+    "Authentication failure throttling: Route PATCH token failures through the existing shared management-token throttle. (agent)",
+    "Expiry limits and schema: Add no maximum expiry and make no schema or migration change. (agent)",
+    "Release artifact version: Use docs/releases/1.0.0-SNAPSHOT.md for the release-readiness record. (agent)"
+  ],
+  "artifact_sha": "441efb8e9f37b5abf46e42d29924c79e3f0bc30357c870e74abecb7fc0e09f24"
+}

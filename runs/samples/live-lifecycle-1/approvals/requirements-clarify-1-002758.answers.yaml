@@ -1,0 +1,13 @@
+# Open questions from stage 'requirements' (run live-lifecycle-1, round 1).
+# These are product decisions the agent would not guess. Fill in every `answer`,
+# then submit:  orch answer live-lifecycle-1 requirements-clarify-1-002758
+# Your answers become binding human decisions in the audit log.
+
+- question: Can extending the expiry bring an already expired link back to life?
+  why: This is an explicitly listed product-policy question. Choosing either behavior changes whether
+    previously expired links become usable again.
+  answer: ''
+- question: Is there a maximum expiry, and if so, what is it?
+  why: This is an explicitly listed product-policy question. A limit could affect customer commitments
+    and operational or security policy, so a default should not be guessed.
+  answer: ''

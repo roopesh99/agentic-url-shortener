@@ -1,0 +1,5 @@
+{
+  "approved": false,
+  "approver": "roopeshkotte",
+  "comment": "Keep this revision's file locations and everything else unchanged, and restore two items from v1: (1) modify ManagementTokenRateLimitTest to verify that wrong tokens on PATCH /api/links/{code} count toward the shared management-token throttle; (2) the concurrency test must cover an expiry update concurrent with click recording (redirect path) as well as with deletion."
+}

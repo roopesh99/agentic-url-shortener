@@ -1,0 +1,20 @@
+{
+  "run_id": "live-lifecycle-1",
+  "stage": "requirements",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "7 functional and 3 non-functional requirements; 9 ambiguities recorded (9 assumptions, 0 unresolved).",
+  "gate_evidence": [
+    "outputs_present: PASS",
+    "ambiguities_resolved: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "What HTTP method and route should expose the expiry-change operation?: Add an additive `PATCH /links/{linkId}` operation, retaining any existing API base path or version prefix used by the service. (assumption)",
+    "How should a request distinguish setting an expiry, removing it, and omitting an expiry value?: Use the `expiresAt` field and the same timestamp format and parsing rules as link creation. A future timestamp sets the expiry; `null` removes it; an omitted `expiresAt` field is rejected with HTTP 400 and leaves the link unchanged. (assumption)",
+    "What success response should an expiry-change request return?: Return HTTP 200 with the updated link metadata, including the new expiry or the absence of an expiry. (assumption)",
+    "How should the management token be sent, and what response should be used for a missing or invalid token?: Use the service's existing management-token authentication mechanism and its existing authentication-failure response; do not mutate the link when authentication fails. (assumption)",
+    "What format and location should be used for the machine-readable API definition and operator and API-client documentation?: Use an OpenAPI 3.x definition and place it and the operator and API-client documentation in the service's established documentation locations and formats. (assumption)",
+    "What form should the changelog entry and release-readiness review take?: Use the repository's established changelog and release-review formats; record completion of the review before shipment, including the change's verification, compatibility, and documentation readiness. (assumption)"
+  ],
+  "artifact_sha": "64ea04428caceeed33830006759600b08196bb9ce2e8d5dd03dff5882b258c4f"
+}

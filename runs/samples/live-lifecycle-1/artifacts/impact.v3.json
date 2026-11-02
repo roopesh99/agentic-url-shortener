@@ -1,0 +1,207 @@
+{
+  "name": "impact",
+  "version": 3,
+  "sha": "441efb8e9f37b5abf46e42d29924c79e3f0bc30357c870e74abecb7fc0e09f24",
+  "produced_by": "impact/impact_analyst#3",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 3,
+      "sha": "64ea04428caceeed33830006759600b08196bb9ce2e8d5dd03dff5882b258c4f"
+    }
+  ],
+  "result": {
+    "summary": "Add token-authenticated expiry updates at PATCH /api/links/{code}, with atomic validation, immediate persisted effect, documentation, and release-readiness artifacts.",
+    "outputs": {
+      "impacted": [
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/LinkController.java",
+          "kind": "modify",
+          "reason": "FR1–FR3, FR2: add the PATCH route, return updated metadata, and use the existing token-failure throttle."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java",
+          "kind": "modify",
+          "reason": "FR1, FR3: add an update request type that distinguishes an omitted expiresAt from an explicit null, while reusing the existing metadata response."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/domain/Link.java",
+          "kind": "modify",
+          "reason": "FR1, FR3: provide a way to update the existing nullable expiresAt field."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java",
+          "kind": "modify",
+          "reason": "FR1, FR3: document the existing row-locking operation's use by expiry updates as well as click recording and deletion."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/service/ClickRecorder.java",
+          "kind": "modify",
+          "reason": "FR3: keep the row-locking documentation accurate when expiry updates also serialize with click recording."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+          "kind": "modify",
+          "reason": "FR1–FR7: implement token-authorized, transactional expiry updates with the required deleted, expired, and future-expiry validation."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/service/ManagementTokenRateLimiter.java",
+          "kind": "modify",
+          "reason": "FR2: update the limiter documentation to include expiry updates in the shared stats/delete management-token throttle."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/LinkExpiryUpdateTest.java",
+          "kind": "create",
+          "reason": "FR1–FR7, NFR1: exercise the new HTTP contract, validation, authentication, metadata, and redirect behavior."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java",
+          "kind": "modify",
+          "reason": "FR3: add concurrency coverage for expiry updates against click recording on the redirect path, as well as against deletion."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/ManagementTokenRateLimitTest.java",
+          "kind": "modify",
+          "reason": "FR2: verify wrong tokens on PATCH count toward the shared management-token throttle."
+        },
+        {
+          "path": "url-shortener/openapi.yaml",
+          "kind": "create",
+          "reason": "NFR2: define the PATCH operation, authentication, request values, response metadata, and relevant errors in OpenAPI 3.x."
+        },
+        {
+          "path": "url-shortener/README.md",
+          "kind": "create",
+          "reason": "NFR2: document the expiry-change capability for operators at the workflow-required location."
+        },
+        {
+          "path": "url-shortener/docs/api.md",
+          "kind": "create",
+          "reason": "NFR2: document the operation, authentication, request values, and success and error behavior for API clients."
+        },
+        {
+          "path": "url-shortener/docs/design.md",
+          "kind": "create",
+          "reason": "FR3–FR7: record the update, locking, and expiry-validation design at the workflow-required location."
+        },
+        {
+          "path": "url-shortener/CHANGELOG.md",
+          "kind": "create",
+          "reason": "NFR3: prepare a changelog entry at the workflow-required location."
+        },
+        {
+          "path": "url-shortener/docs/releases/1.0.0-SNAPSHOT.md",
+          "kind": "create",
+          "reason": "NFR3: record the release-readiness review for the current pom.xml version at the workflow-required location."
+        }
+      ],
+      "api_changes": [
+        {
+          "method": "PATCH",
+          "path": "/api/links/{code}",
+          "change": "Add an operation using the service's existing base path and code path parameter. Request: Content-Type application/json; required X-Management-Token header; body {\"expiresAt\": \"<ISO-8601 instant>\"} to set a future expiry or {\"expiresAt\": null} to remove it. Omission of expiresAt, malformed input, or a non-future timestamp returns HTTP 400; non-future timestamps use error code invalid_expiry. Success: HTTP 200 with the updated LinkMetadata representation, including expiresAt as the new instant or null. Errors: HTTP 401 missing_token, HTTP 403 invalid_token, HTTP 429 rate_limited when the existing shared wrong-token limit is exceeded, HTTP 404 not_found for unknown or deleted links, and HTTP 410 expired for an already expired link. Error bodies retain the existing {error, message} format. No maximum expiry is added. Existing endpoints keep their current contracts unless the specification says otherwise; this operation is additive."
+        }
+      ],
+      "data_changes": [
+        "No schema change is needed: links.expires_at already exists and is nullable, which supports both setting and removing an expiry.",
+        "No migration file is required. Existing migrations V1 and V2 remain immutable; any future schema changes must use a new, higher-numbered migration."
+      ],
+      "data_flows": [
+        "PATCH parses the request while preserving whether expiresAt was supplied. The controller rejects an omitted field; explicit null reaches the service as a request to clear expiry.",
+        "LinkService obtains the link with the existing pessimistic lockByCode operation, checks that it is live, authenticates using the stored token hash and existing constant-time token comparison, then rejects an already expired link with 410 or a non-future requested expiry with 400. A valid change is saved in the transaction; no token or token hash is returned.",
+        "The updated expires_at is committed to the existing links row. The PATCH response is built from that updated link, and the existing metadata and redirect lookup paths read the persisted value; no cache or separate expiry store is introduced.",
+        "Redirect lookup remains a database lookup with no new work or lock on its read path. Click recording remains separate and best-effort; it uses the existing link-row lock, so a concurrent expiry update can serialize with it. Keep the update transaction short so this contention does not unnecessarily delay redirects, and preserve RedirectController's behavior of serving the redirect if click recording fails."
+      ],
+      "risks": [
+        {
+          "risk": "A request implementation that treats both an omitted expiresAt and explicit null as Java null could accidentally clear expiry on an incomplete request.",
+          "mitigation": "Use an update DTO that records field presence separately from its nullable value, and reject omission before calling the service.",
+          "detection": "LinkExpiryUpdateTest should assert omission returns 400 and that the stored expiry is unchanged, while explicit null succeeds and reports null."
+        },
+        {
+          "risk": "An expired link could be revived, or a past expiry could be persisted, if validation order or the expiry boundary differs from creation and redirect behavior.",
+          "mitigation": "Under the row lock, reject an already expired link before mutation; otherwise require a non-null requested expiry to be strictly after the service clock, using the same microsecond truncation and future rule as creation.",
+          "detection": "LinkExpiryUpdateTest should cover an authorized update to an expired link (410 expired), a timestamp at or before now (400 invalid_expiry), and unchanged persisted state for both."
+        },
+        {
+          "risk": "An update racing deletion or click recording could observe or write inconsistent link state.",
+          "mitigation": "Reuse lockByCode and the existing transaction; click recording and deletion already use the corresponding link-row lock. Do not add a second persistence path.",
+          "detection": "The expanded ClickDeletionRaceTest should exercise expiry update concurrent with click recording and with deletion, checking the final expiry, click, and tombstone invariants."
+        },
+        {
+          "risk": "Incorrect token handling could permit an unauthorized update or make PATCH token guessing bypass the established shared rate limit.",
+          "mitigation": "Use the same authorization and withTokenThrottle patterns as the existing stats and delete operations; do not mutate before authorization.",
+          "detection": "LinkExpiryUpdateTest should assert missing and wrong tokens leave state unchanged; ManagementTokenRateLimitTest should show wrong PATCH tokens contribute to the shared limit."
+        },
+        {
+          "risk": "Adding a maximum expiry only on updates, or changing creation behavior to impose one, would violate the specified compatibility rule.",
+          "mitigation": "Apply only the existing creation validation rule that an expiry must be in the future; do not add an update-only maximum or alter creation.",
+          "detection": "LinkExpiryUpdateTest should set a far-future expiry successfully; LinkCreationTest continues to protect existing creation validation."
+        },
+        {
+          "risk": "Changes to shared DTOs, authentication, or persistence behavior could unintentionally alter existing endpoint contracts.",
+          "mitigation": "Keep the route additive, reuse existing metadata/error/token conventions, and leave existing create, metadata, stats, delete, and redirect behavior untouched.",
+          "detection": "Run LinkCreationTest, LinkLifecycleTest, LinkStatsTest, ErrorContractAndHeadersTest, and ClickFailureIsolationTest alongside the new endpoint tests."
+        },
+        {
+          "risk": "Documentation or the release record could disagree with actual status codes, authentication, or the shipped API definition.",
+          "mitigation": "Keep OpenAPI, README, API-client documentation, changelog, design note, and release-readiness record aligned with the implemented contract; record compatibility, verification, and documentation readiness in the release record.",
+          "detection": "Review all required artifacts against the endpoint and its tests before shipment, including completion of the checklist in docs/releases/1.0.0-SNAPSHOT.md."
+        }
+      ],
+      "test_strategy": [
+        "Add LinkExpiryUpdateTest using the existing IntegrationTest support and controllable clock. Cover setting a future expiry and seeing it in the 200 response and metadata; clearing with explicit null; redirect behavior before and after changes; omitted field rejection; missing and invalid token responses with unchanged state; expired-link 410 expired; at-or-before-now 400 invalid_expiry; deleted-link 404; and a far-future accepted value.",
+        "Modify ClickDeletionRaceTest to cover an expiry update concurrent with click recording as well as the existing update/deletion-relevant locking behavior; assert serialization preserves the intended final link state and click invariants.",
+        "Modify ManagementTokenRateLimitTest to send wrong tokens to PATCH /api/links/{code} and prove those failures count in the same per-peer limit as stats and delete, while valid tokens remain usable.",
+        "Existing LinkLifecycleTest protects redirect expiry boundaries, public metadata, deleted-link behavior, and token-authorized deletion; LinkCreationTest protects the existing timestamp format and creation validation.",
+        "Existing ErrorContractAndHeadersTest protects standard error bodies, existing endpoint contracts, and security headers; ClickFailureIsolationTest protects best-effort click persistence and redirect availability.",
+        "Existing LinkStatsTest and ClickDeletionRaceTest protect click behavior and deletion consistency; ClickPersistenceAndUpgradeTest and PersistenceRestartTest protect persisted data and migration compatibility.",
+        "Existing RedirectLatencyTest protects the redirect hot path's latency expectation. Run it with the new tests to detect accidental extra redirect-path work.",
+        "Before shipment, manually verify the OpenAPI definition and operator/API-client docs against the implemented request and response behavior, and complete the release-readiness review."
+      ],
+      "change_requests": [
+        "Keep the technical plan unchanged. Align documentation and release files with the workflow's fixed locations: the API definition is url-shortener/openapi.yaml; operator and API-client documentation are url-shortener/README.md and url-shortener/docs/api.md (no separate guides); the design note is url-shortener/docs/design.md; the release-readiness record is url-shortener/docs/releases/<version>.md; the changelog is url-shortener/CHANGELOG.md.",
+        "Keep this revision's file locations and everything else unchanged, and restore two items from v1: (1) modify ManagementTokenRateLimitTest to verify that wrong tokens on PATCH /api/links/{code} count toward the shared management-token throttle; (2) the concurrency test must cover an expiry update concurrent with click recording (redirect path) as well as with deletion."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Endpoint and resource naming",
+        "choice": "Add PATCH /api/links/{code}, retaining the current /api/links base path and its existing code path-parameter convention.",
+        "rationale": "This implements the approved additive PATCH route without introducing a competing version or resource naming convention.",
+        "source": "agent"
+      },
+      {
+        "topic": "Omitted versus null expiry",
+        "choice": "Use an update request DTO that tracks whether expiresAt was present separately from its nullable timestamp value.",
+        "rationale": "The API must reject omission while accepting explicit null to clear expiry.",
+        "source": "agent"
+      },
+      {
+        "topic": "Locking and update transaction",
+        "choice": "Reuse lockByCode and perform authorization, expiry validation, and mutation within one short transaction.",
+        "rationale": "The existing pessimistic row lock already coordinates with deletion and click recording without adding a parallel persistence mechanism.",
+        "source": "agent"
+      },
+      {
+        "topic": "Authentication failure throttling",
+        "choice": "Route PATCH token failures through the existing shared management-token throttle.",
+        "rationale": "This preserves the service's established authentication-failure and abuse-protection behavior.",
+        "source": "agent"
+      },
+      {
+        "topic": "Expiry limits and schema",
+        "choice": "Add no maximum expiry and make no schema or migration change.",
+        "rationale": "Creation already accepts future expiry values without a maximum, and the nullable expires_at column supports clearing.",
+        "source": "agent"
+      },
+      {
+        "topic": "Release artifact version",
+        "choice": "Use docs/releases/1.0.0-SNAPSHOT.md for the release-readiness record.",
+        "rationale": "The current project version in pom.xml is 1.0.0-SNAPSHOT and the workflow requires the release record under docs/releases/<version>.md.",
+        "source": "agent"
+      }
+    ]
+  }
+}

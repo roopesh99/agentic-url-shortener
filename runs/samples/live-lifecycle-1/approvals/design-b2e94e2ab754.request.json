@@ -1,0 +1,22 @@
+{
+  "run_id": "live-lifecycle-1",
+  "stage": "design",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "The design adds an authenticated PATCH operation at /api/links/{code} to set or clear expiry, reusing the existing link row, metadata representation, management-token handling, and row lock. Existing HTTP routes and behavior remain unchanged; no schema migration or redirect-path work is needed.",
+  "gate_evidence": [
+    "openapi_valid: PASS"
+  ],
+  "files_changed": [
+    "url-shortener/docs/design.md",
+    "url-shortener/openapi.yaml"
+  ],
+  "decisions": [
+    "Update route and method: Add PATCH /api/links/{code}. (agent)",
+    "Request value semantics: Require expiresAt; accept a future instant to set expiry and explicit null to remove it. (agent)",
+    "Expired and invalid expiries: Reject updates to already expired links with 410 expired and reject non-future values on active links with 400 invalid_expiry. (agent)",
+    "Persistence and concurrency: Update the existing nullable expires_at column under the existing pessimistic link-row lock. (agent)",
+    "Authentication and throttling: Reuse X-Management-Token verification and the shared wrong-token throttle. (agent)",
+    "Expiry limits and redirect path: Add no maximum expiry and do not add work or locking to redirect resolution. (agent)"
+  ],
+  "artifact_sha": "b2e94e2ab7549046719d782945027a0961098db970fa0946858a361850ca1985"
+}

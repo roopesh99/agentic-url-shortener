@@ -1,0 +1,14 @@
+{
+  "answers": [
+    {
+      "question": "Can extending the expiry bring an already expired link back to life?",
+      "answer": "No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that has already expired is rejected with 410 and error code expired (as redirects to expired links already respond), and the link is left unchanged. Deleted links cannot be changed either (404, as today)."
+    },
+    {
+      "question": "Is there a maximum expiry, and if so, what is it?",
+      "answer": "No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would be inconsistent, and adding one to creation would change existing behaviour (NFR1)."
+    }
+  ],
+  "answered_by": "roopeshkotte",
+  "source": "human"
+}

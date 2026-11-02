@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Replays the three recorded scenarios offline: no API key, no network calls to an LLM, $0.
+# Replays the four recorded scenarios offline: no API key, no network calls to an LLM, $0.
 # Every LLM exchange comes from scenarios/cassettes/, every human decision from runs/samples/.
 # Each scenario starts from the repository state it originally started from (a temporary git
 # worktree) and its generated url-shortener is compared with the commit the original run produced.
@@ -9,7 +9,8 @@ ROOT="$PWD"
 WORK="$(mktemp -d)"
 trap 'git -C "$ROOT" worktree remove --force "$WORK/wt-brownfield" 2>/dev/null || true
       git -C "$ROOT" worktree remove --force "$WORK/wt-ambiguous" 2>/dev/null || true
-      git -C "$ROOT" branch -D orch/replay-brownfield orch/replay-ambiguous >/dev/null 2>&1 || true
+      git -C "$ROOT" worktree remove --force "$WORK/wt-lifecycle" 2>/dev/null || true
+      git -C "$ROOT" branch -D orch/replay-brownfield orch/replay-ambiguous orch/replay-lifecycle >/dev/null 2>&1 || true
       rm -rf "$WORK"' EXIT
 
 unset OPENAI_API_KEY ANTHROPIC_API_KEY
@@ -42,5 +43,15 @@ orch run workflows/brownfield.yaml --requirement scenarios/ambiguous-reliability
     "${llm[@]}" --recorded-decisions runs/samples/live-ambiguous-1/approvals --run-id replay-ambiguous | tail -2
 git -C "$WORK/wt-ambiguous" diff --quiet c225b82 -- url-shortener; check ambiguous $?
 
-for r in replay-greenfield replay-brownfield replay-ambiguous; do echo "  $r: $(orch verify-audit $r)"; done
+echo "== lifecycle: let owners change a link's expiry, through design, docs and release readiness"
+# The workflow file is the one the run started with: later workflow changes (e.g. downstream_context)
+# change prompts, and a replay must send exactly the recorded requests. The release prompt was fixed
+# mid-run, so the replay's release passes first time where the live run failed once and was re-planned.
+git worktree add -q --detach "$WORK/wt-lifecycle" 5622981
+orch run "$WORK/wt-lifecycle/workflows/lifecycle.yaml" --requirement scenarios/lifecycle-expiry.md \
+    --workspace "$WORK/wt-lifecycle" "${llm[@]}" --recorded-decisions runs/samples/live-lifecycle-1/approvals \
+    --run-id replay-lifecycle | tail -2
+git -C "$WORK/wt-lifecycle" diff --quiet f404c98 -- url-shortener; check lifecycle $?
+
+for r in replay-greenfield replay-brownfield replay-ambiguous replay-lifecycle; do echo "  $r: $(orch verify-audit $r)"; done
 exit $status

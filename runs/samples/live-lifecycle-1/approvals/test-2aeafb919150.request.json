@@ -1,0 +1,22 @@
+{
+  "run_id": "live-lifecycle-1",
+  "stage": "test",
+  "reason": "policy: high-risk change (2 violation(s); require_approval by high_impact_paths)",
+  "summary": "18 new tests: LinkExpiryUpdateTest (13: FR1-FR7, NFR2-01), the PATCH case added to ManagementTokenRateLimitTest, and four expiry races added to ClickDeletionRaceTest; no existing test changed or removed.",
+  "gate_evidence": [
+    "[change_control/high_impact_paths] url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java: modifies high-impact path (matches '*/src/test/*')",
+    "[change_control/high_impact_paths] url-shortener/src/test/java/com/example/shortener/api/ManagementTokenRateLimitTest.java: modifies high-impact path (matches '*/src/test/*')"
+  ],
+  "files_changed": [
+    "url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java",
+    "url-shortener/src/test/java/com/example/shortener/api/LinkExpiryUpdateTest.java",
+    "url-shortener/src/test/java/com/example/shortener/api/ManagementTokenRateLimitTest.java"
+  ],
+  "decisions": [
+    "Existing tests extended, not changed: ManagementTokenRateLimitTest and ClickDeletionRaceTest only gain new test methods, helpers and imports; every existing method is byte-identical (agent)",
+    "TC-NFR2-02 and TC-NFR3-01 not implemented as Java tests: The README/API docs are written by the parallel docs stage and the changelog and release record by the later release stage, so neither exists when this suite runs; they are enforced by the docs_cover_api, release_checklist_passed and files_exist gates instead (agent)",
+    "TC-NFR1-01 and TC-NFR1-02 covered by the existing suite: The test gate runs every existing test, including RedirectLatencyTest, with a floor of 121 tests (agent)",
+    "Mutation checks: Removing the expired check, reading a missing field as null, bypassing the throttle on PATCH, and dropping the row lock each make a new test fail (agent)"
+  ],
+  "artifact_sha": "2aeafb91915039a826f406fcbde37ccfe668f7d442cc8638b39c9dc9d27f8c20"
+}

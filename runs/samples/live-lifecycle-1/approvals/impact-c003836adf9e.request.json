@@ -1,0 +1,18 @@
+{
+  "run_id": "live-lifecycle-1",
+  "stage": "impact",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Add token-authorized expiry updates on the existing link resource, with immediate redirect effect and no schema change.",
+  "gate_evidence": [
+    "outputs_present: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "Resource identifier and route: Expose PATCH at `/api/links/{code}`, adding a method to the existing resource route. (agent)",
+    "Request presence and clearing: Represent field presence separately from its value; treat explicit null as clear and omission as HTTP 400. (agent)",
+    "Expired links and update ordering: Lock and load the link, reject deleted links, authorize, then reject an already-expired link before validating or applying the proposed expiry. (agent)",
+    "Expiry validation and persistence: Reuse the creation-time future check and microsecond precision, and update only the existing expiry field without a schema migration. (agent)",
+    "Documentation and release artifacts: Use the fixed locations `openapi.yaml`, `README.md`, `docs/api.md`, `docs/design.md`, `CHANGELOG.md`, and `docs/releases/1.0.0.md`; treat these as artifacts to create because they are absent from the supplied file inventory. (agent)"
+  ],
+  "artifact_sha": "c003836adf9e53f5fd5212d03c6ec83b8af1ad1556492be3f4029211040b2ca5"
+}

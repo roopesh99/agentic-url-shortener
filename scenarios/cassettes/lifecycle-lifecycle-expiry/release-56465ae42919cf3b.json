@@ -1,0 +1,221 @@
+{
+  "request": {
+    "agent": "release",
+    "effort": "high",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "changelog_markdown": {
+          "type": "string"
+        },
+        "checklist": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "evidence": {
+                "type": "string"
+              },
+              "item": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "n/a"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "item",
+              "status",
+              "evidence"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "decisions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "choice": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "topic": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "topic",
+              "choice",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "risks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "mitigation": {
+                "type": "string"
+              },
+              "risk": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "risk",
+              "mitigation"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "rollback_plan": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "version",
+        "changelog_markdown",
+        "checklist",
+        "risks",
+        "rollback_plan",
+        "decisions"
+      ],
+      "type": "object"
+    },
+    "system": "You are the release manager in a governed software delivery pipeline. You decide whether a change is ready to release and prepare the release record a human signs off.\n\nFacts you can rely on: every upstream artifact you are shown was accepted only after the orchestrator's own exit gates passed and every required human approval was granted, and the orchestrator re-ran the full test suite on the current workspace immediately before this stage (its entry gate) and it passed. You are shown each stage's summary and recorded decisions.\n\nThe release record you produce is the release-readiness review. After its checks pass, the orchestrator asks a human for the release sign-off; nothing ships without it. Do not list the review itself or the pending human sign-off as checklist items: they cannot be complete while you are writing the record, and the sign-off is enforced by the workflow, not by you.\n\nProduce:\n- `version`: the next semantic version: a minor bump for new backward-compatible features, a patch bump for fixes only, a major bump only for breaking changes (call them out).\n- `changelog_markdown`: the complete CHANGELOG.md, newest release first, keeping every earlier entry unchanged. The new entry lists Added / Changed / Fixed / Security items in user-facing terms.\n- `checklist`: release-readiness items, each `pass`, `fail` or `n/a` with concrete evidence from what you are shown: requirements approved; open questions resolved; design approved; API definition valid and implemented; tests passing; documentation updated; backward compatibility; security and privacy requirements addressed; migrations reviewed; rollback possible. Mark an item `fail` if the evidence is missing; a failing item blocks the release, which is the intended behaviour.\n- `risks`: the residual risks of releasing, each with a mitigation.\n- `rollback_plan`: how to roll this release back, including any database migration.\n- `decisions` and a one-line `summary`.",
+    "user": "<approved_specification>\n{\n  \"acceptance_criteria\": [\n    \"Given an active link and a valid management token, when the owner submits a future `expiresAt`, the request returns HTTP 200 with metadata showing that expiry; subsequent redirects use the updated expiry immediately.\",\n    \"Given an active link and a valid management token, when the owner submits `expiresAt: null`, the request returns HTTP 200 with metadata showing no expiry, and subsequent redirects are no longer limited by the removed expiry.\",\n    \"Given a request with an omitted `expiresAt`, when the service processes it, the request is rejected with HTTP 400 and the link remains unchanged.\",\n    \"Given a request without a valid management token, when the service processes it, the service returns its established authentication-failure response and leaves the link unchanged.\",\n    \"Given an already expired link, when an authorized owner attempts to set or remove its expiry, the service returns HTTP 410 with error code `expired` and leaves the link unchanged.\",\n    \"Given a link that has not expired, when an authorized owner submits an expiry at or before the current time, the service returns HTTP 400 with error code `invalid_expiry` and leaves the link unchanged.\",\n    \"Given a deleted link, when an authorized owner attempts to change its expiry, the service returns HTTP 404 and makes no change.\",\n    \"Given an authorized owner submits a valid future expiry far beyond any commonly expected near-term period, when the request is processed, the service accepts it subject to the same validation rules as link creation; no update-only maximum is applied.\",\n    \"Given the new capability is released, when existing endpoints are exercised, their behavior remains unchanged.\",\n    \"Before shipment, the machine-readable API definition and operator and API-client documentation describe the operation, authentication, request values, and relevant success and error behavior.\",\n    \"Before shipment, a changelog entry is prepared and a release-readiness review is recorded as complete.\"\n  ],\n  \"ambiguities\": [\n    {\n      \"question\": \"Can extending the expiry bring an already expired link back to life?\",\n      \"rationale\": \"Decided by a human: This is the binding decision and defines the required behavior for expired and deleted links.\",\n      \"resolution\": \"No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that has already expired is rejected with 410 and error code expired (as redirects to expired links already respond), and the link is left unchanged. Deleted links cannot be changed either (404, as today).\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"Is there a maximum expiry, and if so, what is it?\",\n      \"rationale\": \"Decided by a human: This is the binding decision; expiry updates must not introduce a limit absent from creation.\",\n      \"resolution\": \"No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would be inconsistent, and adding one to creation would change existing behaviour (NFR1).\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What should happen if an owner sets an expiry at or before the current time on a link that has not yet expired?\",\n      \"rationale\": \"Decided by a human: This is the binding decision for validation, error response, and mutation behavior.\",\n      \"resolution\": \"Reject it with 400 and error code invalid_expiry (expiresAt must be in the future), exactly as link creation does, and leave the link unchanged. An owner who wants a link gone deletes it. This keeps one expiry rule everywhere and prevents an irreversible accidental expiry.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What HTTP method and route should expose the expiry-change operation?\",\n      \"rationale\": \"PATCH is a conventional method for changing part of a resource and provides an additive contract without changing existing endpoint behavior; retaining the service's base path and versioning avoids introducing a competing API convention.\",\n      \"resolution\": \"Add an additive `PATCH /links/{linkId}` operation, retaining any existing API base path or version prefix used by the service.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"How should a request distinguish setting an expiry, removing it, and omitting an expiry value?\",\n      \"rationale\": \"Reusing the creation field and parser keeps the API consistent; `null` is a conventional explicit representation for clearing a nullable value, while rejecting omission avoids treating an incomplete expiry-change request as a successful no-op.\",\n      \"resolution\": \"Use the `expiresAt` field and the same timestamp format and parsing rules as link creation. A future timestamp sets the expiry; `null` removes it; an omitted `expiresAt` field is rejected with HTTP 400 and leaves the link unchanged.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What success response should an expiry-change request return?\",\n      \"rationale\": \"A 200 response with the updated representation is a conventional response for a successful resource update and directly makes the required metadata visible to the client.\",\n      \"resolution\": \"Return HTTP 200 with the updated link metadata, including the new expiry or the absence of an expiry.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"How should the management token be sent, and what response should be used for a missing or invalid token?\",\n      \"rationale\": \"Reusing established authentication handling is the lowest-risk way to enforce the stated token-holder restriction without changing existing security or API conventions.\",\n      \"resolution\": \"Use the service's existing management-token authentication mechanism and its existing authentication-failure response; do not mutate the link when authentication fails.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What format and location should be used for the machine-readable API definition and operator and API-client documentation?\",\n      \"rationale\": \"OpenAPI 3.x is a widely supported machine-readable API standard, while using the repository's existing documentation conventions minimizes duplication and inconsistency.\",\n      \"resolution\": \"Use an OpenAPI 3.x definition and place it and the operator and API-client documentation in the service's established documentation locations and formats.\",\n      \"source\": \"assumption\"\n    },\n    {\n      \"question\": \"What form should the changelog entry and release-readiness review take?\",\n      \"rationale\": \"Following existing release conventions is the conventional, low-risk approach and makes the required pre-release artifacts auditable without introducing a new process.\",\n      \"resolution\": \"Use the repository's established changelog and release-review formats; record completion of the review before shipment, including the change's verification, compatibility, and documentation readiness.\",\n      \"source\": \"assumption\"\n    }\n  ],\n  \"clarifications\": [\n    {\n      \"answer\": \"No. An expired link stays expired and cannot be brought back to life. Changing the expiry of a link that has already expired is rejected with 410 and error code expired (as redirects to expired links already respond), and the link is left unchanged. Deleted links cannot be changed either (404, as today).\",\n      \"question\": \"Can extending the expiry bring an already expired link back to life?\"\n    },\n    {\n      \"answer\": \"No maximum, consistent with link creation, which has none today. Adding a maximum only for updates would be inconsistent, and adding one to creation would change existing behaviour (NFR1).\",\n      \"question\": \"Is there a maximum expiry, and if so, what is it?\"\n    },\n    {\n      \"answer\": \"Reject it with 400 and error code invalid_expiry (expiresAt must be in the future), exactly as link creation does, and leave the link unchanged. An owner who wants a link gone deletes it. This keeps one expiry rule everywhere and prevents an irreversible accidental expiry.\",\n      \"question\": \"What should happen if an owner sets an expiry at or before the current time on a link that has not yet expired?\"\n    }\n  ],\n  \"functional\": [\n    {\n      \"id\": \"FR1\",\n      \"text\": \"The owner of an existing link can set a new expiry or remove its expiry.\"\n    },\n    {\n      \"id\": \"FR2\",\n      \"text\": \"Only a holder of the link's management token can change that link's expiry.\"\n    },\n    {\n      \"id\": \"FR3\",\n      \"text\": \"After a successful change, subsequent redirects use the new expiry immediately, and the link's metadata reports the new expiry or that no expiry is set.\"\n    },\n    {\n      \"id\": \"FR4\",\n      \"text\": \"A change to the expiry of an already expired link is rejected with HTTP 410 and error code `expired`; the link remains unchanged and cannot be brought back to life by changing its expiry.\"\n    },\n    {\n      \"id\": \"FR5\",\n      \"text\": \"For a link that has not expired, an expiry at or before the current time is rejected with HTTP 400 and error code `invalid_expiry`; the link remains unchanged.\"\n    },\n    {\n      \"id\": \"FR6\",\n      \"text\": \"A deleted link cannot be changed; an expiry-change request for it is rejected with HTTP 404, consistent with current behavior.\"\n    },\n    {\n      \"id\": \"FR7\",\n      \"text\": \"Expiry changes have no maximum expiry limit; future expiry values are subject to the same validation rules as link creation.\"\n    }\n  ],\n  \"goal\": \"Add an owner-authenticated way to set or remove a link's expiry after creation. Successful changes must immediately affect redirects and be reflected in link metadata, with existing endpoints retaining their behavior.\",\n  \"non_functional\": [\n    {\n      \"id\": \"NFR1\",\n      \"text\": \"Existing endpoints and their behavior remain unchanged; the expiry-change capability is additive.\"\n    },\n    {\n      \"id\": \"NFR2\",\n      \"text\": \"The service API is described by a machine-readable definition, and documentation for operators and API clients describes the expiry-change capability.\"\n    },\n    {\n      \"id\": \"NFR3\",\n      \"text\": \"A changelog entry and a recorded release-readiness review are prepared before the release ships.\"\n    }\n  ]\n}\n</approved_specification>\n\n<accepted_stages>\n{\n  \"design\": {\n    \"artifact\": \"design@v1\",\n    \"decisions\": [\n      {\n        \"choice\": \"Add PATCH /api/links/{code}.\",\n        \"rationale\": \"PATCH changes only part of the existing link resource while preserving the established base path and existing endpoint behavior.\",\n        \"source\": \"agent\",\n        \"topic\": \"Update route and method\"\n      },\n      {\n        \"choice\": \"Require expiresAt; accept a future instant to set expiry and explicit null to remove it.\",\n        \"rationale\": \"Separating omission from null prevents an incomplete update from silently clearing expiry.\",\n        \"source\": \"agent\",\n        \"topic\": \"Request value semantics\"\n      },\n      {\n        \"choice\": \"Reject updates to already expired links with 410 expired and reject non-future values on active links with 400 invalid_expiry.\",\n        \"rationale\": \"This preserves the no-revival rule and the same future-only expiry validation used by creation.\",\n        \"source\": \"agent\",\n        \"topic\": \"Expired and invalid expiries\"\n      },\n      {\n        \"choice\": \"Update the existing nullable expires_at column under the existing pessimistic link-row lock.\",\n        \"rationale\": \"Reusing established persistence and locking keeps updates consistent with click recording and deletion without a migration or alternate state store.\",\n        \"source\": \"agent\",\n        \"topic\": \"Persistence and concurrency\"\n      },\n      {\n        \"choice\": \"Reuse X-Management-Token verification and the shared wrong-token throttle.\",\n        \"rationale\": \"The established mechanism preserves token security and ensures PATCH attempts cannot bypass management-token rate limiting.\",\n        \"source\": \"agent\",\n        \"topic\": \"Authentication and throttling\"\n      },\n      {\n        \"choice\": \"Add no maximum expiry and do not add work or locking to redirect resolution.\",\n        \"rationale\": \"Creation has no maximum, while persisted lookups make committed updates visible to later redirects without changing the latency-sensitive read path.\",\n        \"source\": \"agent\",\n        \"topic\": \"Expiry limits and redirect path\"\n      }\n    ],\n    \"files\": [\n      \"url-shortener/docs/design.md\",\n      \"url-shortener/openapi.yaml\"\n    ],\n    \"produced_by\": \"design/architect#1\",\n    \"summary\": \"The design adds an authenticated PATCH operation at /api/links/{code} to set or clear expiry, reusing the existing link row, metadata representation, management-token handling, and row lock. Existing HTTP routes and behavior remain unchanged; no schema migration or redirect-path work is needed.\"\n  },\n  \"docs\": {\n    \"artifact\": \"docs@v1\",\n    \"decisions\": [\n      {\n        \"choice\": \"Document the update operation as `PATCH /api/links/{code}`, following the approved OpenAPI definition and implementation.\",\n        \"rationale\": \"The specification describes `PATCH /links/{linkId}` while retaining the service base path. The approved API definition and implementation use `/api/links/{code}`. The API definition is the required contract for the reference, so the documentation records this route rather than silently substituting the specification's placeholder and path form.\",\n        \"source\": \"agent\",\n        \"topic\": \"documentation discrepancy\"\n      }\n    ],\n    \"files\": [\n      \"url-shortener/README.md\",\n      \"url-shortener/docs/api.md\"\n    ],\n    \"produced_by\": \"docs/writer#1\",\n    \"summary\": \"Added the operator and client documentation for the service and every operation in the approved OpenAPI definition. Documented the route naming difference from the specification as a documentation discrepancy; the API reference follows the approved API definition and implementation.\"\n  },\n  \"impact\": {\n    \"artifact\": \"impact@v3\",\n    \"decisions\": [\n      {\n        \"choice\": \"Add PATCH /api/links/{code}, retaining the current /api/links base path and its existing code path-parameter convention.\",\n        \"rationale\": \"This implements the approved additive PATCH route without introducing a competing version or resource naming convention.\",\n        \"source\": \"agent\",\n        \"topic\": \"Endpoint and resource naming\"\n      },\n      {\n        \"choice\": \"Use an update request DTO that tracks whether expiresAt was present separately from its nullable timestamp value.\",\n        \"rationale\": \"The API must reject omission while accepting explicit null to clear expiry.\",\n        \"source\": \"agent\",\n        \"topic\": \"Omitted versus null expiry\"\n      },\n      {\n        \"choice\": \"Reuse lockByCode and perform authorization, expiry validation, and mutation within one short transaction.\",\n        \"rationale\": \"The existing pessimistic row lock already coordinates with deletion and click recording without adding a parallel persistence mechanism.\",\n        \"source\": \"agent\",\n        \"topic\": \"Locking and update transaction\"\n      },\n      {\n        \"choice\": \"Route PATCH token failures through the existing shared management-token throttle.\",\n        \"rationale\": \"This preserves the service's established authentication-failure and abuse-protection behavior.\",\n        \"source\": \"agent\",\n        \"topic\": \"Authentication failure throttling\"\n      },\n      {\n        \"choice\": \"Add no maximum expiry and make no schema or migration change.\",\n        \"rationale\": \"Creation already accepts future expiry values without a maximum, and the nullable expires_at column supports clearing.\",\n        \"source\": \"agent\",\n        \"topic\": \"Expiry limits and schema\"\n      },\n      {\n        \"choice\": \"Use docs/releases/1.0.0-SNAPSHOT.md for the release-readiness record.\",\n        \"rationale\": \"The current project version in pom.xml is 1.0.0-SNAPSHOT and the workflow requires the release record under docs/releases/<version>.md.\",\n        \"source\": \"agent\",\n        \"topic\": \"Release artifact version\"\n      }\n    ],\n    \"files\": [],\n    \"produced_by\": \"impact/impact_analyst#3\",\n    \"summary\": \"Add token-authenticated expiry updates at PATCH /api/links/{code}, with atomic validation, immediate persisted effect, documentation, and release-readiness artifacts.\"\n  },\n  \"implement\": {\n    \"artifact\": \"implement@v1\",\n    \"decisions\": [\n      {\n        \"choice\": \"Parse the PATCH body as a JSON tree: a missing expiresAt is 400 invalid_request, explicit null removes the expiry, a value is converted with the application's ObjectMapper\",\n        \"rationale\": \"Field presence must survive parsing so an incomplete request never clears an expiry, and using the same mapper keeps instant parsing identical to creation\",\n        \"source\": \"agent\",\n        \"topic\": \"Request parsing\"\n      },\n      {\n        \"choice\": \"Under lockByCode: 404 unknown or deleted, then token (401/403, counted by the throttle), then 410 if already expired, then 400 invalid_expiry unless the new value is in the future\",\n        \"rationale\": \"Matches the approved design and the owner's rule that an expired link is never revived; nothing is written unless every check passes\",\n        \"source\": \"agent\",\n        \"topic\": \"Check order\"\n      },\n      {\n        \"choice\": \"Extract futureExpiry() used by both create and updateExpiry (microsecond truncation, strictly after now, no maximum)\",\n        \"rationale\": \"One rule for expiry everywhere, as decided in clarification round 2\",\n        \"source\": \"agent\",\n        \"topic\": \"Shared expiry rule\"\n      }\n    ],\n    \"files\": [\n      \"url-shortener/src/main/java/com/example/shortener/api/LinkController.java\",\n      \"url-shortener/src/main/java/com/example/shortener/api/LinkDtos.java\",\n      \"url-shortener/src/main/java/com/example/shortener/domain/Link.java\",\n      \"url-shortener/src/main/java/com/example/shortener/domain/LinkRepository.java\",\n      \"url-shortener/src/main/java/com/example/shortener/service/ClickRecorder.java\",\n      \"url-shortener/src/main/java/com/example/shortener/service/LinkService.java\",\n      \"url-shortener/src/main/java/com/example/shortener/service/ManagementTokenRateLimiter.java\"\n    ],\n    \"produced_by\": \"implement/coder#1\",\n    \"summary\": \"Add PATCH /api/links/{code} to set or remove a link's expiry under the existing row lock, with the existing token rules and wrong-token throttle; creation's expiry rule is shared, no schema change.\"\n  },\n  \"requirements\": {\n    \"artifact\": \"requirements@v3\",\n    \"decisions\": [\n      {\n        \"choice\": \"Add an additive `PATCH /links/{linkId}` operation, retaining any existing API base path or version prefix used by the service.\",\n        \"rationale\": \"PATCH is a conventional method for changing part of a resource and provides an additive contract without changing existing endpoint behavior; retaining the service's base path and versioning avoids introducing a competing API convention.\",\n        \"source\": \"assumption\",\n        \"topic\": \"What HTTP method and route should expose the expiry-change operation?\"\n      },\n      {\n        \"choice\": \"Use the `expiresAt` field and the same timestamp format and parsing rules as link creation. A future timestamp sets the expiry; `null` removes it; an omitted `expiresAt` field is rejected with HTTP 400 and leaves the link unchanged.\",\n        \"rationale\": \"Reusing the creation field and parser keeps the API consistent; `null` is a conventional explicit representation for clearing a nullable value, while rejecting omission avoids treating an incomplete expiry-change request as a successful no-op.\",\n        \"source\": \"assumption\",\n        \"topic\": \"How should a request distinguish setting an expiry, removing it, and omitting an expiry value?\"\n      },\n      {\n        \"choice\": \"Return HTTP 200 with the updated link metadata, including the new expiry or the absence of an expiry.\",\n        \"rationale\": \"A 200 response with the updated representation is a conventional response for a successful resource update and directly makes the required metadata visible to the client.\",\n        \"source\": \"assumption\",\n        \"topic\": \"What success response should an expiry-change request return?\"\n      },\n      {\n        \"choice\": \"Use the service's existing management-token authentication mechanism and its existing authentication-failure response; do not mutate the link when authentication fails.\",\n        \"rationale\": \"Reusing established authentication handling is the lowest-risk way to enforce the stated token-holder restriction without changing existing security or API conventions.\",\n        \"source\": \"assumption\",\n        \"topic\": \"How should the management token be sent, and what response should be used for a missing or invalid token?\"\n      },\n      {\n        \"choice\": \"Use an OpenAPI 3.x definition and place it and the operator and API-client documentation in the service's established documentation locations and formats.\",\n        \"rationale\": \"OpenAPI 3.x is a widely supported machine-readable API standard, while using the repository's existing documentation conventions minimizes duplication and inconsistency.\",\n        \"source\": \"assumption\",\n        \"topic\": \"What format and location should be used for the machine-readable API definition and operator and API-client documentation?\"\n      },\n      {\n        \"choice\": \"Use the repository's established changelog and release-review formats; record completion of the review before shipment, including the change's verification, compatibility, and documentation readiness.\",\n        \"rationale\": \"Following existing release conventions is the conventional, low-risk approach and makes the required pre-release artifacts auditable without introducing a new process.\",\n        \"source\": \"assumption\",\n        \"topic\": \"What form should the changelog entry and release-readiness review take?\"\n      }\n    ],\n    \"files\": [],\n    \"produced_by\": \"requirements/analyst#3\",\n    \"summary\": \"7 functional and 3 non-functional requirements; 9 ambiguities recorded (9 assumptions, 0 unresolved).\"\n  },\n  \"test\": {\n    \"artifact\": \"test@v1\",\n    \"decisions\": [\n      {\n        \"choice\": \"ManagementTokenRateLimitTest and ClickDeletionRaceTest only gain new test methods, helpers and imports; every existing method is byte-identical\",\n        \"rationale\": \"The approved impact plan requires both extensions; keeping existing methods untouched preserves their protection\",\n        \"source\": \"agent\",\n        \"topic\": \"Existing tests extended, not changed\"\n      },\n      {\n        \"choice\": \"The README/API docs are written by the parallel docs stage and the changelog and release record by the later release stage, so neither exists when this suite runs; they are enforced by the docs_cover_api, release_checklist_passed and files_exist gates instead\",\n        \"rationale\": \"A Java test for an artifact produced after the test stage would fail by construction\",\n        \"source\": \"agent\",\n        \"topic\": \"TC-NFR2-02 and TC-NFR3-01 not implemented as Java tests\"\n      },\n      {\n        \"choice\": \"The test gate runs every existing test, including RedirectLatencyTest, with a floor of 121 tests\",\n        \"rationale\": \"Compatibility is the existing tests still passing unchanged\",\n        \"source\": \"agent\",\n        \"topic\": \"TC-NFR1-01 and TC-NFR1-02 covered by the existing suite\"\n      },\n      {\n        \"choice\": \"Removing the expired check, reading a missing field as null, bypassing the throttle on PATCH, and dropping the row lock each make a new test fail\",\n        \"rationale\": \"A green suite is evidence only if it can fail\",\n        \"source\": \"agent\",\n        \"topic\": \"Mutation checks\"\n      }\n    ],\n    \"files\": [\n      \"url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java\",\n      \"url-shortener/src/test/java/com/example/shortener/api/LinkExpiryUpdateTest.java\",\n      \"url-shortener/src/test/java/com/example/shortener/api/ManagementTokenRateLimitTest.java\"\n    ],\n    \"produced_by\": \"test/tester#1\",\n    \"summary\": \"18 new tests: LinkExpiryUpdateTest (13: FR1-FR7, NFR2-01), the PATCH case added to ManagementTokenRateLimitTest, and four expiry races added to ClickDeletionRaceTest; no existing test changed or removed.\"\n  },\n  \"test_plan\": {\n    \"artifact\": \"test_plan@v1\",\n    \"decisions\": [\n      {\n        \"choice\": \"Use automated file-content and OpenAPI parsing checks for artifact presence and key contract statements, with a human review before shipment.\",\n        \"rationale\": \"Automated checks can catch missing or structurally incomplete artifacts, but cannot establish that operator/client guidance is sufficiently clear or that a release review was genuinely completed.\",\n        \"source\": \"agent\",\n        \"topic\": \"Documentation and release-artifact verification\"\n      },\n      {\n        \"choice\": \"Run the established RedirectLatencyTest as the closest automated regression check.\",\n        \"rationale\": \"The specification provides no numeric latency target or percentile acceptance threshold for this change; the existing test can detect regressions against the service's current expectation but cannot prove an unspecified target.\",\n        \"source\": \"agent\",\n        \"topic\": \"Redirect latency verification\"\n      },\n      {\n        \"choice\": \"Assert persisted-state and click/tombstone invariants rather than requiring a particular winner in races.\",\n        \"rationale\": \"The approved design serializes operations on the link row, but does not require which concurrent operation acquires the lock first.\",\n        \"source\": \"agent\",\n        \"topic\": \"Concurrency expectations\"\n      }\n    ],\n    \"files\": [\n      \"docs/test-plan.md\"\n    ],\n    \"produced_by\": \"test_plan/test_planner#1\",\n    \"summary\": \"19 cases covering FR1\\u2013FR7 and NFR1\\u2013NFR3, including endpoint success and failure paths, shared throttling, concurrency, compatibility, and release artifacts.\"\n  }\n}\n</accepted_stages>\n\n<existing_release_files>\n(none: this is a new codebase)\n</existing_release_files>\n\n<write_scope>\n- url-shortener/CHANGELOG.md\n- url-shortener/docs/releases/**\n</write_scope>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "changelog_markdown": "# Changelog\n\n## [1.1.0]\n\n### Added\n- Added `PATCH /api/links/{code}` so link owners can set or remove a link\u2019s expiry using their management token.\n\n### Changed\n- Successful expiry changes are reflected in link metadata and apply to subsequent redirects immediately. Existing endpoints retain their behavior.\n\n### Fixed\n- No unrelated fixes in this release.\n\n### Security\n- Expiry changes use the existing management-token authentication and wrong-token throttling. Invalid or unauthorized requests do not change the link.",
+      "checklist": [
+        {
+          "evidence": "The approved specification defines 7 functional and 3 non-functional requirements.",
+          "item": "Requirements approved",
+          "status": "pass"
+        },
+        {
+          "evidence": "The requirements artifact records 9 resolved assumptions and 0 unresolved ambiguities, including decisions on expired links, maximum expiry, and invalid expiry values.",
+          "item": "Open questions resolved",
+          "status": "pass"
+        },
+        {
+          "evidence": "Accepted design@v1 specifies the additive PATCH operation, token verification, row locking, expiry behavior, and no schema change.",
+          "item": "Design approved",
+          "status": "pass"
+        },
+        {
+          "evidence": "The accepted design and documentation stages include `url-shortener/openapi.yaml`; implementation adds `PATCH /api/links/{code}`, and the accepted test summary includes API-definition coverage.",
+          "item": "API definition valid and implemented",
+          "status": "pass"
+        },
+        {
+          "evidence": "The orchestrator reran the full test suite on the current workspace immediately before this stage and it passed. The accepted test artifact reports 18 new tests, with the suite\u2019s established floor of 121 tests.",
+          "item": "Tests passing",
+          "status": "pass"
+        },
+        {
+          "evidence": "The accepted docs artifact lists updates to `url-shortener/README.md` and `url-shortener/docs/api.md`; the OpenAPI definition documents the operation and its contract.",
+          "item": "Documentation updated",
+          "status": "pass"
+        },
+        {
+          "evidence": "The change is additive, reuses the existing nullable `expires_at` field, and adds no redirect-path work. The test artifact states existing tests were not changed or removed; the full suite passed.",
+          "item": "Backward compatibility",
+          "status": "pass"
+        },
+        {
+          "evidence": "Implementation reuses management-token verification and the shared wrong-token throttle. The recorded check order rejects unauthorized requests before mutation; no new personal data is introduced.",
+          "item": "Security and privacy requirements addressed",
+          "status": "pass"
+        },
+        {
+          "evidence": "The accepted design and impact decisions state that the existing nullable `expires_at` column supports this change and no schema or database migration is needed.",
+          "item": "Migrations reviewed",
+          "status": "n/a"
+        },
+        {
+          "evidence": "The change adds an endpoint without a schema migration or alternate state store; the existing expiry column remains usable by the prior application version.",
+          "item": "Rollback possible",
+          "status": "pass"
+        }
+      ],
+      "decisions": [
+        {
+          "choice": "Use 1.1.0.",
+          "rationale": "This is a new backward-compatible feature, so the release policy calls for a minor version bump. The impact artifact references the current 1.0.0-SNAPSHOT project version for its release-record path; that is not the shipping version for this feature release.",
+          "topic": "Release version"
+        },
+        {
+          "choice": "Document and release `PATCH /api/links/{code}`.",
+          "rationale": "This retains the service\u2019s existing `/api/links` base path and code parameter convention. The accepted API definition, implementation, and documentation use this concrete route.",
+          "topic": "API route"
+        },
+        {
+          "choice": "Use the existing nullable `expires_at` column without a migration.",
+          "rationale": "The column supports both setting and clearing expiry; reusing it avoids schema changes and preserves compatibility.",
+          "topic": "Persistence and migration"
+        },
+        {
+          "choice": "Do not impose a maximum expiry; reject changes to already expired links and reject non-future expiries on active links.",
+          "rationale": "These are the binding human decisions in the approved specification and match the shared creation/update validation rule.",
+          "topic": "Expiry rules"
+        },
+        {
+          "choice": "Roll back application code without reverting persisted expiry values.",
+          "rationale": "The existing schema remains compatible, while reverting user-selected values without an audit history could discard legitimate state.",
+          "topic": "Rollback behavior"
+        }
+      ],
+      "risks": [
+        {
+          "mitigation": "The requirements retain the service\u2019s existing base path, and the documentation records the naming discrepancy. Keep the OpenAPI definition as the client-facing reference and verify clients use the implemented route.",
+          "risk": "The specification uses the placeholder route `/links/{linkId}`, while the approved API definition and implementation use `/api/links/{code}`."
+        },
+        {
+          "mitigation": "Treat persisted user-selected expiries as valid state during rollback. If a particular value must be restored, use an operational source of truth or backup and restore it deliberately rather than reverting the database wholesale.",
+          "risk": "Expiry updates persist in the existing column. Rolling back application code will not restore the prior expiry values, and this change does not introduce expiry-change history."
+        },
+        {
+          "mitigation": "The change avoids modifying redirect resolution, and the established `RedirectLatencyTest` is included in the full passing suite. Define and monitor a numeric target separately if one is required.",
+          "risk": "No numeric redirect-latency target was specified, so the existing latency regression test cannot establish an unstated performance threshold."
+        }
+      ],
+      "rollback_plan": "If release issues require rollback, redeploy the previous application version. No database migration or schema rollback is required; the previous version continues to use the existing `expires_at` column. The PATCH route will no longer be available, but expiry values already written remain persisted and continue to be interpreted by the existing redirect behavior. Do not automatically revert those values; restore a particular prior expiry only when required, using an operational source of truth or backup.",
+      "summary": "Release-readiness checks pass; the change is ready for the workflow\u2019s human release sign-off.",
+      "version": "1.1.0"
+    },
+    "duration_ms": 40050,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_63e3e6db31e94c30812b5f3b19cb9622",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 6058,
+      "output_tokens": 3867
+    }
+  }
+}

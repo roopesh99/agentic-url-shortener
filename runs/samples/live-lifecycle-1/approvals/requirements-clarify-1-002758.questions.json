@@ -1,0 +1,15 @@
+{
+  "run_id": "live-lifecycle-1",
+  "stage": "requirements",
+  "round": 1,
+  "questions": [
+    {
+      "question": "Can extending the expiry bring an already expired link back to life?",
+      "why": "This is an explicitly listed product-policy question. Choosing either behavior changes whether previously expired links become usable again."
+    },
+    {
+      "question": "Is there a maximum expiry, and if so, what is it?",
+      "why": "This is an explicitly listed product-policy question. A limit could affect customer commitments and operational or security policy, so a default should not be guessed."
+    }
+  ]
+}

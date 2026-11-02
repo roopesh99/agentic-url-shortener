@@ -1,0 +1,5 @@
+{
+  "approved": false,
+  "approver": "roopeshkotte",
+  "comment": "Keep the technical plan unchanged. Align documentation and release files with the workflow's fixed locations: the API definition is url-shortener/openapi.yaml; operator and API-client documentation are url-shortener/README.md and url-shortener/docs/api.md (no separate guides); the design note is url-shortener/docs/design.md; the release-readiness record is url-shortener/docs/releases/<version>.md; the changelog is url-shortener/CHANGELOG.md."
+}
