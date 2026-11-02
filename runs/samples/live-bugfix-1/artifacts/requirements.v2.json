@@ -1,0 +1,102 @@
+{
+  "name": "requirements",
+  "version": 2,
+  "sha": "dca6ef5e7b5cb03c07bb397e03194c26efe30e9119f5b0e814503a6a7453875c",
+  "produced_by": "requirements/analyst#2",
+  "inputs": [],
+  "result": {
+    "summary": "7 functional and 1 non-functional requirements; 3 ambiguities resolved, 0 unresolved.",
+    "outputs": {
+      "goal": "Allow browser-compatible website URLs with the reported Unicode and underscore host forms to be shortened when they pass the service’s existing destination rules. Redirect using the agreed host and path/query normalization while preserving the exact entered URL in metadata and keeping existing links and endpoints working.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "The existing link-creation flow must accept `https://müller.de/angebote` and `https://例え.jp/` when the existing destination rules permit them."
+        },
+        {
+          "id": "FR2",
+          "text": "The existing link-creation flow must accept `https://my_site.example.com/page` when the existing destination rules permit it."
+        },
+        {
+          "id": "FR3",
+          "text": "A successfully created short link must redirect to its destination with the host in ASCII (Punycode) form when required."
+        },
+        {
+          "id": "FR4",
+          "text": "For the redirect Location, non-ASCII characters in the path and query must be percent-encoded as they are today. Do not apply other URL changes, such as additional case changes, component reordering, or component removal."
+        },
+        {
+          "id": "FR5",
+          "text": "The `originalUrl` metadata field must return the URL exactly as the user entered it."
+        },
+        {
+          "id": "FR6",
+          "text": "The existing destination rules must continue to refuse local, private, and otherwise prohibited destinations, including when a prohibited host is entered in Unicode or an equivalent ASCII/Punycode form."
+        },
+        {
+          "id": "FR7",
+          "text": "A URL with a host that is accepted under the existing destination rules must not fail with `invalid_url` and the message `url must include a host`."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Existing short links and endpoints must remain usable; the fix must not require changing endpoint interfaces or alter existing links’ logical destinations."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "Should the short link redirect to the exact address entered by the user or to an equivalent normalized form?",
+          "resolution": "An equivalent normalized form, normalized only where HTTP requires it: the redirect's Location uses the host's ASCII (Punycode) form, and non-ASCII characters in the path and query are percent-encoded as today; nothing else changes (no case changes, reordering or removal of components). Link metadata (originalUrl) keeps returning the URL exactly as the user entered it.",
+          "source": "assumption",
+          "rationale": "Decided by a human: this is the binding redirect and metadata policy. It limits redirect normalization to the specified host conversion and existing path/query escaping while retaining the exact user-entered value in metadata."
+        },
+        {
+          "question": "Does “any link that a browser can open” expand the service's currently supported URL schemes or URL forms beyond the reported website URLs?",
+          "resolution": "Do not expand the service's existing URL-scheme policy. Apply the fix to the reported HTTP(S) website URL forms, including the Unicode IDN and underscore-host examples, subject to the existing destination rules.",
+          "source": "assumption",
+          "rationale": "Preserving the current scheme policy is the low-risk, conventional scope for a host-parsing bug fix and avoids changing behavior beyond the reported website URLs."
+        },
+        {
+          "question": "Which IDNA processing profile should be used to convert Unicode domain names to ASCII/Punycode?",
+          "resolution": "Use browser-compatible IDNA-to-ASCII processing for supported HTTP(S) URL hosts, and use the resulting host consistently for destination-rule checks and redirect Location generation.",
+          "source": "assumption",
+          "rationale": "Browser-compatible host processing is a conventional choice for a service shortening browser destinations and helps ensure Unicode and equivalent ASCII/Punycode host forms receive consistent checks."
+        }
+      ],
+      "acceptance_criteria": [
+        "Submit `https://müller.de/angebote` through the existing link-creation flow when permitted by destination rules → creation succeeds and returns a usable short link.",
+        "Follow the short link created for `https://müller.de/angebote` → the redirect Location uses the host `xn--mller-kva.de` and retains the `/angebote` path.",
+        "Submit `https://例え.jp/` through the existing link-creation flow when permitted by destination rules → creation succeeds, and following the short link redirects with the host in its ASCII/Punycode form.",
+        "Submit `https://my_site.example.com/page` through the existing link-creation flow when permitted by destination rules → creation succeeds and the short link redirects to that destination.",
+        "Submit the equivalent Unicode and Punycode forms of an otherwise permitted IDN destination → both can be shortened and their redirect Locations use the corresponding ASCII/Punycode host.",
+        "Submit a permitted destination containing non-ASCII path and query characters → the redirect Location percent-encodes those characters as the service does today, without other changes to URL components.",
+        "Read `originalUrl` metadata for a link created from a URL containing Unicode characters → it matches the exact URL supplied at creation.",
+        "Submit a prohibited local, private, or otherwise disallowed destination using a Unicode host or its equivalent ASCII/Punycode form → creation is refused under the existing destination rules.",
+        "Submit any of the reported, otherwise permitted URLs → the request does not fail with `400 {\"error\":\"invalid_url\",\"message\":\"url must include a host\"}`.",
+        "Use a previously created short link and existing endpoints → they remain usable and resolve to the same logical destinations."
+      ],
+      "clarifications": [
+        {
+          "question": "Should the short link redirect to the exact address entered by the user or to an equivalent normalized form?",
+          "answer": "An equivalent normalized form, normalized only where HTTP requires it: the redirect's Location uses the host's ASCII (Punycode) form, and non-ASCII characters in the path and query are percent-encoded as today; nothing else changes (no case changes, reordering or removal of components). Link metadata (originalUrl) keeps returning the URL exactly as the user entered it."
+        }
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Does “any link that a browser can open” expand the service's currently supported URL schemes or URL forms beyond the reported website URLs?",
+        "choice": "Do not expand the service's existing URL-scheme policy. Apply the fix to the reported HTTP(S) website URL forms, including the Unicode IDN and underscore-host examples, subject to the existing destination rules.",
+        "rationale": "Preserving the current scheme policy is the low-risk, conventional scope for a host-parsing bug fix and avoids changing behavior beyond the reported website URLs.",
+        "source": "assumption"
+      },
+      {
+        "topic": "Which IDNA processing profile should be used to convert Unicode domain names to ASCII/Punycode?",
+        "choice": "Use browser-compatible IDNA-to-ASCII processing for supported HTTP(S) URL hosts, and use the resulting host consistently for destination-rule checks and redirect Location generation.",
+        "rationale": "Browser-compatible host processing is a conventional choice for a service shortening browser destinations and helps ensure Unicode and equivalent ASCII/Punycode host forms receive consistent checks.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

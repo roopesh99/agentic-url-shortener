@@ -1,0 +1,131 @@
+{
+  "name": "release",
+  "version": 1,
+  "sha": "5af73b5bf825d2b3976182f1be17200cd11d4d66bcf3f3e131dc7d0aa5b220e2",
+  "produced_by": "release/release#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 2,
+      "sha": "dca6ef5e7b5cb03c07bb397e03194c26efe30e9119f5b0e814503a6a7453875c"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "420d68a1d4fb8252b2a3562a949253e36b5cea0d5a7991ab4ad3453467626620"
+    },
+    {
+      "name": "reproduce",
+      "version": 1,
+      "sha": "55be85d386a565a5019a11f2826a9af8f104b2a8dce3a94ecbfc7dc7c8c8adf5"
+    },
+    {
+      "name": "fix",
+      "version": 1,
+      "sha": "a303deb690feb898b7413a372b5fc874eb330bc37b378e95ebc76249ba31984b"
+    }
+  ],
+  "result": {
+    "summary": "Not ready for release: design approval, API-definition validation, and documentation-update evidence are missing.",
+    "outputs": {
+      "version": "1.1.1",
+      "checklist": [
+        {
+          "item": "Requirements approved",
+          "status": "pass",
+          "evidence": "The approved specification is provided, and the accepted requirements stage records 7 functional and 1 non-functional requirements."
+        },
+        {
+          "item": "Open questions resolved",
+          "status": "pass",
+          "evidence": "The specification lists three ambiguity resolutions and a clarification for redirect normalization; the accepted requirements stage records 0 unresolved ambiguities."
+        },
+        {
+          "item": "Design approved",
+          "status": "fail",
+          "evidence": "No design artifact or explicit design-approval decision is shown. The impact analysis contains implementation-impact decisions, but does not establish design approval."
+        },
+        {
+          "item": "API definition valid and implemented",
+          "status": "fail",
+          "evidence": "Implementation evidence is present in LinkService.java and the link-creation regression tests, and the impact analysis says endpoint interfaces are unchanged. However, no API definition or validation artifact is shown."
+        },
+        {
+          "item": "Tests passing",
+          "status": "pass",
+          "evidence": "The orchestrator re-ran the full test suite on the current workspace immediately before this stage and it passed. The accepted reproduce stage also records regression coverage for IDN and underscore URLs, redirects, metadata, and prohibited destinations."
+        },
+        {
+          "item": "Documentation updated",
+          "status": "fail",
+          "evidence": "No documentation-update artifact or documentation changes are shown. The existing changelog only contains version 1.1.0."
+        },
+        {
+          "item": "Backward compatibility",
+          "status": "pass",
+          "evidence": "The approved NFR requires existing links and endpoints to remain usable. The fix summary says ASCII hosts and stored URLs are unchanged; the impact analysis says there is no schema change and existing endpoint interfaces are preserved."
+        },
+        {
+          "item": "Security and privacy requirements addressed",
+          "status": "pass",
+          "evidence": "The fix uses the same ASCII host for destination checks and redirect generation. The accepted fix decision reports full-width localhost and 127.0.0.1 forms are refused, and the regression tests cover prohibited destinations. The approved metadata policy preserves the exact submitted URL."
+        },
+        {
+          "item": "Migrations reviewed",
+          "status": "n/a",
+          "evidence": "The impact analysis explicitly says `original_url` remains unchanged and redirect normalization requires no schema change; no database migration is needed."
+        },
+        {
+          "item": "Rollback possible",
+          "status": "pass",
+          "evidence": "The impact analysis specifies no schema change, so the application can be rolled back without a database migration. The rollback plan accounts for links created with newly supported hosts."
+        }
+      ],
+      "risks": [
+        {
+          "risk": "The new ICU4J UTS #46 behavior may differ for less common internationalized hostnames from what some clients or destination rules expect.",
+          "mitigation": "Keep the dependency pinned, retain the regression suite, and monitor URL-creation and redirect errors after release."
+        },
+        {
+          "risk": "Rolling back to an application version without this fix could make links created with Unicode IDN or underscore hosts fail to resolve.",
+          "mitigation": "Before rollback, assess whether such links were created. If they were, use a rollback build that retains the host-conversion fix, or deploy a compatibility fix rather than reverting to the unmodified version."
+        },
+        {
+          "risk": "Release evidence is incomplete: design approval, API-definition validation, and documentation updates are not shown.",
+          "mitigation": "Provide and approve the missing artifacts, then rerun the readiness review before proceeding."
+        }
+      ],
+      "rollback_plan": "No database migration is introduced, so no database rollback is required. Redeploy the previous application artifact if rollback is needed. Before doing so, determine whether links using the newly supported Unicode IDN or underscore hosts have been created; if so, roll back with a compatibility build that retains this host-conversion behavior, or deploy a forward fix, so those links continue to resolve. Preserve stored link records and verify existing-link resolution and destination protections after deployment."
+    },
+    "files_written": [
+      "url-shortener/CHANGELOG.md",
+      "url-shortener/docs/releases/1.1.1.md"
+    ],
+    "decisions": [
+      {
+        "topic": "Version",
+        "choice": "1.1.1",
+        "rationale": "This is a backward-compatible fix to URL handling, with no breaking changes or endpoint changes; a patch bump is appropriate.",
+        "source": "agent"
+      },
+      {
+        "topic": "Release readiness",
+        "choice": "Hold release",
+        "rationale": "The checklist has failures for design approval, API-definition validation, and documentation updates. Those evidence gaps must be resolved before release readiness is established.",
+        "source": "agent"
+      },
+      {
+        "topic": "Redirect and metadata behavior",
+        "choice": "Use ASCII/Punycode for the redirect host when required, preserve existing path/query handling, and retain the exact submitted URL in metadata.",
+        "rationale": "This follows the binding approved clarification and the accepted implementation decisions.",
+        "source": "agent"
+      },
+      {
+        "topic": "Database migration",
+        "choice": "No migration",
+        "rationale": "The accepted impact analysis keeps `original_url` unchanged and derives the normalized redirect URL at resolution time.",
+        "source": "agent"
+      }
+    ]
+  }
+}

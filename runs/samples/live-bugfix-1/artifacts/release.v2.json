@@ -1,0 +1,137 @@
+{
+  "name": "release",
+  "version": 2,
+  "sha": "e8fc2028a9d95de1cdfee03f5d9fe705cc075e987dbc1483ef08ecd8db5c6f37",
+  "produced_by": "release/release#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 2,
+      "sha": "dca6ef5e7b5cb03c07bb397e03194c26efe30e9119f5b0e814503a6a7453875c"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "420d68a1d4fb8252b2a3562a949253e36b5cea0d5a7991ab4ad3453467626620"
+    },
+    {
+      "name": "reproduce",
+      "version": 1,
+      "sha": "55be85d386a565a5019a11f2826a9af8f104b2a8dce3a94ecbfc7dc7c8c8adf5"
+    },
+    {
+      "name": "fix",
+      "version": 1,
+      "sha": "a303deb690feb898b7413a372b5fc874eb330bc37b378e95ebc76249ba31984b"
+    }
+  ],
+  "result": {
+    "summary": "Ready for human release sign-off as a backward-compatible minor release; no database migration is required.",
+    "outputs": {
+      "version": "1.2.0",
+      "checklist": [
+        {
+          "item": "Requirements approved",
+          "status": "pass",
+          "evidence": "The approved specification defines 7 functional and 1 non-functional requirements; the requirements stage was accepted."
+        },
+        {
+          "item": "Open questions resolved",
+          "status": "pass",
+          "evidence": "The requirements gate reports all 3 ambiguities resolved, including 1 by a human; the approved clarification binds redirect normalization and metadata behavior."
+        },
+        {
+          "item": "Design approved",
+          "status": "n/a",
+          "evidence": "This workflow has no design stage. The change is a focused URL-host parsing fix; the accepted impact analysis records its scope and key decisions."
+        },
+        {
+          "item": "API definition valid and implemented",
+          "status": "pass",
+          "evidence": "The OpenAPI conformance gate passed: 7 operations documented and implemented, none undocumented. The change does not alter endpoint interfaces."
+        },
+        {
+          "item": "Tests passing",
+          "status": "pass",
+          "evidence": "The fix-stage Maven gate passed 150 tests in 23 classes, and the orchestrator re-ran the full test suite on the current workspace immediately before this stage and it passed."
+        },
+        {
+          "item": "Documentation updated",
+          "status": "pass",
+          "evidence": "The release notes are included in this CHANGELOG.md content; the OpenAPI conformance gate also confirms all 7 operations are documented and implemented."
+        },
+        {
+          "item": "Backward compatibility",
+          "status": "pass",
+          "evidence": "The approved NFR requires existing links and endpoints to remain usable. The impact decision retains stored `original_url` values and introduces no schema change; the fix leaves ASCII hosts unchanged."
+        },
+        {
+          "item": "Security and privacy requirements addressed",
+          "status": "pass",
+          "evidence": "Destination checks and redirect generation use the same ASCII host conversion. Regression coverage verifies prohibited Unicode and Punycode destinations remain rejected; the approved policy preserves exact entered URLs in metadata."
+        },
+        {
+          "item": "Migrations reviewed",
+          "status": "pass",
+          "evidence": "The accepted impact decision explicitly keeps `original_url` unchanged and derives redirect normalization at resolution time without a schema change; no migration is required."
+        },
+        {
+          "item": "Rollback possible",
+          "status": "pass",
+          "evidence": "No database migration or stored-link rewrite is required, so application rollback is possible. Links created with newly supported Unicode hosts need an IDN-capable resolver retained during rollback; the rollback plan addresses this."
+        }
+      ],
+      "risks": [
+        {
+          "risk": "UTS #46 processing can have edge cases or behavior changes across library versions, potentially affecting less common internationalized hostnames.",
+          "mitigation": "ICU4J 77.1 is pinned, and regression tests cover Unicode/Punycode equivalence, redirects, and prohibited destinations. Review the test suite before any IDNA-library upgrade."
+        },
+        {
+          "risk": "Some underscore-host destinations may not resolve or be accepted consistently by external DNS providers or clients, even though the service is required to accept the specified form when destination rules permit it.",
+          "mitigation": "Continue applying existing destination rules and verify resolution for destinations where required; do not broaden the URL-scheme policy."
+        },
+        {
+          "risk": "A downgrade to the previous resolver could make links created during this release with Unicode hosts fail to redirect.",
+          "mitigation": "Inventory links created during the release and retain or backport the IDN-capable resolver for them during rollback; avoid changing their stored original URLs."
+        }
+      ],
+      "rollback_plan": "No database migration needs to be reversed. If rollback is required, first stop creation of links that depend on the new host handling and inventory affected links. Deploy the previous application version while retaining or backporting the IDN-capable redirect-host conversion for links created during this release. Keep stored `original_url` values unchanged. Verify representative existing ASCII links and affected IDN links before restoring normal traffic; do not complete a full resolver downgrade if it would strand those links."
+    },
+    "files_written": [
+      "url-shortener/CHANGELOG.md",
+      "url-shortener/docs/releases/1.2.0.md"
+    ],
+    "decisions": [
+      {
+        "topic": "Release version",
+        "choice": "Release as 1.2.0.",
+        "rationale": "The change adds backward-compatible support for destination forms previously rejected, so it warrants a minor version bump; it does not introduce a breaking change.",
+        "source": "agent"
+      },
+      {
+        "topic": "Redirect and metadata behavior",
+        "choice": "Normalize only the redirect host to ASCII/Punycode when required; retain existing path/query escaping and preserve the exact submitted URL in `originalUrl`.",
+        "rationale": "This follows the human-resolved binding policy in the approved specification.",
+        "source": "agent"
+      },
+      {
+        "topic": "Destination validation",
+        "choice": "Use the same IDNA-converted ASCII host for destination checks and redirect generation.",
+        "rationale": "This avoids inconsistent treatment of Unicode and Punycode spellings; regression evidence confirms prohibited forms remain rejected.",
+        "source": "agent"
+      },
+      {
+        "topic": "Persistence and migration",
+        "choice": "Keep stored URLs unchanged and perform redirect normalization at resolution time; make no schema change.",
+        "rationale": "This preserves exact metadata and existing links without requiring a migration.",
+        "source": "agent"
+      },
+      {
+        "topic": "Scope",
+        "choice": "Retain the existing HTTP(S)-only scheme policy and leave ASCII-host behavior unchanged.",
+        "rationale": "This matches the approved requirements and limits behavior changes to the reported host forms.",
+        "source": "agent"
+      }
+    ]
+  }
+}

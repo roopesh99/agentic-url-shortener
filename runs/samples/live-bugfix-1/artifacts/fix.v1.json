@@ -1,0 +1,72 @@
+{
+  "name": "fix",
+  "version": 1,
+  "sha": "a303deb690feb898b7413a372b5fc874eb330bc37b378e95ebc76249ba31984b",
+  "produced_by": "fix/coder#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 2,
+      "sha": "dca6ef5e7b5cb03c07bb397e03194c26efe30e9119f5b0e814503a6a7453875c"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "420d68a1d4fb8252b2a3562a949253e36b5cea0d5a7991ab4ad3453467626620"
+    },
+    {
+      "name": "reproduce",
+      "version": 1,
+      "sha": "55be85d386a565a5019a11f2826a9af8f104b2a8dce3a94ecbfc7dc7c8c8adf5"
+    }
+  ],
+  "result": {
+    "summary": "Read the host from the authority when java.net.URI leaves it unparsed, convert non-ASCII hosts to ASCII with UTS #46 (ICU4J), and use that one form for destination checks and the redirect; ASCII hosts and the stored URL are unchanged.",
+    "outputs": {
+      "files": [
+        "url-shortener/pom.xml",
+        "url-shortener/src/main/java/com/example/shortener/service/DestinationPolicy.java",
+        "url-shortener/src/main/java/com/example/shortener/service/DestinationUrls.java",
+        "url-shortener/src/main/java/com/example/shortener/service/LinkService.java"
+      ]
+    },
+    "files_written": [
+      "url-shortener/pom.xml",
+      "url-shortener/src/main/java/com/example/shortener/service/DestinationPolicy.java",
+      "url-shortener/src/main/java/com/example/shortener/service/DestinationUrls.java",
+      "url-shortener/src/main/java/com/example/shortener/service/LinkService.java"
+    ],
+    "decisions": [
+      {
+        "topic": "Root cause",
+        "choice": "java.net.URI.getHost() is null for internationalized and underscore host names; DestinationPolicy read that as no host",
+        "rationale": "Probed against the running service before the run; the regression tests confirm it",
+        "source": "agent"
+      },
+      {
+        "topic": "One conversion for check and redirect",
+        "choice": "DestinationUrls.toAscii feeds both the destination check and redirectTarget",
+        "rationale": "The approved impact plan's key risk: if the two interpreted a host differently, a spelling could bypass the rules or redirect elsewhere. Verified that full-width localhost and 127.0.0.1 forms are refused",
+        "source": "agent"
+      },
+      {
+        "topic": "IDNA library",
+        "choice": "ICU4J 77.1, UTS #46 non-transitional with CheckBidi and CheckJoiners, hyphen checks off",
+        "rationale": "Matches browsers (WHATWG URL); java.net.IDN implements IDNA2003, which maps faß.de to fass.de, a different domain",
+        "source": "agent"
+      },
+      {
+        "topic": "ASCII hosts untouched",
+        "choice": "Conversion only runs for hosts with non-ASCII characters",
+        "rationale": "Existing links, the case of ASCII hosts and every existing destination test keep exactly their old behaviour",
+        "source": "agent"
+      },
+      {
+        "topic": "Mutation checks",
+        "choice": "Checking the host as written, or redirecting to the URL as entered, each fail 3 regression tests",
+        "rationale": "The regression tests guard the fix, not only the original bug",
+        "source": "agent"
+      }
+    ]
+  }
+}

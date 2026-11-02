@@ -1,0 +1,146 @@
+{
+  "name": "impact",
+  "version": 1,
+  "sha": "420d68a1d4fb8252b2a3562a949253e36b5cea0d5a7991ab4ad3453467626620",
+  "produced_by": "impact/impact_analyst#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 2,
+      "sha": "dca6ef5e7b5cb03c07bb397e03194c26efe30e9119f5b0e814503a6a7453875c"
+    }
+  ],
+  "result": {
+    "summary": "Accept browser-compatible Unicode IDN and underscore HTTP(S) hosts, check destinations using their ASCII host form, and normalize only the redirect host while preserving the exact submitted URL in metadata.",
+    "outputs": {
+      "impacted": [
+        {
+          "path": "url-shortener/pom.xml",
+          "kind": "modify",
+          "reason": "Add a pinned browser-compatible IDNA implementation needed to process Unicode and underscore hosts under FR1, FR2, and FR6."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/service/DestinationPolicy.java",
+          "kind": "modify",
+          "reason": "Parse supported URL hosts when URI.getHost() is null, convert hosts using browser-compatible IDNA before destination checks, and retain fail-closed private/local checks under FR1, FR2, FR6, and FR7."
+        },
+        {
+          "path": "url-shortener/src/main/java/com/example/shortener/service/LinkService.java",
+          "kind": "modify",
+          "reason": "Keep storing the submitted URL unchanged but provide a host-normalized redirect destination when resolving a link under FR3, FR4, and FR5."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/service/DestinationPolicyTest.java",
+          "kind": "modify",
+          "reason": "Cover IDN conversion, underscore hosts, equivalent Unicode/Punycode destination checks, and prohibited destinations under FR1, FR2, FR6, and FR7."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/LinkCreationTest.java",
+          "kind": "modify",
+          "reason": "Verify the existing creation flow accepts the reported URL forms and metadata returns the exact submitted URL under FR1, FR2, and FR5."
+        },
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/LinkLifecycleTest.java",
+          "kind": "modify",
+          "reason": "Verify redirects use the ASCII host, preserve other URL components, and keep existing link behavior under FR3, FR4, and NFR1."
+        }
+      ],
+      "api_changes": [
+        {
+          "method": "POST",
+          "path": "/api/links",
+          "change": "Existing endpoint and request/response contracts remain unchanged; the existing `url` input additionally accepts the specified Unicode IDN and underscore HTTP(S) forms when destination rules permit them. Existing endpoints keep their current contracts unless the specification says otherwise; this is an accepted-input expansion, not a wire-format change. Rejections continue to use existing error contracts, including 400 for invalid or prohibited destinations and 429 for rate limiting; a permitted host must not receive the specified `invalid_url` / `url must include a host` error (FR1, FR2, FR6, FR7, NFR1). No other endpoint contract changes."
+        },
+        {
+          "method": "GET",
+          "path": "/{code}",
+          "change": "Request remains a GET with no body. A live link still returns 302 with no body and `Cache-Control: no-store`; its `Location` uses the ASCII/Punycode host where required and retains existing path/query escaping and all other URL components. Existing 404, 410, and 503 behavior is unchanged (FR3, FR4, NFR1)."
+        },
+        {
+          "method": "GET",
+          "path": "/api/links/{code}",
+          "change": "No endpoint contract change: a live link still returns 200 with the existing metadata shape, and `originalUrl` is the exact URL supplied at creation; unknown or deleted links remain 404 (FR5, NFR1)."
+        }
+      ],
+      "data_changes": [
+        "No schema or stored-data changes are required: `links.original_url` continues to store the exact submitted URL, and redirect normalization is computed from that value.",
+        "No migration file is required. Existing migrations V1 and V2 remain immutable; if a future requirement adds schema changes, they must be made in a new, higher-numbered migration."
+      ],
+      "data_flows": [
+        "On creation, the request's exact URL is parsed for validation. The host is converted with the selected browser-compatible IDNA profile for destination-rule checks; DNS resolution remains on the creation path and continues to fail closed. The original request string, not the converted form, is stored in `links.original_url` (FR1, FR2, FR5, FR6, FR7).",
+        "On redirect, the existing indexed link lookup supplies the stored original URL. Local host processing converts only the host where required; the existing URI-to-Location path handles non-ASCII path/query escaping. No DNS lookup, destination fetch, database write, or new analytics work is added to host normalization on the redirect path (FR3, FR4, NFR1).",
+        "The existing best-effort click-recording behavior remains independent of redirect construction: a click-recording failure must not prevent the 302 response. The redirect must not wait for or depend on any destination network operation (NFR1).",
+        "Metadata reads continue from the stored `original_url` value, without deriving the field from the normalized redirect Location (FR5)."
+      ],
+      "risks": [
+        {
+          "risk": "If destination checks and redirect generation interpret a Unicode hostname differently, Unicode spelling could bypass existing local/private destination rules or redirect to a host different from the checked host.",
+          "mitigation": "Use the same browser-compatible IDNA conversion for the host supplied to destination checks and for redirect host generation; preserve the existing local-host checks and resolve the converted host with the existing fail-closed policy.",
+          "detection": "DestinationPolicyTest and LinkCreationTest cover Unicode and equivalent Punycode inputs, local/private prohibited destinations, and DNS resolution behavior; integration tests verify a permitted IDN redirects to its ASCII host."
+        },
+        {
+          "risk": "Authority parsing could accidentally alter user information, port, path, query, fragment, or host casing while replacing an IDN host.",
+          "mitigation": "Replace only the parsed host portion; do not rebuild or otherwise normalize the remaining URL components.",
+          "detection": "LinkLifecycleTest compares redirect Locations for IDN, mixed-case ASCII hosts, ports, and non-ASCII path/query content, including the expected percent-encoding."
+        },
+        {
+          "risk": "An IDNA profile or dependency configuration that rejects underscore labels or applies different mappings could reject the reported URLs or treat equivalent forms inconsistently.",
+          "mitigation": "Use a pinned UTS #46/browser-compatible IDNA implementation configured to allow the underscore form required by the specification, without expanding the existing HTTP(S)-only scheme policy.",
+          "detection": "DestinationPolicyTest and LinkCreationTest include the reported underscore host, Unicode IDN examples, their Punycode equivalents, and invalid-host cases."
+        },
+        {
+          "risk": "Adding parsing or name resolution to redirects could increase latency or introduce a network dependency on the hot path.",
+          "mitigation": "Keep DNS resolution restricted to creation-time policy validation; redirect normalization must be local processing only, with existing click recording still best-effort.",
+          "detection": "Run NoOutboundFetchTest, ClickFailureIsolationTest, and RedirectLatencyTest; the IDN redirect integration test also verifies successful redirect behavior."
+        },
+        {
+          "risk": "Storing a normalized URL instead of the submitted value could change public metadata and existing persisted destinations.",
+          "mitigation": "Do not change the persistence model or creation write value; compute the redirect destination from the original stored URL.",
+          "detection": "LinkCreationTest and LinkLifecycleTest assert exact `originalUrl` metadata; PersistenceRestartTest and ClickPersistenceAndUpgradeTest protect existing persisted links and upgrade behavior."
+        }
+      ],
+      "test_strategy": [
+        "Extend DestinationPolicyTest to assert browser-compatible Unicode-to-ASCII conversion, underscore-host acceptance when the configured resolver permits it, consistent checks for Unicode and Punycode forms, rejection of prohibited destinations in either form, and unchanged fail-closed DNS behavior.",
+        "Extend LinkCreationTest to exercise POST `/api/links` with `https://müller.de/angebote`, `https://例え.jp/`, and `https://my_site.example.com/page`, using the stub resolver; assert creation succeeds and GET metadata returns the exact submitted URL.",
+        "Extend LinkLifecycleTest to follow created Unicode and Punycode IDN links and assert the expected ASCII/Punycode `Location`; also cover underscore hosts, non-ASCII path/query percent-encoding, preservation of other URL components, and the existing 302/no-store behavior.",
+        "Run existing LinkCreationTest and ErrorContractAndHeadersTest to protect request validation and established error contracts; run LinkLifecycleTest to protect existing redirect, metadata, expiry, and deletion behavior.",
+        "Run existing DestinationPolicyTest and NoOutboundFetchTest to protect prohibited-address checks, fail-closed DNS behavior, and the absence of destination fetching or redirect-time resolution.",
+        "Run existing ClickFailureIsolationTest, RedirectLatencyTest, and RedirectOutageAndMetricsTest to ensure redirect availability, latency, outage handling, and metrics remain unaffected.",
+        "Run PersistenceRestartTest and ClickPersistenceAndUpgradeTest to confirm existing links remain usable and migrations/data are unaffected; run the full test suite."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "IDNA processing",
+        "choice": "Use a pinned browser-compatible UTS #46 implementation with settings that accept the specified underscore-host form, while retaining the existing HTTP(S)-only scheme policy.",
+        "rationale": "This follows the approved browser-compatible host-processing decision and addresses the current parser's failure to expose Unicode and underscore hosts.",
+        "source": "agent"
+      },
+      {
+        "topic": "Destination validation",
+        "choice": "Apply local-host checks and DNS resolution to the same ASCII host produced by IDNA conversion that is used for redirect host generation.",
+        "rationale": "Checking the exact host representation used downstream prevents Unicode and Punycode spellings from receiving inconsistent destination-rule treatment.",
+        "source": "agent"
+      },
+      {
+        "topic": "Persistence and metadata",
+        "choice": "Keep `original_url` unchanged and derive the normalized redirect URL at resolution time without a schema change.",
+        "rationale": "This preserves exact `originalUrl` metadata and avoids changing existing stored links or requiring a migration.",
+        "source": "agent"
+      },
+      {
+        "topic": "Redirect normalization",
+        "choice": "Change only the host when required for ASCII/Punycode output and leave all other URL components to the existing redirect serialization and escaping behavior.",
+        "rationale": "This implements the binding redirect policy without introducing unrelated URL normalization.",
+        "source": "agent"
+      },
+      {
+        "topic": "Redirect hot path",
+        "choice": "Perform host normalization locally at resolution time and do not add DNS, destination fetches, or required analytics work to the redirect path.",
+        "rationale": "The existing destination policy runs at creation, and keeping redirects independent of network validation preserves availability and latency.",
+        "source": "agent"
+      }
+    ]
+  }
+}

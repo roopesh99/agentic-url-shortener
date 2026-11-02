@@ -1,0 +1,53 @@
+{
+  "name": "reproduce",
+  "version": 1,
+  "sha": "55be85d386a565a5019a11f2826a9af8f104b2a8dce3a94ecbfc7dc7c8c8adf5",
+  "produced_by": "reproduce/reproducer#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 2,
+      "sha": "dca6ef5e7b5cb03c07bb397e03194c26efe30e9119f5b0e814503a6a7453875c"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "420d68a1d4fb8252b2a3562a949253e36b5cea0d5a7991ab4ad3453467626620"
+    }
+  ],
+  "result": {
+    "summary": "Added regression coverage for IDN and underscore URL acceptance, ASCII-host redirects, exact metadata, and continued rejection of prohibited destinations.",
+    "outputs": {
+      "files": [
+        "url-shortener/src/test/java/com/example/shortener/service/DestinationPolicyTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/LinkCreationTest.java",
+        "url-shortener/src/test/java/com/example/shortener/api/LinkLifecycleTest.java"
+      ]
+    },
+    "files_written": [
+      "url-shortener/src/test/java/com/example/shortener/api/LinkCreationTest.java",
+      "url-shortener/src/test/java/com/example/shortener/api/LinkLifecycleTest.java",
+      "url-shortener/src/test/java/com/example/shortener/service/DestinationPolicyTest.java"
+    ],
+    "decisions": [
+      {
+        "topic": "Test placement",
+        "choice": "Added regression methods to the three existing test classes identified in the impact analysis.",
+        "rationale": "This follows the plan’s requested test locations and reuses the project’s existing policy, API, and lifecycle fixtures.",
+        "source": "agent"
+      },
+      {
+        "topic": "Destination-rule tests",
+        "choice": "Assert prohibited destinations return the existing prohibited_destination error and do not create records.",
+        "rationale": "This distinguishes correct IDNA-aware destination checks from a generic URL-parse rejection while preserving the existing error contract.",
+        "source": "agent"
+      },
+      {
+        "topic": "Network behavior",
+        "choice": "Use the existing stub resolver and a fixed public test address for host-check assertions.",
+        "rationale": "The tests verify ASCII host conversion without performing external DNS or destination requests.",
+        "source": "agent"
+      }
+    ]
+  }
+}

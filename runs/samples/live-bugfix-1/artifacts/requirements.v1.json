@@ -1,0 +1,78 @@
+{
+  "name": "requirements",
+  "version": 1,
+  "sha": "c7e297355015f6922ab864469f5525269332c928afd2cf1036689763d9179604",
+  "produced_by": "requirements/analyst#1",
+  "inputs": [],
+  "result": {
+    "summary": "7 requirements (6 functional, 1 non-functional); 1 ambiguity resolved by assumption and 1 remains open.",
+    "outputs": {
+      "goal": "Fix URL creation so browser-parseable destinations allowed by the service can be shortened when their hosts use Unicode IDN labels or underscores. The resulting short link must redirect to the destination, without weakening existing destination restrictions or changing existing endpoint and link behavior.",
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "The link-creation endpoint must accept URLs with Unicode IDN host labels, including `https://müller.de/angebote` and `https://例え.jp/`, when they are browser-parseable and pass the existing destination rules."
+        },
+        {
+          "id": "FR2",
+          "text": "The link-creation endpoint must accept a browser-parseable URL with an underscore in its host, such as `https://my_site.example.com/page`, when it passes the existing destination rules."
+        },
+        {
+          "id": "FR3",
+          "text": "URLs that currently work, including Punycode host forms and URLs with Unicode path data such as `https://example.com/café`, must continue to work."
+        },
+        {
+          "id": "FR4",
+          "text": "The service must not report that a URL lacks a host when URL parsing has identified a host, including when the host uses Unicode IDN labels or an underscore."
+        },
+        {
+          "id": "FR5",
+          "text": "A created short link must redirect to the submitted destination, either as entered or in an equivalent normalized form; the choice between those forms is unresolved."
+        },
+        {
+          "id": "FR6",
+          "text": "Existing destination restrictions must continue to reject local, private, and otherwise prohibited destinations. Host representations that resolve to the same destination, including Unicode and Punycode IDN forms, must not bypass those restrictions."
+        }
+      ],
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Existing links and endpoint contracts must continue to work unchanged."
+        }
+      ],
+      "ambiguities": [
+        {
+          "question": "What parsing behavior defines “a browser can open” for the supported URL schemes?",
+          "resolution": "Use WHATWG URL parsing as the reference for browser parseability, while retaining the service’s existing supported-scheme policy.",
+          "source": "assumption",
+          "rationale": "WHATWG URL parsing is a conventional, interoperable browser reference. Keeping the existing scheme policy avoids expanding scope beyond the reported host-parsing issue."
+        },
+        {
+          "question": "Should the short link redirect to the exact address entered by the user or to an equivalent normalized form?",
+          "resolution": null,
+          "source": "unresolved",
+          "rationale": "This is an explicitly identified open point. The choice changes the observable redirect target representation and may affect compatibility; the requirement does not authorize either behavior."
+        }
+      ],
+      "acceptance_criteria": [
+        "Given an allowed URL with a Unicode IDN host such as `https://müller.de/angebote` or `https://例え.jp/`, when the user submits it to the existing link-creation endpoint, the service creates a short link using the existing success response contract.",
+        "Given an allowed URL using the corresponding Punycode host form, when the user submits it, the service continues to create a short link using the existing success response contract.",
+        "Given a browser-parseable, destination-allowed URL with an underscore in its host, when the user submits it, the service creates a short link.",
+        "Given an allowed URL with an ordinary host and Unicode path data such as `https://example.com/café`, when the user submits it, the service continues to create a short link.",
+        "Given a URL for which parsing identifies a host, when link creation fails for another reason, the response does not claim that the URL has no host.",
+        "Given an allowed URL that was shortened, when a client follows the short link, the service redirects to the submitted destination or an equivalent normalized form; the exact-versus-normalized representation remains pending the unresolved decision.",
+        "Given a local, private, or otherwise prohibited destination expressed using Unicode, Punycode, or another equivalent host representation, when the user submits it, the service rejects it under the existing destination rules.",
+        "Given existing links and endpoint requests, when exercised after the fix, their existing behavior and contracts remain unchanged."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "What parsing behavior defines “a browser can open” for the supported URL schemes?",
+        "choice": "Use WHATWG URL parsing as the reference for browser parseability, while retaining the service’s existing supported-scheme policy.",
+        "rationale": "WHATWG URL parsing is a conventional, interoperable browser reference. Keeping the existing scheme policy avoids expanding scope beyond the reported host-parsing issue.",
+        "source": "assumption"
+      }
+    ]
+  }
+}

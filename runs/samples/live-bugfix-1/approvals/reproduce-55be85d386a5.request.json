@@ -1,0 +1,22 @@
+{
+  "run_id": "live-bugfix-1",
+  "stage": "reproduce",
+  "reason": "policy: high-risk change (3 violation(s); require_approval by high_impact_paths)",
+  "summary": "Added regression coverage for IDN and underscore URL acceptance, ASCII-host redirects, exact metadata, and continued rejection of prohibited destinations.",
+  "gate_evidence": [
+    "[change_control/high_impact_paths] url-shortener/src/test/java/com/example/shortener/api/LinkCreationTest.java: modifies high-impact path (matches '*/src/test/*')",
+    "[change_control/high_impact_paths] url-shortener/src/test/java/com/example/shortener/api/LinkLifecycleTest.java: modifies high-impact path (matches '*/src/test/*')",
+    "[change_control/high_impact_paths] url-shortener/src/test/java/com/example/shortener/service/DestinationPolicyTest.java: modifies high-impact path (matches '*/src/test/*')"
+  ],
+  "files_changed": [
+    "url-shortener/src/test/java/com/example/shortener/api/LinkCreationTest.java",
+    "url-shortener/src/test/java/com/example/shortener/api/LinkLifecycleTest.java",
+    "url-shortener/src/test/java/com/example/shortener/service/DestinationPolicyTest.java"
+  ],
+  "decisions": [
+    "Test placement: Added regression methods to the three existing test classes identified in the impact analysis. (agent)",
+    "Destination-rule tests: Assert prohibited destinations return the existing prohibited_destination error and do not create records. (agent)",
+    "Network behavior: Use the existing stub resolver and a fixed public test address for host-check assertions. (agent)"
+  ],
+  "artifact_sha": "55be85d386a565a5019a11f2826a9af8f104b2a8dce3a94ecbfc7dc7c8c8adf5"
+}

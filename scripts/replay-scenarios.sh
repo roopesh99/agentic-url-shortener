@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Replays the four recorded scenarios offline: no API key, no network calls to an LLM, $0.
+# Replays the five recorded scenarios offline: no API key, no network calls to an LLM, $0.
 # Every LLM exchange comes from scenarios/cassettes/, every human decision from runs/samples/.
 # Each scenario starts from the repository state it originally started from (a temporary git
 # worktree) and its generated url-shortener is compared with the commit the original run produced.
@@ -10,7 +10,8 @@ WORK="$(mktemp -d)"
 trap 'git -C "$ROOT" worktree remove --force "$WORK/wt-brownfield" 2>/dev/null || true
       git -C "$ROOT" worktree remove --force "$WORK/wt-ambiguous" 2>/dev/null || true
       git -C "$ROOT" worktree remove --force "$WORK/wt-lifecycle" 2>/dev/null || true
-      git -C "$ROOT" branch -D orch/replay-brownfield orch/replay-ambiguous orch/replay-lifecycle >/dev/null 2>&1 || true
+      git -C "$ROOT" worktree remove --force "$WORK/wt-bugfix" 2>/dev/null || true
+      git -C "$ROOT" branch -D orch/replay-brownfield orch/replay-ambiguous orch/replay-lifecycle orch/replay-bugfix >/dev/null 2>&1 || true
       rm -rf "$WORK"' EXIT
 
 unset OPENAI_API_KEY ANTHROPIC_API_KEY
@@ -53,5 +54,13 @@ orch run "$WORK/wt-lifecycle/workflows/lifecycle.yaml" --requirement scenarios/l
     --run-id replay-lifecycle | tail -2
 git -C "$WORK/wt-lifecycle" diff --quiet f404c98 -- url-shortener; check lifecycle $?
 
-for r in replay-greenfield replay-brownfield replay-ambiguous replay-lifecycle; do echo "  $r: $(orch verify-audit $r)"; done
+echo "== bug fix: links to international and underscore host names were rejected (reproduce, then fix)"
+# The current workflow file: the release stage's gate_context was added mid-run, and the replay
+# follows the re-planned release, so its release passes first time where the live run failed once.
+git worktree add -q --detach "$WORK/wt-bugfix" f51b693
+orch run workflows/bugfix.yaml --requirement scenarios/bugfix-idn.md --workspace "$WORK/wt-bugfix" \
+    "${llm[@]}" --recorded-decisions runs/samples/live-bugfix-1/approvals --run-id replay-bugfix | tail -2
+git -C "$WORK/wt-bugfix" diff --quiet e6671c9 -- url-shortener; check bugfix $?
+
+for r in replay-greenfield replay-brownfield replay-ambiguous replay-lifecycle replay-bugfix; do echo "  $r: $(orch verify-audit $r)"; done
 exit $status

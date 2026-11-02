@@ -1,0 +1,10 @@
+{
+  "answers": [
+    {
+      "question": "Should the short link redirect to the exact address entered by the user or to an equivalent normalized form?",
+      "answer": "An equivalent normalized form, normalized only where HTTP requires it: the redirect's Location uses the host's ASCII (Punycode) form, and non-ASCII characters in the path and query are percent-encoded as today; nothing else changes (no case changes, reordering or removal of components). Link metadata (originalUrl) keeps returning the URL exactly as the user entered it."
+    }
+  ],
+  "answered_by": "roopeshkotte",
+  "source": "human"
+}

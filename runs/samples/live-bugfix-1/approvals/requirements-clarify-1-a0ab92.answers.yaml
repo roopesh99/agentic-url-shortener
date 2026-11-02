@@ -1,0 +1,10 @@
+# Open questions from stage 'requirements' (run live-bugfix-1, round 1).
+# These are product decisions the agent would not guess. Fill in every `answer`,
+# then submit:  orch answer live-bugfix-1 requirements-clarify-1-a0ab92
+# Your answers become binding human decisions in the audit log.
+
+- question: Should the short link redirect to the exact address entered by the user or to an equivalent
+    normalized form?
+  why: This is an explicitly identified open point. The choice changes the observable redirect target
+    representation and may affect compatibility; the requirement does not authorize either behavior.
+  answer: ''

@@ -1,0 +1,11 @@
+{
+  "run_id": "live-bugfix-1",
+  "stage": "requirements",
+  "round": 1,
+  "questions": [
+    {
+      "question": "Should the short link redirect to the exact address entered by the user or to an equivalent normalized form?",
+      "why": "This is an explicitly identified open point. The choice changes the observable redirect target representation and may affect compatibility; the requirement does not authorize either behavior."
+    }
+  ]
+}

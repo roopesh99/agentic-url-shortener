@@ -1,0 +1,22 @@
+{
+  "run_id": "live-bugfix-1",
+  "stage": "release",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Ready for human release sign-off as a backward-compatible minor release; no database migration is required.",
+  "gate_evidence": [
+    "release_checklist_passed: PASS",
+    "files_exist: PASS"
+  ],
+  "files_changed": [
+    "url-shortener/CHANGELOG.md",
+    "url-shortener/docs/releases/1.2.0.md"
+  ],
+  "decisions": [
+    "Release version: Release as 1.2.0. (agent)",
+    "Redirect and metadata behavior: Normalize only the redirect host to ASCII/Punycode when required; retain existing path/query escaping and preserve the exact submitted URL in `originalUrl`. (agent)",
+    "Destination validation: Use the same IDNA-converted ASCII host for destination checks and redirect generation. (agent)",
+    "Persistence and migration: Keep stored URLs unchanged and perform redirect normalization at resolution time; make no schema change. (agent)",
+    "Scope: Retain the existing HTTP(S)-only scheme policy and leave ASCII-host behavior unchanged. (agent)"
+  ],
+  "artifact_sha": "e8fc2028a9d95de1cdfee03f5d9fe705cc075e987dbc1483ef08ecd8db5c6f37"
+}

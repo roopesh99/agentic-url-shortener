@@ -1,0 +1,18 @@
+{
+  "run_id": "live-bugfix-1",
+  "stage": "impact",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Accept browser-compatible Unicode IDN and underscore HTTP(S) hosts, check destinations using their ASCII host form, and normalize only the redirect host while preserving the exact submitted URL in metadata.",
+  "gate_evidence": [
+    "outputs_present: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "IDNA processing: Use a pinned browser-compatible UTS #46 implementation with settings that accept the specified underscore-host form, while retaining the existing HTTP(S)-only scheme policy. (agent)",
+    "Destination validation: Apply local-host checks and DNS resolution to the same ASCII host produced by IDNA conversion that is used for redirect host generation. (agent)",
+    "Persistence and metadata: Keep `original_url` unchanged and derive the normalized redirect URL at resolution time without a schema change. (agent)",
+    "Redirect normalization: Change only the host when required for ASCII/Punycode output and leave all other URL components to the existing redirect serialization and escaping behavior. (agent)",
+    "Redirect hot path: Perform host normalization locally at resolution time and do not add DNS, destination fetches, or required analytics work to the redirect path. (agent)"
+  ],
+  "artifact_sha": "420d68a1d4fb8252b2a3562a949253e36b5cea0d5a7991ab4ad3453467626620"
+}

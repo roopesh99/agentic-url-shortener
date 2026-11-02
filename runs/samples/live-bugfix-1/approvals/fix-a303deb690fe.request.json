@@ -1,0 +1,23 @@
+{
+  "run_id": "live-bugfix-1",
+  "stage": "fix",
+  "reason": "policy: high-risk change (1 violation(s); require_approval by dependency_allowlist)",
+  "summary": "Read the host from the authority when java.net.URI leaves it unparsed, convert non-ASCII hosts to ASCII with UTS #46 (ICU4J), and use that one form for destination checks and the redirect; ASCII hosts and the stored URL are unchanged.",
+  "gate_evidence": [
+    "[change_control/dependency_allowlist] url-shortener/pom.xml: new dependency not on allowlist: com.ibm.icu:icu4j"
+  ],
+  "files_changed": [
+    "url-shortener/pom.xml",
+    "url-shortener/src/main/java/com/example/shortener/service/DestinationPolicy.java",
+    "url-shortener/src/main/java/com/example/shortener/service/DestinationUrls.java",
+    "url-shortener/src/main/java/com/example/shortener/service/LinkService.java"
+  ],
+  "decisions": [
+    "Root cause: java.net.URI.getHost() is null for internationalized and underscore host names; DestinationPolicy read that as no host (agent)",
+    "One conversion for check and redirect: DestinationUrls.toAscii feeds both the destination check and redirectTarget (agent)",
+    "IDNA library: ICU4J 77.1, UTS #46 non-transitional with CheckBidi and CheckJoiners, hyphen checks off (agent)",
+    "ASCII hosts untouched: Conversion only runs for hosts with non-ASCII characters (agent)",
+    "Mutation checks: Checking the host as written, or redirecting to the URL as entered, each fail 3 regression tests (agent)"
+  ],
+  "artifact_sha": "a303deb690feb898b7413a372b5fc874eb330bc37b378e95ebc76249ba31984b"
+}

@@ -1,0 +1,16 @@
+{
+  "run_id": "live-bugfix-1",
+  "stage": "requirements",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "7 functional and 1 non-functional requirements; 3 ambiguities resolved, 0 unresolved.",
+  "gate_evidence": [
+    "outputs_present: PASS",
+    "ambiguities_resolved: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "Does “any link that a browser can open” expand the service's currently supported URL schemes or URL forms beyond the reported website URLs?: Do not expand the service's existing URL-scheme policy. Apply the fix to the reported HTTP(S) website URL forms, including the Unicode IDN and underscore-host examples, subject to the existing destination rules. (assumption)",
+    "Which IDNA processing profile should be used to convert Unicode domain names to ASCII/Punycode?: Use browser-compatible IDNA-to-ASCII processing for supported HTTP(S) URL hosts, and use the resulting host consistently for destination-rule checks and redirect Location generation. (assumption)"
+  ],
+  "artifact_sha": "dca6ef5e7b5cb03c07bb397e03194c26efe30e9119f5b0e814503a6a7453875c"
+}

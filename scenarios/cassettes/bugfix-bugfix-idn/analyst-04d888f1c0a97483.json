@@ -1,0 +1,199 @@
+{
+  "request": {
+    "agent": "analyst",
+    "effort": "high",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ambiguities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "enum": [
+                  "assumption",
+                  "unresolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "resolution",
+              "source",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "non_functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "goal",
+        "functional",
+        "non_functional",
+        "ambiguities",
+        "acceptance_criteria"
+      ],
+      "type": "object"
+    },
+    "system": "You are the requirements analyst in a governed software delivery pipeline. You turn a product owner's requirement into a normalized engineering specification that the architect, coders and testers downstream will build from. You do not write code.\n\nYour output is checked by automated gates and then reviewed by a human before any design or code work starts, so precision matters more than polish.\n\nHow to work:\n- Restate the goal in one or two sentences an engineer could act on.\n- List functional and non-functional requirements as atomic, testable statements. Keep the requirement's own ids (FR1, NFR2, ...) when it provides them; otherwise assign them. Do not invent scope the requirement does not ask for.\n- Surface every ambiguity: anything an engineer would have to guess about (formats, limits, error behaviour, status codes, security posture). Include the requirement's own \"open points\" and any you find yourself.\n- For each ambiguity, decide whether a safe, conventional default exists.\n  - If it does, set `source` to \"assumption\", put the default in `resolution`, and explain in `rationale` why it is the conventional and low-risk choice. These become recorded decisions a human will review.\n  - If the answer is a genuine product decision (who may see data, business rules, legal or compliance posture, anything where a wrong guess would be costly to reverse), set `source` to \"unresolved\" and `resolution` to null. This stops the pipeline until a human answers, which is the intended behaviour. Do not guess on these to keep things moving.\n- Write acceptance criteria as observable behaviours (request \u2192 expected response), covering the main path and the important failure paths.\n- `summary`: one line, e.g. counts of requirements and how many ambiguities were resolved vs. left open.",
+    "user": "<requirement>\n# Bug report: links to some valid websites cannot be shortened\n\n> Input to the orchestrator's bug-fix workflow. The service in `url-shortener/` is in use.\n\n## What users report\nSupport has received several reports from users who cannot shorten links to websites that open\nfine in their browser. Creating the link fails immediately with:\n\n    400 {\"error\":\"invalid_url\",\"message\":\"url must include a host\"}\n\nExamples from the tickets:\n- `https://m\u00fcller.de/angebote` (a German shop)\n- `https://\u4f8b\u3048.jp/` (a Japanese site)\n- `https://my_site.example.com/page` (an internal-looking but public host name with an underscore)\n\nThe same shop works when a user pastes its address as `https://xn--mller-kva.de/angebote`, which is\nhow some browsers display it when copied. Ordinary addresses such as `https://example.com/caf\u00e9`\nwork.\n\n## Expected\nAny link that a browser can open and that the service's destination rules allow can be shortened,\nand its short link redirects to it. The error message should not claim that a URL with a host has\nno host.\n\n## Constraints\n- The destination rules must not be weakened: links to local, private or otherwise prohibited\n  addresses must still be refused, whatever form their host name is written in.\n- Existing links and endpoints keep working unchanged.\n\n## Known open points (for the Analyst to resolve or flag)\n- Whether the short link should redirect to the address exactly as the user entered it, or to an\n  equivalent normalized form.\n</requirement>\n\n<clarifications>\nA human answered your earlier open questions. These answers are binding decisions. For each, keep the original question wording, set `resolution` to the answer, set `source` to \"assumption\" and start `rationale` with \"Decided by a human:\". Make the requirements and acceptance criteria consistent with every answer. Raise a new open question only if an answer itself leaves something genuinely undecided.\n\n[\n  {\n    \"answer\": \"An equivalent normalized form, normalized only where HTTP requires it: the redirect's Location uses the host's ASCII (Punycode) form, and non-ASCII characters in the path and query are percent-encoded as today; nothing else changes (no case changes, reordering or removal of components). Link metadata (originalUrl) keeps returning the URL exactly as the user entered it.\",\n    \"question\": \"Should the short link redirect to the exact address entered by the user or to an equivalent normalized form?\"\n  }\n]\n</clarifications>\n\n<previous_attempt_feedback>\nAttempt 1 was not accepted. Fix the causes below.\n\n1 open question(s) were answered by a human (see <clarifications>); treat each answer as a binding decision.\n</previous_attempt_feedback>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "acceptance_criteria": [
+        "Submit `https://m\u00fcller.de/angebote` through the existing link-creation flow when permitted by destination rules \u2192 creation succeeds and returns a usable short link.",
+        "Follow the short link created for `https://m\u00fcller.de/angebote` \u2192 the redirect Location uses the host `xn--mller-kva.de` and retains the `/angebote` path.",
+        "Submit `https://\u4f8b\u3048.jp/` through the existing link-creation flow when permitted by destination rules \u2192 creation succeeds, and following the short link redirects with the host in its ASCII/Punycode form.",
+        "Submit `https://my_site.example.com/page` through the existing link-creation flow when permitted by destination rules \u2192 creation succeeds and the short link redirects to that destination.",
+        "Submit the equivalent Unicode and Punycode forms of an otherwise permitted IDN destination \u2192 both can be shortened and their redirect Locations use the corresponding ASCII/Punycode host.",
+        "Submit a permitted destination containing non-ASCII path and query characters \u2192 the redirect Location percent-encodes those characters as the service does today, without other changes to URL components.",
+        "Read `originalUrl` metadata for a link created from a URL containing Unicode characters \u2192 it matches the exact URL supplied at creation.",
+        "Submit a prohibited local, private, or otherwise disallowed destination using a Unicode host or its equivalent ASCII/Punycode form \u2192 creation is refused under the existing destination rules.",
+        "Submit any of the reported, otherwise permitted URLs \u2192 the request does not fail with `400 {\"error\":\"invalid_url\",\"message\":\"url must include a host\"}`.",
+        "Use a previously created short link and existing endpoints \u2192 they remain usable and resolve to the same logical destinations."
+      ],
+      "ambiguities": [
+        {
+          "question": "Should the short link redirect to the exact address entered by the user or to an equivalent normalized form?",
+          "rationale": "Decided by a human: this is the binding redirect and metadata policy. It limits redirect normalization to the specified host conversion and existing path/query escaping while retaining the exact user-entered value in metadata.",
+          "resolution": "An equivalent normalized form, normalized only where HTTP requires it: the redirect's Location uses the host's ASCII (Punycode) form, and non-ASCII characters in the path and query are percent-encoded as today; nothing else changes (no case changes, reordering or removal of components). Link metadata (originalUrl) keeps returning the URL exactly as the user entered it.",
+          "source": "assumption"
+        },
+        {
+          "question": "Does \u201cany link that a browser can open\u201d expand the service's currently supported URL schemes or URL forms beyond the reported website URLs?",
+          "rationale": "Preserving the current scheme policy is the low-risk, conventional scope for a host-parsing bug fix and avoids changing behavior beyond the reported website URLs.",
+          "resolution": "Do not expand the service's existing URL-scheme policy. Apply the fix to the reported HTTP(S) website URL forms, including the Unicode IDN and underscore-host examples, subject to the existing destination rules.",
+          "source": "assumption"
+        },
+        {
+          "question": "Which IDNA processing profile should be used to convert Unicode domain names to ASCII/Punycode?",
+          "rationale": "Browser-compatible host processing is a conventional choice for a service shortening browser destinations and helps ensure Unicode and equivalent ASCII/Punycode host forms receive consistent checks.",
+          "resolution": "Use browser-compatible IDNA-to-ASCII processing for supported HTTP(S) URL hosts, and use the resulting host consistently for destination-rule checks and redirect Location generation.",
+          "source": "assumption"
+        }
+      ],
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "The existing link-creation flow must accept `https://m\u00fcller.de/angebote` and `https://\u4f8b\u3048.jp/` when the existing destination rules permit them."
+        },
+        {
+          "id": "FR2",
+          "text": "The existing link-creation flow must accept `https://my_site.example.com/page` when the existing destination rules permit it."
+        },
+        {
+          "id": "FR3",
+          "text": "A successfully created short link must redirect to its destination with the host in ASCII (Punycode) form when required."
+        },
+        {
+          "id": "FR4",
+          "text": "For the redirect Location, non-ASCII characters in the path and query must be percent-encoded as they are today. Do not apply other URL changes, such as additional case changes, component reordering, or component removal."
+        },
+        {
+          "id": "FR5",
+          "text": "The `originalUrl` metadata field must return the URL exactly as the user entered it."
+        },
+        {
+          "id": "FR6",
+          "text": "The existing destination rules must continue to refuse local, private, and otherwise prohibited destinations, including when a prohibited host is entered in Unicode or an equivalent ASCII/Punycode form."
+        },
+        {
+          "id": "FR7",
+          "text": "A URL with a host that is accepted under the existing destination rules must not fail with `invalid_url` and the message `url must include a host`."
+        }
+      ],
+      "goal": "Allow browser-compatible website URLs with the reported Unicode and underscore host forms to be shortened when they pass the service\u2019s existing destination rules. Redirect using the agreed host and path/query normalization while preserving the exact entered URL in metadata and keeping existing links and endpoints working.",
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Existing short links and endpoints must remain usable; the fix must not require changing endpoint interfaces or alter existing links\u2019 logical destinations."
+        }
+      ],
+      "summary": "7 functional and 1 non-functional requirements; 3 ambiguities resolved, 0 unresolved."
+    },
+    "duration_ms": 79190,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_d6c98724c33b422eb1b884eb22f320f7",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 1134,
+      "output_tokens": 8470
+    }
+  }
+}
