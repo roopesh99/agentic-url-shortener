@@ -2,18 +2,19 @@
 
 ## What was built
 
-1. **A governed agentic SDLC orchestrator** (`orchestrator/`, Python, ~4.7k lines, 186 tests). It takes
+1. **A governed agentic SDLC orchestrator** (`orchestrator/`, Python, ~4.8k lines, 195 tests). It takes
    a requirement through an explicit dependency graph of stages covering the full lifecycle
    (requirements, impact analysis, API design, implementation, test planning, testing, documentation,
-   release readiness), with entry/exit gates, parallel paths and joins, a policy engine, human
+   release readiness) and a reproduce-then-fix path for bugs, with entry/exit gates, parallel paths and joins, a policy engine, human
    approvals, clarifications and change requests, bounded retries, rollback, fallback, safe-stop,
    resume, lineage-based re-planning, a hash-chained audit log and reliability metrics.
-2. **A URL shortener** (`url-shortener/`, Java 17 / Spring Boot 3.4, 138 tests), produced by the
-   orchestrator in four runs: built from a requirement, extended with click analytics, hardened from a
-   deliberately vague request, then given owner-editable expiry through the full lifecycle, which also
-   produced its OpenAPI definition, README, API reference, changelog and a release-readiness record.
+2. **A URL shortener** (`url-shortener/`, Java 17 / Spring Boot 3.4, 150 tests), produced by the
+   orchestrator in five runs: built from a requirement, extended with click analytics, hardened from a
+   deliberately vague request, given owner-editable expiry through the full lifecycle (which also
+   produced its OpenAPI definition, README, API reference, changelog and release records), and fixed
+   for a real bug, reproduced by a failing test before the fix.
 
-Everything is reproducible offline: `scripts/replay-scenarios.sh` replays all four scenarios from their
+Everything is reproducible offline: `scripts/replay-scenarios.sh` replays all five scenarios from their
 recorded LLM exchanges and human decisions and checks that the generated code matches the committed
 code exactly (it does).
 
@@ -33,6 +34,7 @@ The work followed a walking skeleton, then layers, each committed separately (`g
 | 5 | lineage-based re-planning | the last orchestration capability |
 | 6 | metrics and reports from the log | measure what was built |
 | 7 | documentation, offline replay of the scenarios | deliverables |
+| Bug fix | reproduce-then-fix workflow, `regression_reproduces` gate, reproducer agent; release sees gate results | the audit found bug fixes in scope but undemonstrated |
 | Lifecycle | design, documentation and release stages; OpenAPI, conformance, docs-coverage and checklist gates; entry gates in use; fixes the run exposed | an audit against the assignment found the lifecycle stages missing |
 
 ## How the core requirements are met
@@ -40,25 +42,25 @@ The work followed a walking skeleton, then layers, each committed separately (`g
 | Requirement | Where it is met | Evidence |
 |---|---|---|
 | 1. Requirement understanding | analyst agent; ambiguity gate; clarification checkpoints | 27 human answers across the runs; a contradiction caught; "make it more reliable" → 23 requirements |
-| 2. Task decomposition | declarative stage DAGs with dependencies, scopes, gates (`workflows/`); work broken down further inside stages (impact plan: files, risks, tests; test plan: cases traced to requirements) | 4-, 5- and 8-stage workflows, two fork/join points in the lifecycle |
-| 3. Codebase reasoning (brownfield) | impact-analyst stage reading the code; plan approved before changes | impacted files, API/data changes, races and risks named before coding |
+| 2. Task decomposition | declarative stage DAGs with dependencies, scopes, gates (`workflows/`); work broken down further inside stages (impact plan: files, risks, tests; test plan: cases traced to requirements) | 4-, 5-, 5- and 8-stage workflows, two fork/join points in the lifecycle |
+| 3. Codebase reasoning (brownfield) | impact-analyst stage reading the code; plan approved before changes; bug fixes reproduced before they are fixed | impacted files, API/data changes, races and risks named before coding; a real bug's root cause found from a user report |
 | 4. Workflow orchestration | engine with explicit DAG, entry/exit gates, parallel paths, context and lineage, approvals, retries, fallback, rollback, safe-stop, policy, audit, metrics, re-planning; the lifecycle workflow covers requirements → design → implementation → testing → documentation → release readiness | [ARCHITECTURE.md](ARCHITECTURE.md); `test_scheduler`, `test_resilience`, `test_replan`, `test_lifecycle`; `live-lifecycle-1` |
-| 5. Engineering output | layered service; Flyway migrations; an OpenAPI 3.0.3 definition of every endpoint, checked against the code both ways; README and API reference; changelog; 138 tests | `url-shortener/`, `url-shortener/openapi.yaml`, `url-shortener/docs/` |
-| 6. Validation and risk control | gates the orchestrator runs, policy tiers, test-count floor, protected tests, mutation checks | [TESTING.md](TESTING.md), [RISKS.md](RISKS.md) |
-| 7. Controlled autonomy | read/write scopes, propose-only agents, bounded rounds/retries/revisions, budgets, human checkpoints | every live run: 17 approval decisions, 30 answers, all recorded under the person's identity |
+| 5. Engineering output | layered service; Flyway migrations; an OpenAPI 3.0.3 definition of every endpoint, checked against the code both ways; README and API reference; changelog; 150 tests | `url-shortener/`, `url-shortener/openapi.yaml`, `url-shortener/docs/` |
+| 6. Validation and risk control | gates the orchestrator runs, policy tiers, test-count floor, protected tests, a failing regression test required before a fix, mutation checks | [TESTING.md](TESTING.md), [RISKS.md](RISKS.md) |
+| 7. Controlled autonomy | read/write scopes, propose-only agents, bounded rounds/retries/revisions, budgets, human checkpoints | every live run: 22 approval decisions, 31 answers, all recorded under the person's identity |
 | 8. Final summary | this document | |
 
 ## Results (from `orch report --all`, `runs/samples/REPORT.md`)
 
 | Metric | Value |
 |---|---|
-| Runs succeeded | 5 of 6 (83%) — the failure is the first greenfield attempt, before clarification existed |
+| Runs succeeded | 6 of 7 (86%) — the failure is the first greenfield attempt, before clarification existed |
 | Stage success rate (executed stages) | 84% |
-| Failure retries / rollbacks | 1 / 2 (the fault-injection demo; the lifecycle run's release, blocked by its checklist gate and rolled back) |
-| Incidents (unrecovered) / MTTR | 5 (1) / 14.3 min |
-| Human decisions | 17 approval decisions (3 rejected, all with a change request), 30 answers in 10 rounds |
-| Active work vs waiting for humans | 1.1 h vs 39.0 h |
-| Live LLM calls / output tokens | 28 / 239,026 (cost not computed: no pricing configured for the OpenAI model) |
+| Failure retries / rollbacks | 1 / 3 (the fault-injection demo; the lifecycle and bug-fix runs' release stages, each blocked once by its checklist gate and rolled back) |
+| Incidents (unrecovered) / MTTR | 6 (1) / 13.2 min |
+| Human decisions | 22 approval decisions (3 rejected, all with a change request), 31 answers in 11 rounds |
+| Active work vs waiting for humans | 1.3 h vs 39.3 h |
+| Live LLM calls / output tokens | 34 / 282,263 (cost not computed: no pricing configured for the OpenAI model) |
 
 Per scenario: [SCENARIOS.md](SCENARIOS.md).
 
@@ -90,8 +92,9 @@ Per scenario: [SCENARIOS.md](SCENARIOS.md).
   coder and tester stages were served by a Claude Code session through the same prompts, context,
   schemas, policy and gates, recorded as `claude-code-session`. That assistant verified its code before
   answering, so the coder and tester stages never failed a gate. The architect, writer and release
-  agents ran on OpenAI; the release agent's one failure (a prompt bug of mine) is the live run's only
-  rollback. Retries and fallback are demonstrated by tests and by `demo-fault-injection`.
+  agents ran on OpenAI; the release agent failed once in each of the last two runs, both times
+  through a design gap of mine (a prompt bug; no view of gate results), and those are the live runs'
+  only rollbacks. The bug-fix run's regression tests were written by OpenAI. Retries and fallback are demonstrated by tests and by `demo-fault-injection`.
 - **Gaps the runs exposed were fixed mid-run** (clarification, change requests, revision rounds), each as
   a reviewed, tested commit, and recorded in the audit log (`workflow_changed`). The ambiguous run was
   resumed twice for this; its MTTR of 54 minutes includes that work.
@@ -99,6 +102,10 @@ Per scenario: [SCENARIOS.md](SCENARIOS.md).
   stage was logged as a plain resume, so that run's log lacks the re-plan reason; the release prompt
   bug; and the impact analyst could not see where later stages write. Two change requests were needed
   on its impact plan, one because the model dropped tests it was told to keep.
+- **The bug-fix run exposed one more gap**, fixed mid-run (`799f264`): the release agent judged
+  readiness from agents' summaries, not the orchestrator's gate results, and its checklist assumed
+  the full lifecycle. Two of its judgements were accepted at sign-off though weak: version 1.2.0
+  (1.1.1 is arguably right) and "documentation updated" (no docs needed changing, but it did not know).
 - **Mistakes caught along the way** are listed in [RISKS.md](RISKS.md#lessons-from-building-it-things-that-went-wrong-and-were-fixed),
   including a commit message that says five approvals where the metrics show four.
 - Further limitations: [RISKS.md](RISKS.md#known-limitations).
@@ -110,5 +117,5 @@ Per scenario: [SCENARIOS.md](SCENARIOS.md).
 3. An eval set for agent output quality, and per-agent model choice tuned against it.
 4. Event log in a database with an external anchor for the hash chain; a queue-backed scheduler.
 5. Production datastore and shared rate-limit state for the service.
-6. Choose the workflow from the requirement (greenfield, brownfield, lifecycle) instead of naming it,
+6. Choose the workflow from the requirement (greenfield, brownfield, lifecycle, bug fix) instead of naming it,
    and let the release stage bump the build version (today `pom.xml` stays `1.0.0-SNAPSHOT`).

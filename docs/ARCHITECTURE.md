@@ -4,8 +4,8 @@ Two systems live in this repository:
 
 | System | What it is | Where |
 |---|---|---|
-| **Orchestrator** | A governed, agentic SDLC engine (Python, ~4.7k lines): it turns a requirement into reviewed, tested code through a dependency graph of stages, with gates, policy, human checkpoints, rollback, resume, re-planning and an audit trail. | `orchestrator/` |
-| **URL shortener** | The service the orchestrator built and then changed three times (Java 17, Spring Boot 3.4, ~1.6k lines + ~2.4k lines of tests), with its OpenAPI definition and docs. | `url-shortener/` |
+| **Orchestrator** | A governed, agentic SDLC engine (Python, ~4.8k lines): it turns a requirement into reviewed, tested code through a dependency graph of stages, with gates, policy, human checkpoints, rollback, resume, re-planning and an audit trail. | `orchestrator/` |
+| **URL shortener** | The service the orchestrator built and then changed four times (Java 17, Spring Boot 3.4, ~1.7k lines + ~2.5k lines of tests), with its OpenAPI definition and docs. | `url-shortener/` |
 
 The principle throughout: **agents propose, the orchestrator verifies, humans decide.** No agent writes a
 file, judges its own output, or approves anything.
@@ -24,7 +24,7 @@ flowchart LR
     end
     subgraph Agents["Agents (agents/, llm/)"]
         REG["Agent registry"]
-        LLMA["LLM agents<br/>analyst · impact · architect · planner<br/>coder · tester · writer · release"]
+        LLMA["LLM agents<br/>analyst · impact · architect · planner<br/>coder · reproducer · tester · writer · release"]
         ROUTE["Backend router<br/>config/llm.*.yaml"]
         P1["Anthropic"]
         P2["OpenAI"]
@@ -32,7 +32,7 @@ flowchart LR
         CAS["Cassettes<br/>record / replay"]
     end
     subgraph Governance
-        GATES["Gates<br/>mvn compile/test, ambiguity, test-count floor,<br/>OpenAPI valid, API conformance,<br/>docs coverage, release checklist"]
+        GATES["Gates<br/>mvn compile/test, ambiguity, test-count floor,<br/>OpenAPI valid, API conformance,<br/>docs coverage, release checklist,<br/>regression reproduces"]
         POL["Policy engine<br/>policies/default.yaml"]
         APP["Human checkpoints<br/>approvals · clarifications<br/>change requests"]
     end
@@ -62,7 +62,7 @@ flowchart LR
 | Event store | Append-only, hash-chained log: the single source of truth. State, metrics and resume are rebuilt from it; any edit, deletion or reordering is detected. | `engine/events.py` |
 | Agents | One structured-output LLM call per attempt; output validated against a Pydantic model; files proposed through a scoped context. Deterministic stubs implement the same contract. | `agents/` |
 | LLM backends | A provider-neutral contract (`LLMClient`), a registry (Anthropic, OpenAI, session), per-agent routing from config, and cassettes for offline replay. | `llm/` |
-| Gates | Checks the orchestrator runs itself (never the agent's word): Maven compile/test with a test-count floor, ambiguity resolution, structural output checks, OpenAPI validity, two-way API conformance (documented = implemented), documentation coverage of the API, release checklist. | `gates/builtin.py`, `gates/api.py` |
+| Gates | Checks the orchestrator runs itself (never the agent's word): Maven compile/test with a test-count floor, ambiguity resolution, structural output checks, OpenAPI validity, two-way API conformance (documented = implemented), documentation coverage of the API, release checklist, and for bug fixes that new tests fail on the current code while every other test passes. | `gates/builtin.py`, `gates/api.py`, `gates/regression.py` |
 | Policy engine | Rules over every proposed change set (secrets, dangerous code, PII in logs, dependency allowlist, high-impact paths, diff size), each mapped to a risk tier and an action. Policy-as-code; its hash is recorded on every run. | `policy/`, `policies/default.yaml` |
 | Human checkpoints | Approvals (workflow-declared or policy-required), clarification rounds for open questions, change requests from commented rejections. Persisted and bound to content hashes. | `approvals/service.py` |
 | Workspace | Change sets (the only path agent output reaches disk), file-level revert, workspace escape and symlink protection, git checkpoint per accepted stage. | `workspace/` |
@@ -90,7 +90,13 @@ flowchart LR
 `implement` and `test_plan` run **in parallel**; `test` **joins** them. Every stage can declare:
 entry gates (preconditions), exit gates (verification), `approval: required`, `retry`, `fallback`,
 `write_scope` / `read_scope` (least privilege, both ways), `clarification.max_rounds`, `max_revisions`,
-`downstream_context` (show the agent where later stages write).
+`downstream_context` (show the agent where later stages write), `gate_context` (show it the
+orchestrator's gate results for its inputs).
+
+A **bug fix** (`workflows/bugfix.yaml`) is a straight line that enforces the order:
+requirements → impact → **reproduce** (tests only; exit gate `regression_reproduces`: the new tests
+fail on the current code, everything else passes) → **fix** (code only; the whole suite passes) →
+release.
 
 The **full lifecycle** (`workflows/lifecycle.yaml`) adds design, documentation and release readiness,
 with two fork/join points and entry gates on implementation and release:
@@ -273,7 +279,8 @@ repositories) → file-based H2 with Flyway migrations (`V1__create_links`, `V2_
 | `:8081/actuator/{health,metrics}` | Loopback-only management port; `shortener.redirects` timer by outcome |
 
 Cross-cutting: destination policy (http/https, ≤2048 chars, no loopback/private/link-local/unique-local/
-multicast targets, DNS fail-closed), per-IP create limit (20/min, Bucket4j), failed-token limit (10 per
+multicast targets, DNS fail-closed; internationalized hosts are checked, and redirected to, in their
+UTS #46 ASCII form), per-IP create limit (20/min, Bucket4j), failed-token limit (10 per
 rolling minute, shared by stats, delete and expiry changes), 16 KiB API body limit, security headers on
 every response, one JSON error schema. The API is defined in `url-shortener/openapi.yaml` and documented
 in `url-shortener/README.md` and `url-shortener/docs/api.md`.

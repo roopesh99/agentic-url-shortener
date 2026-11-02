@@ -2,21 +2,21 @@
 
 The three the assignment asks for (greenfield, brownfield, ambiguous), plus a fourth that runs the
 full lifecycle: requirements, impact, **design, implementation, testing, documentation and release
-readiness**. Each scenario ran live through the orchestrator (analyst, impact analyst and test planner on OpenAI
+readiness**, and a fifth that fixes a real bug, **reproducing it with a failing test before any fix**. Each scenario ran live through the orchestrator (analyst, impact analyst and test planner on OpenAI
 `gpt-6-luna`; coder and tester served by a Claude Code session; every human decision by the product
 owner). Each one replays offline and reproduces its committed code exactly
 (`scripts/replay-scenarios.sh`). Full reports: `runs/samples/<run>/report.md`.
 
-| | Greenfield | Brownfield | Ambiguous | Full lifecycle |
-|---|---|---|---|---|
-| Input | `scenarios/greenfield.md` | `scenarios/brownfield-analytics.md` | `scenarios/ambiguous-reliability.md` (3 sentences) | `scenarios/lifecycle-expiry.md` |
-| Run | `live-greenfield-2` | `live-brownfield-1` | `live-ambiguous-1` | `live-lifecycle-1` |
-| Workflow | `skeleton` (4 stages) | `brownfield` (5 stages) | `brownfield` (5 stages) | `lifecycle` (8 stages) |
-| Human decisions | 7 answers, 2 approvals | 4 answers, 4 approvals | 16 answers, 4 approvals incl. 1 change request | 3 answers, 7 approval decisions incl. 2 change requests and the release sign-off |
-| Outcome | service v1, 77 tests | click analytics, 95 tests | hardening and observability, 120 tests | expiry changes, OpenAPI definition, README and API reference, changelog and release 1.1.0 record, 138 tests |
-| Active time / waiting for humans | 15.2 min / 34.8 h | 11.8 min / 44.4 min | 20.6 min / 1.8 h (+32.8 min stopped) | 17.7 min / 1.7 h (+59 s stopped) |
-| Live LLM calls, output tokens | 3, 32,140 | 5, 35,336 | 8, 88,089 | 11, 76,712 |
-| Commits produced | `cbb7946` | `1a9a262` `a3b4aed` `94d3336` | `014bce6` `f688d03` `c225b82` | `d78c69a` `704504f` `6b5d32f` `2fb6279` `55cbb75` `f404c98` |
+| | Greenfield | Brownfield | Ambiguous | Full lifecycle | Bug fix |
+|---|---|---|---|---|---|
+| Input | `scenarios/greenfield.md` | `scenarios/brownfield-analytics.md` | `scenarios/ambiguous-reliability.md` (3 sentences) | `scenarios/lifecycle-expiry.md` | `scenarios/bugfix-idn.md` (a user bug report) |
+| Run | `live-greenfield-2` | `live-brownfield-1` | `live-ambiguous-1` | `live-lifecycle-1` | `live-bugfix-1` |
+| Workflow | `skeleton` (4 stages) | `brownfield` (5 stages) | `brownfield` (5 stages) | `lifecycle` (8 stages) | `bugfix` (5 stages) |
+| Human decisions | 7 answers, 2 approvals | 4 answers, 4 approvals | 16 answers, 4 approvals incl. 1 change request | 3 answers, 7 approval decisions incl. 2 change requests and the release sign-off | 1 answer, 5 approvals incl. a new dependency and the release sign-off |
+| Outcome | service v1, 77 tests | click analytics, 95 tests | hardening and observability, 120 tests | expiry changes, OpenAPI definition, README and API reference, changelog and release 1.1.0 record, 138 tests | internationalized and underscore hosts accepted, release 1.2.0, 150 tests |
+| Active time / waiting for humans | 15.2 min / 34.8 h | 11.8 min / 44.4 min | 20.6 min / 1.8 h (+32.8 min stopped) | 17.7 min / 1.7 h (+59 s stopped) | 11.7 min / 17.6 min |
+| Live LLM calls, output tokens | 3, 32,140 | 5, 35,336 | 8, 88,089 | 11, 76,712 | 6, 43,237 |
+| Commits produced | `cbb7946` | `1a9a262` `a3b4aed` `94d3336` | `014bce6` `f688d03` `c225b82` | `d78c69a` `704504f` `6b5d32f` `2fb6279` `55cbb75` `f404c98` | `96ecfaf` `9b4dd8d` `e6671c9` |
 
 ---
 
@@ -149,11 +149,64 @@ the release prompt bug; the impact analyst's missing view of downstream write sc
 uses the workflow file as the run started, and the fixed release prompt, so its release passes first
 time; the delivered code is identical.
 
+## 5. Bug fix: links to international host names were rejected
+
+**The bug is real.** While auditing the service for a bug-fix scenario, a probe of the running service
+showed `https://müller.de/…`, `https://例え.jp/` and `https://my_site.example.com/…` rejected with
+`400 invalid_url: "url must include a host"`, while the same domain in ASCII form
+(`xn--mller-kva.de`) worked: `java.net.URI.getHost()` is null for such hosts. The scenario is written
+as a user bug report (symptoms only); diagnosing it was left to the agents.
+
+**Decomposition.** `workflows/bugfix.yaml` enforces **reproduce first, then fix**:
+
+```
+requirements ─► impact ─► reproduce ─► fix ─► release
+  (approve)    (approve)  [new tests    [full suite,   [entry: full suite]
+                           fail, rest    tests          (approve)
+                           pass]         untouchable]
+```
+
+The `reproduce` stage (a reproducer agent, test files only) must pass `regression_reproduces`: the
+orchestrator clears old reports, runs the suite, and requires the tests to compile and run, at least
+one new test to fail, and no other test to fail. The `fix` stage cannot write tests and must make the
+whole suite pass.
+
+**Orchestration, as it happened.**
+1. The analyst turned the report into 8 requirements, including "Unicode and Punycode forms must not
+   bypass the destination rules", and asked the open point: redirect as entered, or normalized? The
+   owner: the redirect uses the ASCII host (a `Location` header must be ASCII), nothing else changes,
+   and metadata keeps the URL exactly as entered. It also dropped its own first assumption ("whatever
+   a browser accepts") in favour of fixing only the reported forms.
+2. The impact analyst found the root cause and named the key risk: if the security check and the
+   redirect interpreted a host differently, a spelling could bypass the rules. Plan: one conversion
+   (UTS #46, as browsers do) feeding both. Approved.
+3. The reproducer (OpenAI) added 12 tests to 3 existing classes. Policy paused on the edits to existing
+   tests; the owner approved after seeing that one line changed (whitespace) and nothing was removed.
+   **The gate confirmed 10 fail with the reported error** and all 138 existing tests pass; 2 guard
+   tests (Punycode form, path encoding) already pass, so the fix cannot over-correct.
+4. Fix (Claude Code session): a `DestinationUrls` helper reads the host from the authority, converts a
+   non-ASCII host with ICU4J and returns that one form to both the destination check and the redirect;
+   ASCII hosts take exactly the old path. Policy paused on the new dependency (ICU4J 77.1; Java's
+   built-in IDNA2003 converter would send `faß.de` to `fass.de`, a different domain); the owner
+   approved. 150 tests pass; conformance holds.
+5. **Release failed once:** the agent failed "API definition valid" although the conformance gate had
+   passed, and failed design and documentation items this workflow has no stages for. It could not
+   see gate results. After a fix (`gate_context`), a re-plan recorded with its reason re-ran release
+   only; 10 items, none failing; the owner signed off.
+
+**Validation.** Full-width `ｌｏｃａｌｈｏｓｔ` and `１２７.０.０.１` are refused as prohibited (the check runs
+on the converted host). Checking the host as written, or redirecting to the URL as entered, each fail
+3 regression tests. Run metrics: 83% stage success, 1 incident, MTTR 8.8 min, 1 re-plan.
+
+**Accepted at sign-off, recorded as release-agent weaknesses:** version 1.2.0 where 1.1.1 is arguably
+right (its first attempt chose 1.1.1); "documentation updated: pass" on weak grounds (the docs never
+described host rules, so none went stale).
+
 ---
 
 ## Supporting runs
 
 | Run | Purpose |
 |---|---|
-| `live-greenfield-1` | the first greenfield attempt, failed at the ambiguity gate before clarification existed; kept so the success rate is honest (5 of 6 runs) |
+| `live-greenfield-1` | the first greenfield attempt, failed at the ambiguity gate before clarification existed; kept so the success rate is honest (6 of 7 runs) |
 | `demo-fault-injection` | stub agents with two injected faults: a compile failure (rolled back and retried) and a refusal (fallback agent), so retries, rollback and MTTR appear in a real run |

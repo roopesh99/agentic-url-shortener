@@ -19,16 +19,16 @@ python3 -m venv .venv
 # or only what you use: .venv/bin/pip install -e '.[openai]'  /  '.[anthropic]'
 ```
 
-## 1. Reproduce the four scenarios offline (no key, $0)
+## 1. Reproduce the five scenarios offline (no key, $0)
 
 ```bash
 scripts/replay-scenarios.sh
 ```
 
-Replays greenfield, brownfield, ambiguous and the full lifecycle from the recorded LLM exchanges (`scenarios/cassettes/`)
+Replays greenfield, brownfield, ambiguous, the full lifecycle and the bug fix from the recorded LLM exchanges (`scenarios/cassettes/`)
 and the recorded human decisions (`runs/samples/*/approvals/`), each from the repository state it
 originally started from, runs the real Maven gates, and checks that the generated `url-shortener`
-is identical to the committed result. Expected output ends with four `✓` lines and four
+is identical to the committed result. Expected output ends with five `✓` lines and five
 `events verified` lines.
 
 ## 2. Run the service
@@ -47,7 +47,7 @@ curl -s localhost:8080/api/links/demo/stats -H "X-Management-Token: <token>"
 curl -s -X PATCH localhost:8080/api/links/demo -H "X-Management-Token: <token>" \
      -H 'Content-Type: application/json' -d '{"expiresAt":"2030-01-01T00:00:00Z"}'   # or null to remove
 curl -s 127.0.0.1:8081/actuator/metrics/shortener.redirects
-mvn test                                                           # 138 tests
+mvn test                                                           # 150 tests
 ```
 
 ## 3. Run the orchestrator
@@ -64,6 +64,14 @@ agents against this repository's service, as in the recorded run:
 
 ```bash
 .venv/bin/orch run workflows/lifecycle.yaml --requirement scenarios/lifecycle-expiry.md --workspace . \
+    --agents llm --llm record --llm-config config/llm.openai-hybrid.yaml --approvals file
+```
+
+A bug fix (`workflows/bugfix.yaml`) takes a bug report and requires a failing regression test before
+the fix:
+
+```bash
+.venv/bin/orch run workflows/bugfix.yaml --requirement scenarios/bugfix-idn.md --workspace . \
     --agents llm --llm record --llm-config config/llm.openai-hybrid.yaml --approvals file
 ```
 
@@ -120,9 +128,9 @@ assistant answers with `orch respond <request.json> --files-from <dir> --summary
 ## 4. Tests
 
 ```bash
-.venv/bin/pytest                    # orchestrator: 186 tests, incl. real Maven builds (~40 s)
+.venv/bin/pytest                    # orchestrator: 195 tests, incl. real Maven builds (~50 s)
 .venv/bin/pytest -m "not maven"     # without the Maven builds (~6 s)
-cd url-shortener && mvn test        # service: 138 tests
+cd url-shortener && mvn test        # service: 150 tests
 ```
 
 See [TESTING.md](TESTING.md).

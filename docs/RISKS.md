@@ -17,6 +17,7 @@
 | Audit log or artifact edited | Resume, report and verify refuse it | `test_events.py`, `test_resilience.py`, `test_metrics.py` |
 | Upstream output changes after downstream finished | `orch replan` / automatic on resume; lineage decides reuse or re-run | `test_replan.py` |
 | Code drifts from the approved API definition | Conformance gate fails the implementation (documented but not built, or built but not documented) | `test_lifecycle.py`, `live-lifecycle-1` |
+| A "fix" without proof of the bug | The reproduce stage must produce a test that fails on the current code, with every other test passing, before the fix stage may start; the fix cannot change tests | `test_bugfix.py`, `live-bugfix-1` |
 | Release prepared from a stale or broken build | Release entry gate re-runs the full suite; a failing checklist item blocks the release | `live-lifecycle-1` (blocked once, rolled back) |
 
 ## Trade-offs
@@ -42,6 +43,8 @@
 - LLM nondeterminism: the analyst re-opened a question it had resolved earlier (handled, but it costs a round); output quality is not measured by an eval set.
 - Prompt injection: requirement text and code reach prompts. Agents cannot write outside their scope or skip policy and gates, which contains the damage, but a malicious requirement could still steer what an agent proposes within its scope.
 - The conformance gate compares methods and paths found by a static scan of Spring annotations, not request or response schemas; it would miss a route built some other way (e.g. functional routing).
+- `regression_reproduces` proves a new test fails, not that it fails *for the reported reason*: a person reads the failures (the gate puts every one, with its message, in the evidence). In the live run all 10 failed with the reported error.
+- The release agent's judgement is not checked beyond its checklist: it chose 1.2.0 for a bug fix (1.1.1 is arguably right) and passed "documentation updated" without seeing the docs.
 - The release stage cannot bump the build version (`pom.xml` is outside its write scope); release 1.1.0 is recorded while the build says `1.0.0-SNAPSHOT`.
 - `live-lifecycle-1`'s log records its release re-plan as a plain resume, without the reason (the bug was fixed afterwards; the log is append-only). The reason is in commit `5db4b29`.
 - Costs for the OpenAI model are unknown in the reports (no pricing configured); token counts are exact.
@@ -64,4 +67,5 @@
 - **Tests that could not fail.** One assertion ended in `or True`; another test's docstring contradicted its assertion; `*IT` test classes would have been skipped by Surefire. Each caught in review and fixed, and mutation checks were added for every safety mechanism.
 - **The model drifted from an explicit instruction.** In the lifecycle run, asked to "keep the technical plan unchanged" and only move files, the impact analyst dropped two tests; a second change request restored them. Human review of plan revisions is not optional.
 - **A prompt bug blocked a release.** The release prompt let the agent list its own review and the pending sign-off as failing items. The checklist gate did its job; the fix was the prompt.
+- **An agent judged from claims, not evidence.** The bug-fix release agent failed a check the orchestrator had already verified, because it saw agents' summaries and not gate results. It now gets the gate results from the audit log.
 - **A record is off by one.** The brownfield evidence commit message (`0f4090f`) says five approvals; the metrics show four (spec, impact plan, V2 migration, edits to two existing tests).

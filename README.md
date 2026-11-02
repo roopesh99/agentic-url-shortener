@@ -2,8 +2,8 @@
 
 A governed agentic SDLC orchestrator (Python) that turns a requirement into a
 reviewed, tested service, and the URL shortener (Java 17 / Spring Boot) it built
-and then changed three times: greenfield, brownfield, from a deliberately vague request, and through
-the full lifecycle (API design, documentation, release readiness).
+and then changed four times: greenfield, brownfield, from a deliberately vague request, through the
+full lifecycle (API design, documentation, release readiness), and a bug fix reproduced before it was fixed.
 
 **Agents propose, the orchestrator verifies, humans decide.** Explicit stage DAGs with
 gates, parallel paths and joins; a policy engine; approvals, clarifications and change
@@ -19,7 +19,7 @@ re-planning; a hash-chained audit log; reliability metrics computed from it.
 | [docs/SETUP.md](docs/SETUP.md) · [docs/TESTING.md](docs/TESTING.md) | running everything; testing approach |
 | [runs/samples/REPORT.md](runs/samples/REPORT.md) | metrics across the recorded runs |
 
-Reproduce all four scenarios offline (no API key, $0), checking the generated code
+Reproduce all five scenarios offline (no API key, $0), checking the generated code
 against the committed result:
 
 ```bash
@@ -159,12 +159,12 @@ Every evaluation (`POLICY_EVALUATED`) and the policy file's sha256 are in the au
 |---|---|
 | `orchestrator/engine/` | contracts (`models.py`), state machine, hash-chained event store, DAG loader, scheduler |
 | `orchestrator/agents/` | agent contract + scoped workspace (write allowlist = autonomy boundary), stub agents |
-| `orchestrator/gates/` | gate contract + built-ins (`maven_test`, `ambiguities_resolved`, `openapi_valid`, `openapi_conformance`, `docs_cover_api`, `release_checklist_passed`, …) |
+| `orchestrator/gates/` | gate contract + built-ins (`maven_test`, `ambiguities_resolved`, `openapi_valid`, `openapi_conformance`, `docs_cover_api`, `release_checklist_passed`, `regression_reproduces`, …) |
 | `orchestrator/approvals/` | human approval checkpoints (CLI, auto) |
 | `orchestrator/llm/` | provider-neutral contract, provider registry + config, providers, session backend, cassettes, strict-schema generation |
 | `config/` | LLM backend configurations (which provider serves which agent) |
 | `orchestrator/policy/` | policy engine, rules, risk tiers |
 | `orchestrator/workspace/` | proposed change sets; the only code path that writes agent output |
 | `policies/` | governance policy (policy-as-code) |
-| `workflows/` | declarative DAGs: `skeleton` (greenfield), `brownfield`, `lifecycle` (full SDLC), `fault-demo` |
+| `workflows/` | declarative DAGs: `skeleton` (greenfield), `brownfield`, `lifecycle` (full SDLC), `bugfix` (reproduce, then fix), `fault-demo` |
 | `scenarios/` | requirement inputs |
