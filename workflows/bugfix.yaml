@@ -19,9 +19,10 @@ stages:
   - id: requirements
     agent: analyst
     exit_gates:
-      - name: outputs_present
-        args: { keys: [goal, functional, non_functional] }
+      - name: outputs_present          # a narrow bug may have no non-functional requirements
+        args: { keys: [goal, functional] }
       - ambiguities_resolved
+    retry: { max_attempts: 2 }       # a structural miss gets one more attempt, with the gate's feedback
     clarification: { max_rounds: 3 }
     approval: required
     max_revisions: 2
