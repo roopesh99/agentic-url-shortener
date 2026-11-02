@@ -17,7 +17,7 @@ owner). Each one replays offline and reproduces its committed code exactly
 | Outcome | service v1, 77 tests | click analytics, 95 tests | hardening and observability, 120 tests | expiry changes, OpenAPI definition, README and API reference, changelog and release 1.1.0 record, 138 tests | internationalized and underscore hosts accepted, release 1.2.0, 150 tests |
 | Active time / waiting for humans | 15.2 min / 34.8 h | 11.8 min / 44.4 min | 20.6 min / 1.8 h (+32.8 min stopped) | 17.7 min / 1.7 h (+59 s stopped) | 11.7 min / 17.6 min |
 | Live LLM calls, output tokens | 3, 32,140 | 5, 35,336 | 8, 88,089 | 11, 76,712 | 6, 43,237 |
-| Commits produced | `cbb7946` | `1a9a262` `a3b4aed` `94d3336` | `014bce6` `f688d03` `c225b82` | `d78c69a` `704504f` `6b5d32f` `2fb6279` `55cbb75` `f404c98` | `96ecfaf` `9b4dd8d` `e6671c9` |
+| Commits produced | `ca25c18` | `a3163a6` `2016785` `b5c4980` | `6883101` `624a5d7` `e7efb93` | `295128a` `737ff7f` `9d95cf7` `7331904` `523b2fa` `0e47485` | `bd2852d` `092f844` `5bc359a` |
 
 ---
 
@@ -144,7 +144,7 @@ reading a missing field as "remove", PATCH bypassing the throttle, updating with
 each fail a new test. Run metrics: 89% stage success (the rolled-back release attempt), 1 incident,
 MTTR 3.0 min.
 
-**Found by this run and fixed afterwards** (`cac2dea`): the re-plan of a *failed* stage was logged as a
+**Found by this run and fixed afterwards** (`cf2556a`): the re-plan of a *failed* stage was logged as a
 plain resume, so its reason is missing from this run's log (it is in the evidence commit message);
 the release prompt bug; the impact analyst's missing view of downstream write scopes. The replay
 uses the workflow file as the run started, and the fixed release prompt, so its release passes first
@@ -215,7 +215,7 @@ the application sees it, so no in-process test could. `scenarios/bugfix-html-err
    (high confidence, runner-up brownfield); the owner confirmed. The selection is in `RUN_STARTED`.
 2. The analyst's spec (3 functional requirements, none non-functional) **failed the bug-fix workflow's
    first gate**, which required non-functional requirements: a rule copied from the lifecycle. The rule
-   was corrected (`a9a858e`) and the run re-planned from requirements, the reason recorded.
+   was corrected (`6ce4920`) and the run re-planned from requirements, the reason recorded.
 3. Impact: the right mechanism (Tomcat's error-report valve), limited to `/api/**` by inspecting the
    path, which it named as its own top risk. The owner's **change request** removed the path check:
    every route is documented API, so `/%ZZ` must be JSON too. Revision approved.

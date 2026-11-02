@@ -51,7 +51,7 @@
 - `regression_reproduces` proves a new test fails, not that it fails *for the reported reason*: a person reads the failures (the gate puts every one, with its message, in the evidence). In the live run all 10 failed with the reported error.
 - The release agent's judgement is not checked beyond its checklist: it chose 1.2.0 for a bug fix (1.1.1 is arguably right) and passed "documentation updated" without seeing the docs.
 - The release stage cannot bump the build version (`pom.xml` is outside its write scope); release 1.1.0 is recorded while the build says `1.0.0-SNAPSHOT`.
-- `live-lifecycle-1`'s log records its release re-plan as a plain resume, without the reason (the bug was fixed afterwards; the log is append-only). The reason is in commit `5db4b29`.
+- `live-lifecycle-1`'s log records its release re-plan as a plain resume, without the reason (the bug was fixed afterwards; the log is append-only). The reason is in commit `683ae4d`.
 - Costs for the OpenAI model are unknown in the reports (no pricing configured); token counts are exact.
 - Runs started before resume support (`live-greenfield-1`, `-2`) cannot be resumed; `live-greenfield-2` predates content-bound decision ids and replays through its answers file.
 
@@ -78,4 +78,5 @@
 - **A guard can be fooled by leftovers.** The oldest gate counted stale test reports, so deleting a test class would still have met the test-count floor.
 - **Tests can pass without testing.** The race tests slept and hoped; they now prove each wait from the database, and three guard tests prove the proof can fail.
 - **An intermittent replay stop was seen once** (the auto scenario's re-plan step, 1 of 4 runs); not reproduced since. The script now prints the failing gate if it recurs.
-- **A record is off by one.** The brownfield evidence commit message (`0f4090f`) says five approvals; the metrics show four (spec, impact plan, V2 migration, edits to two existing tests).
+- **History was rewritten once, before publishing,** to remove a personal identity from commits; ids changed. Audit logs and commit messages keep the old ids; [COMMIT_MAP.md](COMMIT_MAP.md) translates them.
+- **A record is off by one.** The brownfield evidence commit message (`ed2f7c5`) says five approvals; the metrics show four (spec, impact plan, V2 migration, edits to two existing tests).

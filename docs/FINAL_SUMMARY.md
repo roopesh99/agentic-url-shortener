@@ -106,11 +106,11 @@ Per scenario: [SCENARIOS.md](SCENARIOS.md).
 - **Gaps the runs exposed were fixed mid-run** (clarification, change requests, revision rounds), each as
   a reviewed, tested commit, and recorded in the audit log (`workflow_changed`). The ambiguous run was
   resumed twice for this; its MTTR of 54 minutes includes that work.
-- **The lifecycle run exposed three more gaps**, fixed after the run (`cac2dea`): a re-plan of a failed
+- **The lifecycle run exposed three more gaps**, fixed after the run (`cf2556a`): a re-plan of a failed
   stage was logged as a plain resume, so that run's log lacks the re-plan reason; the release prompt
   bug; and the impact analyst could not see where later stages write. Two change requests were needed
   on its impact plan, one because the model dropped tests it was told to keep.
-- **The bug-fix run exposed one more gap**, fixed mid-run (`799f264`): the release agent judged
+- **The bug-fix run exposed one more gap**, fixed mid-run (`1084e53`): the release agent judged
   readiness from agents' summaries, not the orchestrator's gate results, and its checklist assumed
   the full lifecycle. Two of its judgements were accepted at sign-off though weak: version 1.2.0
   (1.1.1 is arguably right) and "documentation updated" (no docs needed changing, but it did not know).
