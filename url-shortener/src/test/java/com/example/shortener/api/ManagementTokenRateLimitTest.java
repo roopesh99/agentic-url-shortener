@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,8 +21,12 @@ import com.example.shortener.service.RateLimitedException;
 import com.example.shortener.support.IntegrationTest;
 import com.example.shortener.support.MutableClock;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 
-/** FR10: at most 10 wrong management tokens per client IP per rolling minute, shared by stats and delete. */
+/**
+ * FR10: at most 10 wrong management tokens per client IP per rolling minute, shared by stats, delete
+ * and expiry changes.
+ */
 class ManagementTokenRateLimitTest extends IntegrationTest {
 
     private static final AtomicInteger NEXT = new AtomicInteger(1);
@@ -70,6 +75,29 @@ class ManagementTokenRateLimitTest extends IntegrationTest {
     }
 
     @Test
+    void TC_FR2_03_wrongTokensOnExpiryChangesCountTowardTheSameLimit() throws Exception {
+        JsonNode link = create("https://example.com/limit-patch", null, "2030-01-01T00:01:00Z");
+        String code = link.get("code").asText();
+        String ip = freshIp();
+        for (int i = 0; i < 10; i++) {
+            var request = i % 2 == 0 ? expiryChange(code) : get("/api/links/" + code + "/stats");
+            mvc.perform(request.header("X-Management-Token", "wrong").with(peer(ip)))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("invalid_token"));
+        }
+        mvc.perform(expiryChange(code).header("X-Management-Token", "wrong").with(peer(ip)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error").value("rate_limited"))
+                .andExpect(header().exists("Retry-After"));
+        mvc.perform(delete("/api/links/" + code).header("X-Management-Token", "wrong").with(peer(ip)))
+                .andExpect(status().isTooManyRequests()); // the PATCH failures counted for delete too
+        assertThat(repository.findByCode(code).orElseThrow().getExpiresAt()).isNotNull();
+
+        mvc.perform(expiryChange(code).header("X-Management-Token", link.get("managementToken").asText()).with(peer(ip)))
+                .andExpect(status().isOk()); // the real owner is never locked out
+        assertThat(repository.findByCode(code).orElseThrow().getExpiresAt()).isNull();
+    }
+
+    @Test
     void TC_FR10_02_missingTokensNeverCount() throws Exception {
         String code = create("https://example.com/missing").get("code").asText();
         String ip = freshIp();
@@ -95,6 +123,10 @@ class ManagementTokenRateLimitTest extends IntegrationTest {
         mvc.perform(get("/api/links/" + code + "/stats").header("X-Management-Token", link.get("managementToken").asText())
                         .with(peer(ip)))
                 .andExpect(status().isOk()); // the real owner is never locked out
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder expiryChange(String code) {
+        return patch("/api/links/" + code).contentType(MediaType.APPLICATION_JSON).content("{\"expiresAt\":null}");
     }
 
     private static String freshIp() {
