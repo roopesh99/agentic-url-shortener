@@ -2,22 +2,23 @@
 
 | Metric | Value |
 |---|---|
-| Runs (succeeded) | 8 (88%) |
-| Stage success rate | 84% |
+| Runs (succeeded) | 9 (89%) |
+| Stage success rate | 85% |
 | Failure retries | 1 |
 | Clarification rounds (incl. replays) / change requests | 19 / 5 |
 | Rollbacks | 3 |
 | Incidents (unrecovered) | 9 (1) |
 | MTTR | 5.2 min |
-| Human decisions | 27 approvals (4 rejected), 31 answers in 11 rounds |
-| Active time / waiting for humans | 1.4 h / 48.6 h |
-| Live LLM calls / output tokens | 39 / 307,877 |
+| Human decisions | 30 approvals (4 rejected), 31 answers in 11 rounds |
+| Active time / waiting for humans | 1.6 h / 48.8 h |
+| Live LLM calls / output tokens | 42 / 324,336 |
 
 | Run | Workflow | Status | Processes | Stage success | Failure retries | Rollbacks | Incidents | MTTR | Active | Human wait | End to end |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `demo-fault-injection` | fault-demo | SUCCEEDED | 1 | 100% | 1 | 1 | 2 | 2.7 s | 6.8 s | 0.0 s | 6.8 s |
 | `live-ambiguous-1` | brownfield | SUCCEEDED | 4 | 62% | 0 | 0 | 3 | 11.5 min | 20.6 min | 1.8 h | 2.7 h |
 | `live-brownfield-1` | brownfield | SUCCEEDED | 1 | 100% | 0 | 0 | 0 | – | 11.8 min | 44.4 min | 56.2 min |
+| `live-brownfield-2` | brownfield | SUCCEEDED | 1 | 100% | 0 | 0 | 0 | – | 8.4 min | 11.3 min | 19.7 min |
 | `live-bugfix-1` | bugfix | SUCCEEDED | 2 | 83% | 0 | 1 | 1 | 4.7 min | 11.7 min | 17.6 min | 32.9 min |
 | `live-bugfix-2` | bugfix | SUCCEEDED | 2 | 83% | 0 | 0 | 1 | 36.7 s | 8.4 min | 9.3 h | 9.4 h |
 | `live-greenfield-1` | skeleton | FAILED | 1 | 0% | 0 | 0 | 1 | – | 50.0 s | 0.0 s | 50.0 s |

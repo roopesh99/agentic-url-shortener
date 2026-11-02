@@ -1,0 +1,17 @@
+{
+  "run_id": "live-brownfield-2",
+  "stage": "impact",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "Strengthen the six races in ClickDeletionRaceTest with verified, bounded H2 lock-wait observation; production code and API contracts remain unchanged.",
+  "gate_evidence": [
+    "outputs_present: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "Lock-wait observation: Use H2's INFORMATION_SCHEMA.SESSIONS blocker and executing-statement visibility from the test harness. (agent)",
+    "Bounded waits and cleanup: Follow the existing race test's finite 5-second acquisition and 10-second operation-wait convention, and make an unverified first transaction roll back during cleanup. (agent)",
+    "Test helper placement: Keep the observation and coordination helpers in ClickDeletionRaceTest rather than adding a general-purpose test utility or dependency. (agent)",
+    "API and schema: Make no endpoint, request/response, schema, or migration changes. (agent)"
+  ],
+  "artifact_sha": "4cb33267b8ff3f94121f3f3cc94d3373d396348c599f013750e1031f89953a15"
+}

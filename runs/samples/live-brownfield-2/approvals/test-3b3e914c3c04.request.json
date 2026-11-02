@@ -1,0 +1,19 @@
+{
+  "run_id": "live-brownfield-2",
+  "stage": "test",
+  "reason": "policy: high-risk change (1 violation(s); require_approval by high_impact_paths)",
+  "summary": "Every race in ClickDeletionRaceTest now proves its interleaving: the first transaction is released only after H2 shows the second operation's session BLOCKED by it on a row-lock query for the same link; otherwise the test fails within a bound and the first transaction rolls back. Fixed sleeps removed; outcome assertions kept.",
+  "gate_evidence": [
+    "[change_control/high_impact_paths] url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java: modifies high-impact path (matches '*/src/test/*')"
+  ],
+  "files_changed": [
+    "url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java"
+  ],
+  "decisions": [
+    "Proof of the wait: INFORMATION_SCHEMA.SESSIONS: SESSION_STATE BLOCKED, BLOCKER_ID equal to the first transaction's SESSION_ID(), and a 'from links ... for update' statement whose bound parameter is the link's code or id (agent)",
+    "Failure paths: Early completion and an unobserved wait fail with a diagnostic (target, holder session, last observed blocked sessions); the first transaction is marked rollback-only unless the wait was verified, and is always released (agent)",
+    "Assertions retained: All 11 outcome assertions and all 6 test methods kept; the 6 'holds lock' latch assertions are replaced by the holder's stricter bounded lock check (agent)",
+    "Verification: 9/9 race tests pass on 3 consecutive runs (~4.4 s), full suite 158 pass; mutation checks: releasing without proof fails 3 tests, accepting any blocked session fails 1, committing an unproven interleaving fails 2 (agent)"
+  ],
+  "artifact_sha": "3b3e914c3c04ea91c3eed5956aea2bbd7b88a605b2ddb00758dcf81d8edba8fa"
+}

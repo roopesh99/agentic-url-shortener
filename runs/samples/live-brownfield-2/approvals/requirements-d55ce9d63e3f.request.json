@@ -1,0 +1,16 @@
+{
+  "run_id": "live-brownfield-2",
+  "stage": "requirements",
+  "reason": "workflow declares this stage approval: required",
+  "summary": "4 functional and 2 non-functional requirements; 2 ambiguities resolved by assumptions and 0 left open.",
+  "gate_evidence": [
+    "outputs_present: PASS",
+    "ambiguities_resolved: PASS"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "How should the test establish that the second operation is waiting specifically on the target row lock?: Use existing database-native lock-wait visibility where available, or equivalent test-only instrumentation that can identify the second operation as blocked on the target link row. Do not treat a start signal or lack of completion alone as proof. (assumption)",
+    "What bounded wait should be used to observe lock contention?: Use the test suite’s existing timeout convention; if none exists, use a finite, appropriately generous test timeout. Expiration must fail the test with a diagnostic and must not permit the first operation to commit as though the interleaving had been proven. (assumption)"
+  ],
+  "artifact_sha": "d55ce9d63e3fec0ddf6e073db476ba8ed9a8102fe0421e4f8cb7b40f420cc56a"
+}

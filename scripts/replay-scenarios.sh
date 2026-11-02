@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Replays the six recorded scenarios offline: no API key, no network calls to an LLM, $0.
+# Replays the seven recorded scenarios offline: no API key, no network calls to an LLM, $0.
 # Every LLM exchange comes from scenarios/cassettes/, every human decision from runs/samples/.
 # Each scenario starts from the repository state it originally started from (a temporary git
 # worktree) and its generated url-shortener is compared with the commit the original run produced.
@@ -12,7 +12,8 @@ trap 'git -C "$ROOT" worktree remove --force "$WORK/wt-brownfield" 2>/dev/null |
       git -C "$ROOT" worktree remove --force "$WORK/wt-lifecycle" 2>/dev/null || true
       git -C "$ROOT" worktree remove --force "$WORK/wt-bugfix" 2>/dev/null || true
       git -C "$ROOT" worktree remove --force "$WORK/wt-auto" 2>/dev/null || true
-      git -C "$ROOT" branch -D orch/replay-brownfield orch/replay-ambiguous orch/replay-lifecycle orch/replay-bugfix orch/replay-auto >/dev/null 2>&1 || true
+      git -C "$ROOT" worktree remove --force "$WORK/wt-tests" 2>/dev/null || true
+      git -C "$ROOT" branch -D orch/replay-brownfield orch/replay-ambiguous orch/replay-lifecycle orch/replay-bugfix orch/replay-auto orch/replay-tests >/dev/null 2>&1 || true
       rm -rf "$WORK"' EXIT
 
 unset OPENAI_API_KEY ANTHROPIC_API_KEY
@@ -84,5 +85,13 @@ fi
 tail -2 "$WORK/auto.log"
 git -C "$WORK/wt-auto" diff --quiet dc311a5 -- url-shortener; check auto $?
 
-for r in replay-greenfield replay-brownfield replay-ambiguous replay-lifecycle replay-bugfix replay-auto; do echo "  $r: $(orch verify-audit $r)"; done
+echo "== tests: a test-quality request routed by 'orch run auto' to brownfield"
+git worktree add -q --detach "$WORK/wt-tests" 1cb9457
+mkdir -p "$WORK/wf-tests" && git archive 1cb9457 workflows | tar -x -C "$WORK/wf-tests"
+orch run auto --requirement scenarios/harden-race-tests.md --workspace "$WORK/wt-tests" \
+    --workflows-dir "$WORK/wf-tests/workflows" "${llm[@]}" \
+    --recorded-decisions runs/samples/live-brownfield-2/approvals --run-id replay-tests | tail -2
+git -C "$WORK/wt-tests" diff --quiet ab2aba4 -- url-shortener; check tests $?
+
+for r in replay-greenfield replay-brownfield replay-ambiguous replay-lifecycle replay-bugfix replay-auto replay-tests; do echo "  $r: $(orch verify-audit $r)"; done
 exit $status

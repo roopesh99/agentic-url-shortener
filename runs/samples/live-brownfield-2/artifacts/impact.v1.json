@@ -1,0 +1,91 @@
+{
+  "name": "impact",
+  "version": 1,
+  "sha": "4cb33267b8ff3f94121f3f3cc94d3373d396348c599f013750e1031f89953a15",
+  "produced_by": "impact/impact_analyst#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 1,
+      "sha": "d55ce9d63e3fec0ddf6e073db476ba8ed9a8102fe0421e4f8cb7b40f420cc56a"
+    }
+  ],
+  "result": {
+    "summary": "Strengthen the six races in ClickDeletionRaceTest with verified, bounded H2 lock-wait observation; production code and API contracts remain unchanged.",
+    "outputs": {
+      "impacted": [
+        {
+          "path": "url-shortener/src/test/java/com/example/shortener/api/ClickDeletionRaceTest.java",
+          "kind": "modify",
+          "reason": "FR1-FR4 and NFR1-NFR2 require every existing race scenario to hold the target row lock, verify the second operation is blocked on it before release, fail on early completion or timeout, and retain its outcome assertions without fixed sleeps."
+        }
+      ],
+      "api_changes": [],
+      "data_changes": [],
+      "data_flows": [
+        "In each first-operation transaction, run the existing lock-taking operation for the target link, then record that transaction's H2 session ID and signal the test only after the lock-taking call returns.",
+        "Keep the first transaction behind a release latch. Launch the existing second operation only after the first-operation signal, passing it the same target code or ID.",
+        "Use a separate JdbcTemplate connection to observe H2 INFORMATION_SCHEMA.SESSIONS. Verify a session with BLOCKER_ID equal to the first session and an executing row-lock query matching the second operation; correlate that query and session with the test-launched operation and its target.",
+        "Poll the database observation until verified or the bounded deadline; a start signal or incomplete future alone is not evidence. Include the target, session IDs, observed statements, and operation completion state in failure diagnostics.",
+        "Only mark the first transaction eligible to commit after verified contention. On an early completion or observation timeout, fail the test and release the holder for cleanup with its transaction marked rollback-only.",
+        "After verified contention, release the first operation, await both operations with bounded completion waits, then run the existing click, deletion, expiry, and redirect outcome assertions. The observer is test-only and does not run on production request or redirect paths."
+      ],
+      "risks": [
+        {
+          "risk": "H2 session-view fields or lock-query reporting differ from what the observer expects, causing false timeouts or loss of lock-wait detection.",
+          "mitigation": "Use the H2 version already present on the test runtime classpath; validate the required session ID, blocker, and executing-statement fields and report the observed session rows on failure. Keep the observer isolated to the test harness.",
+          "detection": "All six race tests require a positive observation before release and fail with the metadata snapshot if it is absent."
+        },
+        {
+          "risk": "An unrelated blocked query could be mistaken for the second operation, or the observation could fail to establish that both operations target the same row.",
+          "mitigation": "Require the blocker session to be the recorded first-operation session, match the expected lock-query shape for the second operation, and associate the observed session with the launched operation that uses the same target code or ID.",
+          "detection": "Each scenario's verified-wait assertion fails if the blocker or expected query does not match; the existing post-release assertions also detect incorrect outcomes."
+        },
+        {
+          "risk": "A failed assertion or observer timeout could leave the first transaction holding a lock, hanging other tests, or committing without the interleaving having been proven.",
+          "mitigation": "Release the holder in a finally path, mark its transaction rollback-only unless the verified-wait condition was set, and bound acquisition, observation, and completion waits.",
+          "detection": "The race tests fail on timeout or early completion with diagnostics, while bounded future waits expose cleanup or operation hangs."
+        },
+        {
+          "risk": "Database metadata polling or contention coordination could make the suite slow or flaky under load.",
+          "mitigation": "Use the suite's existing bounded-wait convention, keep polling test-only and event/observation-driven, and remove the current fixed 300 ms sleeps.",
+          "detection": "Run all six race tests repeatedly; the positive path should release immediately after metadata confirms the wait, while failures terminate at the configured deadline."
+        }
+      ],
+      "test_strategy": [
+        "Modify every existing scenario in ClickDeletionRaceTest: click then delete; delete then click; click then expiry change; expiry change then redirect/click; delete then expiry change; and expiry change then delete. In each, assert first-lock acquisition before launching the second operation and verify the database-observed wait before release.",
+        "Retain the current outcome assertions in ClickDeletionRaceTest after verified release, including the click count, tombstone/deletion state, expiry value, redirect status, and NOT_FOUND result.",
+        "Exercise the observer's early-completion and bounded-timeout failure paths through its guard logic: neither condition may release the holder as a successful interleaving, and timeout diagnostics must identify the target and observed sessions.",
+        "Run LinkStatsTest to protect click counting and click erasure on deletion, LinkExpiryUpdateTest to protect expiry behavior, and LinkLifecycleTest to protect redirects and tombstone behavior.",
+        "Run ClickFailureIsolationTest and RedirectLatencyTest to guard existing best-effort click recording and redirect-path behavior; no production code or hot-path instrumentation is planned."
+      ]
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Lock-wait observation",
+        "choice": "Use H2's INFORMATION_SCHEMA.SESSIONS blocker and executing-statement visibility from the test harness.",
+        "rationale": "The existing integration tests use H2, so database-native observation can positively establish a blocked session without changing production code.",
+        "source": "agent"
+      },
+      {
+        "topic": "Bounded waits and cleanup",
+        "choice": "Follow the existing race test's finite 5-second acquisition and 10-second operation-wait convention, and make an unverified first transaction roll back during cleanup.",
+        "rationale": "This preserves the suite's current timeout scale while ensuring observation failure cannot be treated as proof or leave a lock held.",
+        "source": "agent"
+      },
+      {
+        "topic": "Test helper placement",
+        "choice": "Keep the observation and coordination helpers in ClickDeletionRaceTest rather than adding a general-purpose test utility or dependency.",
+        "rationale": "The mechanism serves only this race test class and requires no production or build changes.",
+        "source": "agent"
+      },
+      {
+        "topic": "API and schema",
+        "choice": "Make no endpoint, request/response, schema, or migration changes.",
+        "rationale": "FR4 explicitly limits the change to tests; all existing endpoints retain their current contracts and migrations remain untouched.",
+        "source": "agent"
+      }
+    ]
+  }
+}

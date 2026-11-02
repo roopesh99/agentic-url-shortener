@@ -1,0 +1,11 @@
+{
+  "summary": "No production change: the approved specification (FR4) and impact plan make this a test-only improvement.",
+  "files": [],
+  "decisions": [
+    {
+      "topic": "Empty change set",
+      "choice": "The implement stage proposes no files",
+      "rationale": "FR4 forbids production changes and the impact plan lists only ClickDeletionRaceTest; the compile gate confirms production still builds unchanged"
+    }
+  ]
+}

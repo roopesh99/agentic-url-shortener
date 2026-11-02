@@ -1,0 +1,132 @@
+{
+  "name": "test_plan",
+  "version": 1,
+  "sha": "52d73e4addcd708c3d18882e8a43dba99da9411e88b0eb7343a1accb05dcc978",
+  "produced_by": "test_plan/test_planner#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 1,
+      "sha": "d55ce9d63e3fec0ddf6e073db476ba8ed9a8102fe0421e4f8cb7b40f420cc56a"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "4cb33267b8ff3f94121f3f3cc94d3373d396348c599f013750e1031f89953a15"
+    }
+  ],
+  "result": {
+    "summary": "14 cases: all six ClickDeletionRaceTest scenarios, lock-acquisition and verified-wait ordering, failure guards, retained outcomes, and deterministic bounded coordination.",
+    "outputs": {
+      "test_cases": [
+        {
+          "id": "TC-FR1-01",
+          "covers": "FR1, FR2, FR4, NFR1, NFR2 — click then delete",
+          "level": "integration",
+          "check": "In the running Spring context, confirm the first click operation has returned from acquiring the target link row lock and recorded its H2 session before launching deletion. Before releasing the first transaction, observe the deletion session blocked by that session on the target row lock. Release promptly after verification; confirm the existing click-count and deletion/tombstone assertions pass."
+        },
+        {
+          "id": "TC-FR1-02",
+          "covers": "FR1, FR2, FR4, NFR1, NFR2 — delete then click",
+          "level": "integration",
+          "check": "Confirm the first deletion operation has acquired the target link row lock and recorded its H2 session before launching the click. Before release, observe the click session blocked by that session on the same target row lock. After release, confirm the existing deletion, click-erasure, and NOT_FOUND assertions pass."
+        },
+        {
+          "id": "TC-FR1-03",
+          "covers": "FR1, FR2, FR4, NFR1, NFR2 — click then expiry change",
+          "level": "integration",
+          "check": "Confirm the first click operation has acquired the target row lock and recorded its H2 session before launching the expiry change. Before release, observe the expiry-change session blocked by that session on the same target row lock. After release, confirm the existing click-count and expiry-value assertions pass."
+        },
+        {
+          "id": "TC-FR1-04",
+          "covers": "FR1, FR2, FR4, NFR1, NFR2 — expiry change then redirect/click",
+          "level": "integration",
+          "check": "Confirm the first expiry-change operation has acquired the target row lock and recorded its H2 session before launching the redirect/click operation. Before release, observe the second operation blocked by that session on the same target row lock. After release, confirm the existing expiry and redirect-status/click assertions pass."
+        },
+        {
+          "id": "TC-FR1-05",
+          "covers": "FR1, FR2, FR4, NFR1, NFR2 — delete then expiry change",
+          "level": "integration",
+          "check": "Confirm the first deletion operation has acquired the target row lock and recorded its H2 session before launching the expiry change. Before release, observe the expiry-change session blocked by that session on the same target row lock. After release, confirm the existing deletion/tombstone and expiry assertions pass."
+        },
+        {
+          "id": "TC-FR1-06",
+          "covers": "FR1, FR2, FR4, NFR1, NFR2 — expiry change then delete",
+          "level": "integration",
+          "check": "Confirm the first expiry-change operation has acquired the target row lock and recorded its H2 session before launching deletion. Before release, observe the deletion session blocked by that session on the same target row lock. After release, confirm the existing expiry and deletion/tombstone assertions pass."
+        },
+        {
+          "id": "TC-FR3-01",
+          "covers": "FR3 — second operation completes before verified lock wait",
+          "level": "unit",
+          "check": "Provide the wait guard with a completed second-operation result and no verified target-row-lock observation. Assert that it reports test failure, does not mark the interleaving as verified, and does not permit the holder to commit as a successful race."
+        },
+        {
+          "id": "TC-FR3-02",
+          "covers": "FR3 — bounded lock-wait observation timeout",
+          "level": "unit",
+          "check": "Provide the wait guard with no verified lock-wait observation through the configured deadline. Assert that it fails rather than passing or waiting indefinitely, and that its diagnostic includes the target, relevant session IDs, observed statements, and second-operation completion state."
+        },
+        {
+          "id": "TC-FR3-03",
+          "covers": "FR3 — failure-path cleanup",
+          "level": "unit",
+          "check": "For early-completion and observation-timeout failures, assert cleanup releases the first-operation holder and marks its transaction rollback-only; assert the failure path cannot commit without a verified-wait condition."
+        },
+        {
+          "id": "TC-NFR1-01",
+          "covers": "NFR1, FR1, FR2 — coordination is observation-driven",
+          "level": "integration",
+          "check": "Run a race scenario with the H2 lock-wait observer. Assert that the second operation is launched only after the first-lock signal and that the first transaction is released only after metadata confirms the second session is blocked by the recorded first session on the target row. No fixed sleep is used as proof of either event."
+        },
+        {
+          "id": "TC-NFR2-01",
+          "covers": "NFR2, FR3 — bounded waiting and completion",
+          "level": "integration",
+          "check": "With lock contention withheld, assert the race test terminates at the configured bounded observation deadline with a diagnostic rather than hanging. With contention observed, assert the holder is released immediately after verification and both operation-completion waits are bounded."
+        },
+        {
+          "id": "TC-FR4-01",
+          "covers": "FR4 — no production changes and existing behavior regression",
+          "level": "integration",
+          "check": "Run LinkStatsTest, LinkExpiryUpdateTest, LinkLifecycleTest, ClickFailureIsolationTest, and RedirectLatencyTest. Assert their existing click counting/erasure, expiry, redirect/tombstone, failure-isolation, and redirect-path behavior remains passing; verify the change is confined to the race-test harness."
+        },
+        {
+          "id": "TC-FR2-01",
+          "covers": "FR2, FR3 — observer identifies the correct blocker and target",
+          "level": "integration",
+          "check": "During a race scenario, inspect the H2 session observation and assert the blocked session is the launched second operation, its blocker is the recorded first-operation session, and its executing lock-wait statement is associated with the same target link. An unrelated blocked session or query must not satisfy the wait condition."
+        }
+      ]
+    },
+    "files_written": [
+      "docs/test-plan.md"
+    ],
+    "decisions": [
+      {
+        "topic": "Proof of lock contention",
+        "choice": "Require database-native H2 session metadata to identify the second operation, its executing row-lock wait, the first-operation blocker session, and the target link; a start signal or incomplete future is insufficient.",
+        "rationale": "This follows the approved resolution and distinguishes the claimed interleaving from mere scheduling delay or unrelated contention.",
+        "source": "agent"
+      },
+      {
+        "topic": "Observer failure-path coverage",
+        "choice": "Test early completion, timeout, and rollback cleanup through isolated wait-guard logic, in addition to exercising successful observations in the integration scenarios.",
+        "rationale": "These branches must fail safely without requiring an integration test to induce fragile timing or leave a database transaction blocked.",
+        "source": "agent"
+      },
+      {
+        "topic": "Timeout and test speed",
+        "choice": "Use the suite's existing bounded timeout convention, or a finite generous timeout if none exists; release the holder immediately after positive observation.",
+        "rationale": "The timeout prevents hangs but does not replace positive observation. Automated checks can verify bounded failure and absence of deliberate fixed sleeps, but cannot establish a universal normal-runtime speed guarantee.",
+        "source": "agent"
+      },
+      {
+        "topic": "Existing outcome assertions",
+        "choice": "Preserve and rerun the current assertions in all six race scenarios and the named regression suites rather than defining new production outcomes.",
+        "rationale": "The specification requires retaining prior behavior and assertions, while the approved impact analysis does not enumerate every scenario's exact prior assertion values.",
+        "source": "agent"
+      }
+    ]
+  }
+}

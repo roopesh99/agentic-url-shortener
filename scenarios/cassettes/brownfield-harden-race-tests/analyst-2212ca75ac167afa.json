@@ -1,0 +1,181 @@
+{
+  "request": {
+    "agent": "analyst",
+    "effort": "high",
+    "max_tokens": 32000,
+    "model": "gpt-6-luna",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ambiguities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "enum": [
+                  "assumption",
+                  "unresolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "resolution",
+              "source",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "non_functional": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "goal",
+        "functional",
+        "non_functional",
+        "ambiguities",
+        "acceptance_criteria"
+      ],
+      "type": "object"
+    },
+    "system": "You are the requirements analyst in a governed software delivery pipeline. You turn a product owner's requirement into a normalized engineering specification that the architect, coders and testers downstream will build from. You do not write code.\n\nYour output is checked by automated gates and then reviewed by a human before any design or code work starts, so precision matters more than polish.\n\nHow to work:\n- Restate the goal in one or two sentences an engineer could act on.\n- List functional and non-functional requirements as atomic, testable statements. Keep the requirement's own ids (FR1, NFR2, ...) when it provides them; otherwise assign them. Do not invent scope the requirement does not ask for.\n- Surface every ambiguity: anything an engineer would have to guess about (formats, limits, error behaviour, status codes, security posture). Include the requirement's own \"open points\" and any you find yourself.\n- For each ambiguity, decide whether a safe, conventional default exists.\n  - If it does, set `source` to \"assumption\", put the default in `resolution`, and explain in `rationale` why it is the conventional and low-risk choice. These become recorded decisions a human will review.\n  - If the answer is a genuine product decision (who may see data, business rules, legal or compliance posture, anything where a wrong guess would be costly to reverse), set `source` to \"unresolved\" and `resolution` to null. This stops the pipeline until a human answers, which is the intended behaviour. Do not guess on these to keep things moving.\n- Write acceptance criteria as observable behaviours (request \u2192 expected response), covering the main path and the important failure paths.\n- `summary`: one line, e.g. counts of requirements and how many ambiguities were resolved vs. left open.",
+    "user": "<requirement>\n# Request: make the concurrency tests prove the interleaving they claim\n\n`ClickDeletionRaceTest` checks that click recording, deletion and expiry changes on the same link\nare serialized by the link's row lock. Each test starts a first operation inside a transaction,\nwaits until it holds the lock, then starts a second operation and sleeps 300 ms before letting the\nfirst one commit, so that the second one should be waiting on the lock meanwhile.\n\nNothing checks that it actually was. On a slow or busy machine the second operation can start\nafter the first has already committed; the test then passes without having exercised the race it\nnames. A test that can pass without testing anything is worse than a failing one, because nobody\nnotices.\n\n## Wanted\n- Every test in `ClickDeletionRaceTest` proves that the intended interleaving happened, and fails\n  (not passes) if it did not.\n- The tests keep asserting the same outcomes they assert today.\n- They stay fast and deterministic on a normal machine; a fixed sleep must not be what makes them\n  correct.\n- Production code does not change: this is a test-quality improvement.\n</requirement>"
+  },
+  "response": {
+    "cost_usd": null,
+    "data": {
+      "acceptance_criteria": [
+        "For each test, the first operation is confirmed to hold the target link row lock before the second operation is launched.",
+        "For each test, the first operation is not allowed to commit until the test confirms that the second operation is blocked waiting on that same row lock.",
+        "If the second operation completes without entering the verified lock wait, the test fails.",
+        "If the lock wait is not verified before the configured bounded timeout, the test fails with a useful diagnostic instead of passing or hanging.",
+        "After the verified wait, the first operation is released and the test checks the same outcomes it checked before the change.",
+        "No fixed sleep is relied on to establish that the second operation is waiting, and no production code is changed."
+      ],
+      "ambiguities": [
+        {
+          "question": "How should the test establish that the second operation is waiting specifically on the target row lock?",
+          "rationale": "Directly observing the database wait is the least invasive conventional way to prove the claimed lock interleaving, and it avoids production-code changes.",
+          "resolution": "Use existing database-native lock-wait visibility where available, or equivalent test-only instrumentation that can identify the second operation as blocked on the target link row. Do not treat a start signal or lack of completion alone as proof.",
+          "source": "assumption"
+        },
+        {
+          "question": "What bounded wait should be used to observe lock contention?",
+          "rationale": "A bounded timeout prevents hangs while leaving normal execution event-driven; the timeout is a failure safeguard, not a substitute for observing the lock wait.",
+          "resolution": "Use the test suite\u2019s existing timeout convention; if none exists, use a finite, appropriately generous test timeout. Expiration must fail the test with a diagnostic and must not permit the first operation to commit as though the interleaving had been proven.",
+          "source": "assumption"
+        }
+      ],
+      "functional": [
+        {
+          "id": "FR1",
+          "text": "For every test in `ClickDeletionRaceTest`, establish that the first operation has acquired the target link\u2019s row lock before starting the second operation."
+        },
+        {
+          "id": "FR2",
+          "text": "Before allowing the first operation to commit, positively verify that the second operation is blocked waiting for the same target link row lock. Merely starting the second operation or observing that it has not completed is not sufficient proof."
+        },
+        {
+          "id": "FR3",
+          "text": "If the second operation completes without waiting on the target row lock, or the test cannot verify the lock wait within a bounded time, fail the test rather than allowing it to pass."
+        },
+        {
+          "id": "FR4",
+          "text": "Retain the existing scenarios and outcome assertions for click recording, deletion, and expiry changes; do not change production behavior or production code."
+        }
+      ],
+      "goal": "Strengthen every test in `ClickDeletionRaceTest` so it proves the second operation was waiting on the same link row lock before the first operation commits. Preserve the tests\u2019 existing outcome assertions and make this a test-only change, without relying on a fixed sleep for correctness.",
+      "non_functional": [
+        {
+          "id": "NFR1",
+          "text": "Use deterministic coordination or observation rather than a fixed sleep as the mechanism that makes the test prove the interleaving."
+        },
+        {
+          "id": "NFR2",
+          "text": "Keep the tests fast in normal operation; waiting is only for the required lock-wait observation and must be bounded so a failed test does not hang indefinitely."
+        }
+      ],
+      "summary": "4 functional and 2 non-functional requirements; 2 ambiguities resolved by assumptions and 0 left open."
+    },
+    "duration_ms": 32512,
+    "model": "gpt-6-luna",
+    "provider": "openai",
+    "request_id": "req_f73e2f471b124b94b1a9dc19f9ba9b89",
+    "source": "live",
+    "stop_reason": "completed",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 795,
+      "output_tokens": 3401
+    }
+  }
+}

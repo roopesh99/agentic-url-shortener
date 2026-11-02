@@ -1,0 +1,33 @@
+{
+  "name": "implement",
+  "version": 1,
+  "sha": "97ecfb7d91fc50a5cd211061da1ffbedf29e872b38ae909e2e3a570f9756ea9d",
+  "produced_by": "implement/coder#1",
+  "inputs": [
+    {
+      "name": "requirements",
+      "version": 1,
+      "sha": "d55ce9d63e3fec0ddf6e073db476ba8ed9a8102fe0421e4f8cb7b40f420cc56a"
+    },
+    {
+      "name": "impact",
+      "version": 1,
+      "sha": "4cb33267b8ff3f94121f3f3cc94d3373d396348c599f013750e1031f89953a15"
+    }
+  ],
+  "result": {
+    "summary": "No production change: the approved specification (FR4) and impact plan make this a test-only improvement.",
+    "outputs": {
+      "files": []
+    },
+    "files_written": [],
+    "decisions": [
+      {
+        "topic": "Empty change set",
+        "choice": "The implement stage proposes no files",
+        "rationale": "FR4 forbids production changes and the impact plan lists only ClickDeletionRaceTest; the compile gate confirms production still builds unchanged",
+        "source": "agent"
+      }
+    ]
+  }
+}

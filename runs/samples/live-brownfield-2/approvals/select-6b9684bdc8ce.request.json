@@ -1,0 +1,18 @@
+{
+  "run_id": "live-brownfield-2",
+  "stage": "select",
+  "reason": "confirm the workflow this requirement will run through",
+  "summary": "brownfield (high confidence): This is a test-suite hardening change: the tests need to reliably verify an intended interleaving, while production behavior and API contracts remain unchanged. It does not report a defect in the service itself or request documentation or release preparation.",
+  "gate_evidence": [
+    "eligible: brownfield, bugfix, lifecycle",
+    "excluded skeleton: needs a new codebase; url-shortener/pom.xml exists",
+    "signal: “make the concurrency tests prove the interleaving they claim”",
+    "signal: “A test that can pass without testing anything”",
+    "signal: “Production code does not change: this is a test-quality improvement”"
+  ],
+  "files_changed": [],
+  "decisions": [
+    "runner-up: bugfix"
+  ],
+  "artifact_sha": "6b9684bdc8ce614f9b8f875e2b782c846f757a24635fa5e78ae37426b626d282"
+}
